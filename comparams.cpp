@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2007/02/01 12:14:59  vfrolov
+ * Redesigned COM port params
+ *
  * Revision 1.1  2007/01/23 09:13:10  vfrolov
  * Initial revision
  *
@@ -33,8 +36,40 @@ ComParams::ComParams()
   : baudRate(CBR_19200),
     byteSize(8),
     parity(NOPARITY),
-    stopBits(ONESTOPBIT)
+    stopBits(ONESTOPBIT),
+    outCts(1),
+    outDsr(0)
 {
+}
+
+BOOL ComParams::SetBaudRate(const char *pBaudRate)
+{
+  if (*pBaudRate == 'c') {
+    baudRate = -1;
+    return TRUE;
+  }
+
+  if (isdigit(*pBaudRate)) {
+    baudRate = atol(pBaudRate);
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+BOOL ComParams::SetByteSize(const char *pByteSize)
+{
+  if (*pByteSize == 'c') {
+    byteSize = -1;
+    return TRUE;
+  }
+
+  if (isdigit(*pByteSize)) {
+    byteSize = atoi(pByteSize);
+    return TRUE;
+  }
+
+  return FALSE;
 }
 
 BOOL ComParams::SetParity(const char *pParity)
@@ -45,7 +80,7 @@ BOOL ComParams::SetParity(const char *pParity)
     case 'e': parity = EVENPARITY; break;
     case 'm': parity = MARKPARITY; break;
     case 's': parity = SPACEPARITY; break;
-    case 'd': parity = -1; break;
+    case 'c': parity = -1; break;
     default : return FALSE;
   }
   return TRUE;
@@ -61,13 +96,73 @@ BOOL ComParams::SetStopBits(const char *pStopBits)
         stopBits = ONESTOPBIT;
       break;
     case '2': stopBits = TWOSTOPBITS; break;
-    case 'd': stopBits = -1; break;
+    case 'c': stopBits = -1; break;
     default : return FALSE;
   }
   return TRUE;
 }
 
-const char *ComParams::ParityStr(int parity)
+BOOL ComParams::SetOutCts(const char *pOutCts)
+{
+  if (_stricmp(pOutCts, "on") == 0) {
+    outCts = 1;
+  }
+  else
+  if (_stricmp(pOutCts, "off") == 0) {
+    outCts = 0;
+  }
+  else
+  if (*pOutCts == 'c') {
+    outCts = -1;
+  }
+  else
+    return FALSE;
+ 
+  return TRUE;
+}
+
+BOOL ComParams::SetOutDsr(const char *pOutDsr)
+{
+  if (_stricmp(pOutDsr, "on") == 0) {
+    outDsr = 1;
+  }
+  else
+  if (_stricmp(pOutDsr, "off") == 0) {
+    outDsr = 0;
+  }
+  else
+  if (*pOutDsr == 'c') {
+    outDsr = -1;
+  }
+  else
+    return FALSE;
+ 
+  return TRUE;
+}
+///////////////////////////////////////////////////////////////
+string ComParams::BaudRateStr(long baudRate)
+{
+  if (baudRate >= 0) {
+    stringstream buf;
+    buf << baudRate;
+    return buf.str();
+  }
+
+  return baudRate == -1 ? "current" : "?";
+}
+
+string ComParams::ByteSizeStr(int byteSize)
+{
+  if (byteSize >= 0) {
+    stringstream buf;
+    buf << byteSize;
+    return buf.str();
+  }
+
+  return byteSize == -1 ? "current" : "?";
+}
+
+string ComParams::ParityStr(int parity)
 {
   switch (parity) {
     case NOPARITY: return "no";
@@ -75,39 +170,69 @@ const char *ComParams::ParityStr(int parity)
     case EVENPARITY: return "even";
     case MARKPARITY: return "mark";
     case SPACEPARITY: return "space";
-    case -1: return "default";
+    case -1: return "current";
   }
   return "?";
 }
 
-const char *ComParams::StopBitsStr(int stopBits)
+string ComParams::StopBitsStr(int stopBits)
 {
   switch (stopBits) {
     case ONESTOPBIT: return "1";
     case ONE5STOPBITS: return "1.5";
     case TWOSTOPBITS: return "2";
-    case -1: return "default";
+    case -1: return "current";
   }
   return "?";
 }
 
+string ComParams::OutCtsStr(int outCts)
+{
+  switch (outCts) {
+    case 1: return "on";
+    case 0: return "off";
+    case -1: return "current";
+  }
+  return "?";
+}
+
+string ComParams::OutDsrStr(int outDsr)
+{
+  switch (outDsr) {
+    case 1: return "on";
+    case 0: return "off";
+    case -1: return "current";
+  }
+  return "?";
+}
+///////////////////////////////////////////////////////////////
 const char *ComParams::BaudRateLst()
 {
-  return "a positive number or d[efault]";
+  return "a positive number or c[urrent]";
 }
 
 const char *ComParams::ByteSizeLst()
 {
-  return "a positive number or d[efault]";
+  return "a positive number or c[urrent]";
 }
 
 const char *ComParams::ParityLst()
 {
-  return "n[o], o[dd], e[ven], m[ark], s[pace] or d[efault]";
+  return "n[o], o[dd], e[ven], m[ark], s[pace] or c[urrent]";
 }
 
 const char *ComParams::StopBitsLst()
 {
-  return "1, 1.5, 2 or d[efault]";
+  return "1, 1.5, 2 or c[urrent]";
+}
+
+const char *ComParams::OutCtsLst()
+{
+  return "on, off or c[urrent]";
+}
+
+const char *ComParams::OutDsrLst()
+{
+  return "on, off or c[urrent]";
 }
 ///////////////////////////////////////////////////////////////

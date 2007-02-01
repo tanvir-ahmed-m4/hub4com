@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2007/02/01 12:14:58  vfrolov
+ * Redesigned COM port params
+ *
  * Revision 1.1  2007/01/23 09:13:10  vfrolov
  * Initial revision
  *
@@ -38,8 +41,9 @@ typedef multimap<ComPort*, ComPort*> ComPortMap;
 class ComHub
 {
   public:
-    ComHub(int num);
+    ComHub() {}
 
+    BOOL Add(const char *pPath);
     BOOL PlugIn(int n, const char *pPath, const ComParams &comParams);
     BOOL StartAll();
     void Write(ComPort *pFromPort, LPCVOID pData, DWORD len);

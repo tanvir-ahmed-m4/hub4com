@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2007/02/01 12:14:58  vfrolov
+ * Redesigned COM port params
+ *
  * Revision 1.1  2007/01/23 09:13:10  vfrolov
  * Initial revision
  *
@@ -47,18 +50,18 @@ static ComPortMap::iterator FindPair(ComPortMap &map, ComPortPair &pair)
   return i;
 }
 ///////////////////////////////////////////////////////////////
-ComHub::ComHub(int num)
+BOOL ComHub::Add(const char * /*pPath*/)
 {
-  for (int i = 0 ; i < num ; i++) {
-    ComPort *pPort = new ComPort(*this);
+  ComPort *pPort = new ComPort(*this);
 
-    if (!pPort) {
-      cerr << "Can't create ComPort " << i << endl;
-      break;
-    }
-
-    ports.push_back(pPort);
+  if (!pPort) {
+    cerr << "Can't create ComPort " << ports.size() << endl;
+    return FALSE;
   }
+
+  ports.push_back(pPort);
+
+  return TRUE;
 }
 
 BOOL ComHub::PlugIn(int n, const char *pPath, const ComParams &comParams)

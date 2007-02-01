@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2007/02/01 12:14:59  vfrolov
+ * Redesigned COM port params
+ *
  * Revision 1.1  2007/01/23 09:13:10  vfrolov
  * Initial revision
  *
@@ -35,21 +38,29 @@ static void Usage(const char *pProgName)
 {
   cerr
   << "Usage:" << endl
-  << "  " << pProgName << " [options] \\\\.\\<port0> \\\\.\\<port1> ..." << endl
+  << "  " << pProgName << " [options] \\\\.\\<port0> [options] \\\\.\\<port1> ..." << endl
   << endl
   << "Common options:" << endl
   << "  --help                   - show this help." << endl
   << endl
   << "COM port options:" << endl
-  << "  --baud=<b>               - set baud rate to <b> (default is " << ComParams().BaudRate() << ")," << endl
+  << "  --baud=<b>               - set baud rate to <b> (" << ComParams().BaudRateStr() << " by default)," << endl
   << "                             where <b> is " << ComParams::BaudRateLst() << "." << endl
-  << "  --data=<d>               - set data bits to <d> (default is " << ComParams().ByteSize() << "), where <d> is" << endl
-  << "                             " << ComParams::ByteSizeLst() << "." << endl
-  << "  --parity=<p>             - set parity to <p> (default is " << ComParams::ParityStr(ComParams().Parity()) << "), where <p> is" << endl
+  << "  --data=<d>               - set data bits to <d> (" << ComParams().ByteSizeStr() << " by default)," << endl
+  << "                             where <d> is " << ComParams::ByteSizeLst() << "." << endl
+  << "  --parity=<p>             - set parity to <p> (" << ComParams().ParityStr() << " by default)," << endl
+  << "                             where <p> is" << endl
   << "                             " << ComParams::ParityLst() << "." << endl
-  << "  --stop=<s>               - set stop bits to <s> (default is " << ComParams::StopBitsStr(ComParams().StopBits()) << "), where <s> is" << endl
-  << "                             " << ComParams::StopBitsLst() << "." << endl
-  << "  The value d[efault] above means to use current COM port settings." << endl
+  << "  --stop=<s>               - set stop bits to <s> (" << ComParams().StopBitsStr() << " by default)," << endl
+  << "                             where <s> is " << ComParams::StopBitsLst() << "." << endl
+  << "  --octs=<c>               - set CTS handshaking on output to <c>" << endl
+  << "                             (" << ComParams().OutCtsStr() << " by default), where <c> is" << endl
+  << "                             " << ComParams::OutCtsLst() << "." << endl
+  << "  --odsr=<c>               - set DSR handshaking on output to <d>" << endl
+  << "                             (" << ComParams().OutDsrStr() << " by default), where <d> is" << endl
+  << "                             " << ComParams::OutDsrLst() << "." << endl
+  << endl
+  << "  The value c[urrent] above means to use current COM port settings." << endl
   << endl
   << "Route options:" << endl
   << "  --route=<LstR>:<LstL>    - send data received from any ports from <LstR> to" << endl
@@ -58,6 +69,7 @@ static void Usage(const char *pProgName)
   << "                             all ports from <LstL> and vice versa." << endl
   << "  --no-route=<LstR>:<LstL> - do not send data received from any ports from" << endl
   << "                             <LstR> to ports from <LstL>." << endl
+  << endl
   << "  The syntax of <LstR> and <LstL> above: <P1>[,<P2>...]" << endl
   << "  The <Pn> above is a zero based position number of port or All." << endl
   << "  If no any route option specified, then the options --route=0:All --route=1:0" << endl
@@ -67,6 +79,7 @@ static void Usage(const char *pProgName)
   << "Examples:" << endl
   << "  " << pProgName << " \\\\.\\COM1 \\\\.\\CNCB1 \\\\.\\CNCB2" << endl
   << "  " << pProgName << " --route=All:All \\\\.\\CNCB0 \\\\.\\CNCB1 \\\\.\\CNCB2" << endl
+  << "  " << pProgName << " --baud=9600 \\\\.\\COM1 --baud=19200 \\\\.\\CNCB1" << endl
   ;
   exit(1);
 }
@@ -144,22 +157,30 @@ int main(int argc, char* argv[])
 {
   int i;
 
+  ComHub hub;
+
   for (i = 1 ; i < argc ; i++) {
-    if (GetParam(argv[i], "--") == NULL)
-      break;
+    if (!GetParam(argv[i], "--")) {
+      if (!hub.Add(argv[i]))
+        return 1;
+    }
   }
 
-  ComHub hub(argc - i);
   BOOL defaultRouteData = TRUE;
+  int plugged = 0;
 
-  char **pArgs = &argv[1];
+  char **pArgs;
   ComParams comParams;
 
-  while (argc > 1) {
+  for (pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
 
-    if (!pArg)
-      break;
+    if (!pArg) {
+      if (!hub.PlugIn(plugged++, *pArgs, comParams))
+        exit(1);
+
+      continue;
+    }
 
     const char *pParam;
 
@@ -167,10 +188,16 @@ int main(int argc, char* argv[])
       Usage(argv[0]);
     } else
     if ((pParam = GetParam(pArg, "baud=")) != NULL) {
-      comParams.SetBaudRate(pParam);
+      if (!comParams.SetBaudRate(pParam)) {
+        cerr << "Unknown baud rate value " << pParam << endl;
+        exit(1);
+      }
     } else
     if ((pParam = GetParam(pArg, "data=")) != NULL) {
-      comParams.SetByteSize(pParam);
+      if (!comParams.SetByteSize(pParam)) {
+        cerr << "Unknown data bits value " << pParam << endl;
+        exit(1);
+      }
     } else
     if ((pParam = GetParam(pArg, "parity=")) != NULL) {
       if (!comParams.SetParity(pParam)) {
@@ -181,6 +208,18 @@ int main(int argc, char* argv[])
     if ((pParam = GetParam(pArg, "stop=")) != NULL) {
       if (!comParams.SetStopBits(pParam)) {
         cerr << "Unknown stop bits value " << pParam << endl;
+        exit(1);
+      }
+    } else
+    if ((pParam = GetParam(pArg, "octs=")) != NULL) {
+      if (!comParams.SetOutCts(pParam)) {
+        cerr << "Unknown CTS handshaking on output value " << pParam << endl;
+        exit(1);
+      }
+    } else
+    if ((pParam = GetParam(pArg, "odsr=")) != NULL) {
+      if (!comParams.SetOutDsr(pParam)) {
+        cerr << "Unknown DSR handshaking on output value " << pParam << endl;
         exit(1);
       }
     } else
@@ -199,22 +238,14 @@ int main(int argc, char* argv[])
       cerr << "Unknown option " << pArg << endl;
       exit(1);
     }
-
-    pArgs++;
-    argc--;
   }
 
-  if (argc < 2)
+  if (plugged < 2)
     Usage(argv[0]);
 
   if (defaultRouteData) {
     hub.RouteData(0, -1, FALSE);
     hub.RouteData(1, 0, FALSE);
-  }
-
-  for (i = 1 ; i < argc ; i++) {
-    if (!hub.PlugIn(i - 1, pArgs[i - 1], comParams))
-      return 1;
   }
 
   hub.RouteDataReport();

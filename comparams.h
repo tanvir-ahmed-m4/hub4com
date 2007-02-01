@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2007/02/01 12:14:59  vfrolov
+ * Redesigned COM port params
+ *
  * Revision 1.1  2007/01/23 09:13:10  vfrolov
  * Initial revision
  *
@@ -34,29 +37,48 @@ class ComParams
   public:
     ComParams();
 
-    void SetBaudRate(const char *pBaudRate) { baudRate = atol(pBaudRate); }
-    void SetByteSize(const char *pByteSize) { byteSize = atoi(pByteSize); }
+    BOOL SetBaudRate(const char *pBaudRate);
+    BOOL SetByteSize(const char *pByteSize);
     BOOL SetParity(const char *pParity);
     BOOL SetStopBits(const char *pStopBits);
+    BOOL SetOutCts(const char *pOutCts);
+    BOOL SetOutDsr(const char *pOutDsr);
  
-    static const char *ParityStr(int parity);
-    static const char *StopBitsStr(int stopBits);
+    static string BaudRateStr(long baudRate);
+    static string ByteSizeStr(int byteSize);
+    static string ParityStr(int parity);
+    static string StopBitsStr(int stopBits);
+    static string OutCtsStr(int outCts);
+    static string OutDsrStr(int outDsr);
+
+    string BaudRateStr() const { return BaudRateStr(baudRate); }
+    string ByteSizeStr() const { return ByteSizeStr(byteSize); }
+    string ParityStr() const { return ParityStr(parity); }
+    string StopBitsStr() const { return StopBitsStr(stopBits); }
+    string OutCtsStr() const { return OutCtsStr(outCts); }
+    string OutDsrStr() const { return OutDsrStr(outDsr); }
 
     static const char *BaudRateLst();
     static const char *ByteSizeLst();
     static const char *ParityLst();
     static const char *StopBitsLst();
+    static const char *OutCtsLst();
+    static const char *OutDsrLst();
 
     long BaudRate() const { return baudRate; }
     int ByteSize() const { return byteSize; }
     int Parity() const { return parity; }
     int StopBits() const { return stopBits; }
+    int OutCts() const { return outCts; }
+    int OutDsr() const { return outDsr; }
 
   private:
     long baudRate;
     int byteSize;
     int parity;
     int stopBits;
+    int outCts;
+    int outDsr;
 };
 ///////////////////////////////////////////////////////////////
 
