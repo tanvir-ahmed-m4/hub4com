@@ -1,0 +1,5 @@
+*.ncb
+*.sln
+*.user
+Release
+Debug
