@@ -51,7 +51,7 @@ you'd like to handle its data by two applications. You can do it this way:
 
   2. Start the hub4com.exe on COM1, CNCB0 and CNCB1 ports:
 
-       hub4com \\.\COM1 \\.\CNCB1 \\.\CNCB2
+       hub4com \\.\COM1 \\.\CNCB0 \\.\CNCB1
 
      It will send data received from COM1 port to CNCB0 and CNCB1 ports
      and it will send data received from CNCB0 port to COM1 port.
