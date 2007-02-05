@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2007/02/05 09:33:20  vfrolov
+ * Implemented internal flow control
+ *
  * Revision 1.2  2007/02/01 12:14:59  vfrolov
  * Redesigned COM port params
  *
@@ -152,9 +155,6 @@ HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
   return handle;
 }
 ///////////////////////////////////////////////////////////////
-int ReadOverlapped::iNext = 0;
-int WriteOverlapped::iNext = 0;
-///////////////////////////////////////////////////////////////
 WriteOverlapped::WriteOverlapped(ComPort &_port, const void *_pBuf, DWORD _len)
   : port(_port),
     len(_len)
@@ -177,34 +177,25 @@ VOID CALLBACK WriteOverlapped::OnWrite(
     DWORD done,
     LPOVERLAPPED pOverlapped)
 {
-  WriteOverlapped &overlapped = *(WriteOverlapped *)pOverlapped;
+  WriteOverlapped *pOver = (WriteOverlapped *)pOverlapped;
 
   if (err != ERROR_SUCCESS && err != ERROR_OPERATION_ABORTED)
-    TraceError(err, "WriteOverlapped::OnWrite: %s", overlapped.port.Name().c_str());
+    TraceError(err, "WriteOverlapped::OnWrite: %s", pOver->port.Name().c_str());
 
-  if (overlapped.len > done)
-    overlapped.port.WriteLost() += overlapped.len - done;
-
-  overlapped.port.WriteQueued() -= overlapped.len;
-
-  delete &overlapped;
+  pOver->port.OnWrite(pOver, pOver->len, done);
 }
 
 BOOL WriteOverlapped::StartWrite()
 {
   ::memset((OVERLAPPED *)this, 0, sizeof(OVERLAPPED));
 
-  i = iNext++;
-
-  if (!pBuf) {
+  if (!pBuf)
     return FALSE;
-  }
 
-  if (::WriteFileEx(port.Handle(), pBuf, len, this, OnWrite)) {
-    port.WriteQueued() += len;
-    return TRUE;
-  }
-  return FALSE;
+  if (!::WriteFileEx(port.Handle(), pBuf, len, this, OnWrite))
+    return FALSE;
+
+  return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 VOID CALLBACK ReadOverlapped::OnRead(
@@ -212,21 +203,19 @@ VOID CALLBACK ReadOverlapped::OnRead(
     DWORD done,
     LPOVERLAPPED pOverlapped)
 {
-  ReadOverlapped &overlapped = *(ReadOverlapped *)pOverlapped;
+  ReadOverlapped *pOver = (ReadOverlapped *)pOverlapped;
 
-  if (err == ERROR_SUCCESS)
-    overlapped.port.OnRead(overlapped.buf, done);
-  else
-    TraceError(err, "ReadOverlapped::OnRead(): %s", overlapped.port.Name().c_str());
+  if (err != ERROR_SUCCESS) {
+    TraceError(err, "ReadOverlapped::OnRead(): %s", pOver->port.Name().c_str());
+    done = 0;
+  }
 
-  overlapped.StartRead();
+  pOver->port.OnRead(pOver, pOver->buf, done);
 }
 
 BOOL ReadOverlapped::StartRead()
 {
   ::memset((OVERLAPPED *)this, 0, sizeof(OVERLAPPED));
-
-  i = iNext++;
 
   if (::ReadFileEx(port.Handle(), buf, sizeof(buf), this, OnRead)) {
     return TRUE;

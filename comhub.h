@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2007/02/05 09:33:20  vfrolov
+ * Implemented internal flow control
+ *
  * Revision 1.2  2007/02/01 12:14:58  vfrolov
  * Redesigned COM port params
  *
@@ -47,14 +50,27 @@ class ComHub
     BOOL PlugIn(int n, const char *pPath, const ComParams &comParams);
     BOOL StartAll();
     void Write(ComPort *pFromPort, LPCVOID pData, DWORD len);
-    void LostReport();
-    void RouteData(int iFrom, int iTo, BOOL noRoute);
-    void RouteDataReport();
-    int NumPorts() { return (int)ports.size(); }
+    void AddXoff(ComPort *pFromPort, int count);
+    void LostReport() const;
+
+    void RouteData(int iFrom, int iTo, BOOL noRoute) {
+      Route(routeDataMap, iFrom, iTo, noRoute);
+    }
+
+    void RouteFlowControl(int iFrom, int iTo, BOOL noRoute) {
+      Route(routeFlowControlMap, iFrom, iTo, noRoute);
+    }
+
+    void RouteFlowControl(BOOL fromAnyDataReceiver);
+    void RouteReport() const;
+    int NumPorts() const { return (int)ports.size(); }
 
   private:
+    void Route(ComPortMap &map, int iFrom, int iTo, BOOL noRoute) const;
+
     ComPorts ports;
     ComPortMap routeDataMap;
+    ComPortMap routeFlowControlMap;
 };
 ///////////////////////////////////////////////////////////////
 

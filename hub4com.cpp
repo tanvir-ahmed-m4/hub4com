@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2007/02/05 09:33:20  vfrolov
+ * Implemented internal flow control
+ *
  * Revision 1.2  2007/02/01 12:14:59  vfrolov
  * Redesigned COM port params
  *
@@ -167,6 +170,7 @@ int main(int argc, char* argv[])
   }
 
   BOOL defaultRouteData = TRUE;
+  BOOL defaultRouteFlowControl = TRUE;
   int plugged = 0;
 
   char **pArgs;
@@ -248,7 +252,12 @@ int main(int argc, char* argv[])
     hub.RouteData(1, 0, FALSE);
   }
 
-  hub.RouteDataReport();
+  if (defaultRouteFlowControl) {
+    hub.RouteFlowControl(FALSE);
+  } else {
+  }
+
+  hub.RouteReport();
 
   if (hub.StartAll()) {
     DWORD nextReportTime = 0;

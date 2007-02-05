@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2007/02/05 09:33:20  vfrolov
+ * Implemented internal flow control
+ *
  * Revision 1.2  2007/02/01 12:14:58  vfrolov
  * Redesigned COM port params
  *
@@ -35,7 +38,7 @@
 ///////////////////////////////////////////////////////////////
 typedef pair <ComPort*, ComPort*> ComPortPair;
 ///////////////////////////////////////////////////////////////
-static ComPortMap::iterator FindPair(ComPortMap &map, ComPortPair &pair)
+static ComPortMap::iterator FindPair(ComPortMap &map, const ComPortPair &pair)
 {
   ComPortMap::iterator i;
 
@@ -98,41 +101,65 @@ void ComHub::Write(ComPort *pFromPort, LPCVOID pData, DWORD len)
   }
 }
 
-void ComHub::LostReport()
+void ComHub::AddXoff(ComPort *pFromPort, int count)
+{
+  ComPortMap::const_iterator i;
+
+  for (i = routeFlowControlMap.find(pFromPort) ; i != routeFlowControlMap.end() ; i++) {
+    if (i->first != pFromPort)
+      break;
+
+    i->second->AddXoff(count);
+  }
+}
+
+void ComHub::LostReport() const
 {
   for (ComPorts::const_iterator i = ports.begin() ; i != ports.end() ; i++)
     (*i)->LostReport();
 }
 
-void ComHub::RouteData(int iFrom, int iTo, BOOL noRoute)
+void ComHub::RouteFlowControl(BOOL fromAnyDataReceiver)
+{
+  for (ComPortMap::const_iterator i = routeDataMap.begin() ; i != routeDataMap.end() ; i++) {
+    ComPortPair pair(i->second, i->first);
+
+    if (FindPair(routeFlowControlMap, pair) == routeFlowControlMap.end()) {
+      if (fromAnyDataReceiver || FindPair(routeDataMap, pair) != routeDataMap.end())
+        routeFlowControlMap.insert(pair);
+    }
+  }
+}
+
+void ComHub::Route(ComPortMap &map, int iFrom, int iTo, BOOL noRoute) const
 {
   if (iFrom < 0) {
     for (int iF = 0 ; iF < (int)ports.size() ; iF++) {
       if(iTo < 0) {
         for (int iT = 0 ; iT < (int)ports.size() ; iT++)
-          RouteData(iF, iT, noRoute);
+          Route(map, iF, iT, noRoute);
       } else {
-        RouteData(iF, iTo, noRoute);
+        Route(map, iF, iTo, noRoute);
       }
     }
   } else {
     if(iTo < 0) {
       for (int iT = 0 ; iT < (int)ports.size() ; iT++)
-        RouteData(iFrom, iT, noRoute);
+        Route(map, iFrom, iT, noRoute);
     }
     else
     if (iFrom != iTo || noRoute) {
       ComPortPair pair(ports.at(iFrom), ports.at(iTo));
 
       for (;;) {
-        ComPortMap::iterator i = FindPair(routeDataMap, pair);
+        ComPortMap::iterator i = FindPair(map, pair);
 
-        if (i == routeDataMap.end()) {
+        if (i == map.end()) {
           if (!noRoute)
-            routeDataMap.insert(pair);
+            map.insert(pair);
           break;
         } else if (noRoute) {
-          routeDataMap.erase(i);
+          map.erase(i);
         } else {
           break;
         }
@@ -141,21 +168,21 @@ void ComHub::RouteData(int iFrom, int iTo, BOOL noRoute)
   }
 }
 
-void ComHub::RouteDataReport()
+static void RouteReport(const ComPortMap &map, const char *pMapName)
 {
-  if (!routeDataMap.size()) {
-    cout << "No route for data" << endl;
+  if (!map.size()) {
+    cout << "No route for " << pMapName << endl;
     return;
   }
 
   ComPort *pLastPort = NULL;
 
-  for (ComPortMap::const_iterator i = routeDataMap.begin() ; i != routeDataMap.end() ; i++) {
+  for (ComPortMap::const_iterator i = map.begin() ; i != map.end() ; i++) {
     if (pLastPort != i->first) {
       if (pLastPort)
         cout << endl;
 
-      cout << "Route data " << i->first->Name() << " -->";
+      cout << "Route " << pMapName << " " << i->first->Name() << " -->";
 
       pLastPort = i->first;
     }
@@ -165,5 +192,11 @@ void ComHub::RouteDataReport()
 
   if (pLastPort)
     cout << endl;
+}
+
+void ComHub::RouteReport() const
+{
+  ::RouteReport(routeDataMap, "data");
+  ::RouteReport(routeFlowControlMap, "flow control");
 }
 ///////////////////////////////////////////////////////////////

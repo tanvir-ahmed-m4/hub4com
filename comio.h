@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2007/02/05 09:33:20  vfrolov
+ * Implemented internal flow control
+ *
  * Revision 1.1  2007/01/23 09:13:10  vfrolov
  * Initial revision
  *
@@ -48,10 +51,6 @@ class ReadOverlapped : private OVERLAPPED
 
     ComPort &port;
     BYTE buf[64];
-
-    int i;
-
-    static int iNext;
 };
 
 class WriteOverlapped : private OVERLAPPED
@@ -70,10 +69,6 @@ class WriteOverlapped : private OVERLAPPED
     ComPort &port;
     BYTE *pBuf;
     DWORD len;
-
-    int i;
-
-    static int iNext;
 };
 ///////////////////////////////////////////////////////////////
 
