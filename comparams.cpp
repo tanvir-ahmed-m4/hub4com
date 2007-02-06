@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.3  2007/02/06 11:53:33  vfrolov
+ * Added options --odsr, --ox, --ix and --idsr
+ * Added communications error reporting
+ *
  * Revision 1.2  2007/02/01 12:14:59  vfrolov
  * Redesigned COM port params
  *
@@ -38,7 +42,10 @@ ComParams::ComParams()
     parity(NOPARITY),
     stopBits(ONESTOPBIT),
     outCts(1),
-    outDsr(0)
+    outDsr(0),
+    outX(0),
+    inX(0),
+    inDsr(0)
 {
 }
 
@@ -102,37 +109,18 @@ BOOL ComParams::SetStopBits(const char *pStopBits)
   return TRUE;
 }
 
-BOOL ComParams::SetOutCts(const char *pOutCts)
+BOOL ComParams::SetFlag(const char *pFlagStr, int *pFlag)
 {
-  if (_stricmp(pOutCts, "on") == 0) {
-    outCts = 1;
+  if (_stricmp(pFlagStr, "on") == 0) {
+    *pFlag = 1;
   }
   else
-  if (_stricmp(pOutCts, "off") == 0) {
-    outCts = 0;
+  if (_stricmp(pFlagStr, "off") == 0) {
+    *pFlag = 0;
   }
   else
-  if (*pOutCts == 'c') {
-    outCts = -1;
-  }
-  else
-    return FALSE;
- 
-  return TRUE;
-}
-
-BOOL ComParams::SetOutDsr(const char *pOutDsr)
-{
-  if (_stricmp(pOutDsr, "on") == 0) {
-    outDsr = 1;
-  }
-  else
-  if (_stricmp(pOutDsr, "off") == 0) {
-    outDsr = 0;
-  }
-  else
-  if (*pOutDsr == 'c') {
-    outDsr = -1;
+  if (*pFlagStr == 'c') {
+    *pFlag = -1;
   }
   else
     return FALSE;
@@ -186,19 +174,9 @@ string ComParams::StopBitsStr(int stopBits)
   return "?";
 }
 
-string ComParams::OutCtsStr(int outCts)
+string ComParams::FlagStr(int flag)
 {
-  switch (outCts) {
-    case 1: return "on";
-    case 0: return "off";
-    case -1: return "current";
-  }
-  return "?";
-}
-
-string ComParams::OutDsrStr(int outDsr)
-{
-  switch (outDsr) {
+  switch (flag) {
     case 1: return "on";
     case 0: return "off";
     case -1: return "current";
@@ -226,12 +204,7 @@ const char *ComParams::StopBitsLst()
   return "1, 1.5, 2 or c[urrent]";
 }
 
-const char *ComParams::OutCtsLst()
-{
-  return "on, off or c[urrent]";
-}
-
-const char *ComParams::OutDsrLst()
+const char *ComParams::FlagLst()
 {
   return "on, off or c[urrent]";
 }

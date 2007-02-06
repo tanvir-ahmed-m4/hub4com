@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.4  2007/02/06 11:53:33  vfrolov
+ * Added options --odsr, --ox, --ix and --idsr
+ * Added communications error reporting
+ *
  * Revision 1.3  2007/02/05 09:33:20  vfrolov
  * Implemented internal flow control
  *
@@ -59,9 +63,21 @@ static void Usage(const char *pProgName)
   << "  --octs=<c>               - set CTS handshaking on output to <c>" << endl
   << "                             (" << ComParams().OutCtsStr() << " by default), where <c> is" << endl
   << "                             " << ComParams::OutCtsLst() << "." << endl
-  << "  --odsr=<c>               - set DSR handshaking on output to <d>" << endl
-  << "                             (" << ComParams().OutDsrStr() << " by default), where <d> is" << endl
+  << "  --odsr=<c>               - set DSR handshaking on output to <c>" << endl
+  << "                             (" << ComParams().OutDsrStr() << " by default), where <c> is" << endl
   << "                             " << ComParams::OutDsrLst() << "." << endl
+  << "  --ox=<c>                 - set XON/XOFF handshaking on output to <c>" << endl
+  << "                             (" << ComParams().OutXStr() << " by default), where <c> is" << endl
+  << "                             " << ComParams::OutXLst() << "." << endl
+  << "  --ix=<c>                 - set XON/XOFF handshaking on input to <c>" << endl
+  << "                             (" << ComParams().InXStr() << " by default), where <c> is" << endl
+  << "                             " << ComParams::InXLst() << "." << endl
+  << "                             If XON/XOFF handshaking on input is enabled for" << endl
+  << "                             the port then XON/XOFF characters will be" << endl
+  << "                             discarded from output to this port." << endl
+  << "  --idsr=<c>               - set DSR sensitivity on input to <c>" << endl
+  << "                             (" << ComParams().InDsrStr() << " by default), where <c> is" << endl
+  << "                             " << ComParams::InDsrLst() << "." << endl
   << endl
   << "  The value c[urrent] above means to use current COM port settings." << endl
   << endl
@@ -224,6 +240,24 @@ int main(int argc, char* argv[])
     if ((pParam = GetParam(pArg, "odsr=")) != NULL) {
       if (!comParams.SetOutDsr(pParam)) {
         cerr << "Unknown DSR handshaking on output value " << pParam << endl;
+        exit(1);
+      }
+    } else
+    if ((pParam = GetParam(pArg, "ox=")) != NULL) {
+      if (!comParams.SetOutX(pParam)) {
+        cerr << "Unknown XON/XOFF handshaking on output value " << pParam << endl;
+        exit(1);
+      }
+    } else
+    if ((pParam = GetParam(pArg, "ix=")) != NULL) {
+      if (!comParams.SetInX(pParam)) {
+        cerr << "Unknown XON/XOFF handshaking on input value " << pParam << endl;
+        exit(1);
+      }
+    } else
+    if ((pParam = GetParam(pArg, "idsr=")) != NULL) {
+      if (!comParams.SetInDsr(pParam)) {
+        cerr << "Unknown DSR sensitivity value " << pParam << endl;
         exit(1);
       }
     } else

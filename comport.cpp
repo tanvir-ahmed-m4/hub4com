@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.3  2007/02/06 11:53:33  vfrolov
+ * Added options --odsr, --ox, --ix and --idsr
+ * Added communications error reporting
+ *
  * Revision 1.2  2007/02/05 09:33:20  vfrolov
  * Implemented internal flow control
  *
@@ -32,6 +36,7 @@
 #include "comport.h"
 #include "comhub.h"
 #include "comio.h"
+#include "comparams.h"
 
 ///////////////////////////////////////////////////////////////
 ComPort::ComPort(ComHub &_hub)
@@ -39,6 +44,7 @@ ComPort::ComPort(ComHub &_hub)
     hub(_hub),
     countReadOverlapped(0),
     countXoff(0),
+    filterX(FALSE),
     writeQueueLimit(256),
     writeQueued(0),
     writeLostTotal(0)
@@ -56,6 +62,7 @@ BOOL ComPort::Open(const char *pPath, const ComParams &comParams)
   }
 
   writeLost = 0;
+  filterX = comParams.InX();
 
   string path(pPath);
 
@@ -117,6 +124,15 @@ BOOL ComPort::Write(LPCVOID pData, DWORD len)
   if (!pOverlapped)
     return FALSE;
 
+  if (filterX) {
+    len = pOverlapped->FilterX();
+
+    if (!len) {
+      delete pOverlapped;
+      return TRUE;
+    }
+  }
+
   if (writeQueued > writeQueueLimit)
     PurgeComm(handle, PURGE_TXABORT|PURGE_TXCLEAR);
 
@@ -174,8 +190,43 @@ void ComPort::LostReport()
 {
   if (writeLost) {
     writeLostTotal += writeLost;
-    cout << "Write lost: " << name << " " << writeLost << " total " << writeLostTotal << endl;
+    cout << "Write lost " << name << ": " << writeLost << ", total " << writeLostTotal << endl;
     writeLost = 0;
+  }
+
+  DWORD errors;
+
+  if (ClearCommError(handle, &errors, NULL) && errors) {
+    cout << "Error " << name << ":";
+
+    if (errors & CE_RXOVER) { cout << " RXOVER"; }
+    if (errors & CE_OVERRUN) { cout << " OVERRUN"; }
+    if (errors & CE_RXPARITY) { cout << " RXPARITY"; }
+    if (errors & CE_FRAME) { cout << " FRAME"; }
+
+    #define IOCTL_SERIAL_GET_STATS CTL_CODE(FILE_DEVICE_SERIAL_PORT,35,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+    typedef struct _SERIALPERF_STATS {
+      ULONG ReceivedCount;
+      ULONG TransmittedCount;
+      ULONG FrameErrorCount;
+      ULONG SerialOverrunErrorCount;
+      ULONG BufferOverrunErrorCount;
+      ULONG ParityErrorCount;
+    } SERIALPERF_STATS, *PSERIALPERF_STATS;
+
+    SERIALPERF_STATS stats;
+    DWORD size;
+
+    if (DeviceIoControl(handle, IOCTL_SERIAL_GET_STATS, NULL, 0, &stats, sizeof(stats), &size, NULL)) {
+      cout << ", total"
+        << " RXOVER=" << stats.BufferOverrunErrorCount
+        << " OVERRUN=" << stats.SerialOverrunErrorCount
+        << " RXPARITY=" << stats.ParityErrorCount
+        << " FRAME=" << stats.FrameErrorCount;
+    }
+
+    cout << endl;
   }
 }
 ///////////////////////////////////////////////////////////////

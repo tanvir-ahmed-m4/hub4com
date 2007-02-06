@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.3  2007/02/06 11:53:33  vfrolov
+ * Added options --odsr, --ox, --ix and --idsr
+ * Added communications error reporting
+ *
  * Revision 1.2  2007/02/01 12:14:59  vfrolov
  * Redesigned COM port params
  *
@@ -41,15 +45,21 @@ class ComParams
     BOOL SetByteSize(const char *pByteSize);
     BOOL SetParity(const char *pParity);
     BOOL SetStopBits(const char *pStopBits);
-    BOOL SetOutCts(const char *pOutCts);
-    BOOL SetOutDsr(const char *pOutDsr);
+    BOOL SetOutCts(const char *pOutCts) { return SetFlag(pOutCts, &outCts); }
+    BOOL SetOutDsr(const char *pOutDsr) { return SetFlag(pOutDsr, &outDsr); }
+    BOOL SetOutX(const char *pOutX) { return SetFlag(pOutX, &outX); }
+    BOOL SetInX(const char *pInX) { return SetFlag(pInX, &inX); }
+    BOOL SetInDsr(const char *pInDsr) { return SetFlag(pInDsr, &inDsr); }
  
     static string BaudRateStr(long baudRate);
     static string ByteSizeStr(int byteSize);
     static string ParityStr(int parity);
     static string StopBitsStr(int stopBits);
-    static string OutCtsStr(int outCts);
-    static string OutDsrStr(int outDsr);
+    static string OutCtsStr(int outCts) { return FlagStr(outCts); }
+    static string OutDsrStr(int outDsr) { return FlagStr(outDsr); }
+    static string OutXStr(int outX) { return FlagStr(outX); }
+    static string InXStr(int inX) { return FlagStr(inX); }
+    static string InDsrStr(int inDsr) { return FlagStr(inDsr); }
 
     string BaudRateStr() const { return BaudRateStr(baudRate); }
     string ByteSizeStr() const { return ByteSizeStr(byteSize); }
@@ -57,13 +67,19 @@ class ComParams
     string StopBitsStr() const { return StopBitsStr(stopBits); }
     string OutCtsStr() const { return OutCtsStr(outCts); }
     string OutDsrStr() const { return OutDsrStr(outDsr); }
+    string OutXStr() const { return OutXStr(outX); }
+    string InXStr() const { return InXStr(inX); }
+    string InDsrStr() const { return InDsrStr(inDsr); }
 
     static const char *BaudRateLst();
     static const char *ByteSizeLst();
     static const char *ParityLst();
     static const char *StopBitsLst();
-    static const char *OutCtsLst();
-    static const char *OutDsrLst();
+    static const char *OutCtsLst() { return FlagLst(); }
+    static const char *OutDsrLst() { return FlagLst(); }
+    static const char *OutXLst() { return FlagLst(); }
+    static const char *InXLst() { return FlagLst(); }
+    static const char *InDsrLst() { return FlagLst(); }
 
     long BaudRate() const { return baudRate; }
     int ByteSize() const { return byteSize; }
@@ -71,14 +87,24 @@ class ComParams
     int StopBits() const { return stopBits; }
     int OutCts() const { return outCts; }
     int OutDsr() const { return outDsr; }
+    int OutX() const { return outX; }
+    int InX() const { return inX; }
+    int InDsr() const { return inDsr; }
 
   private:
+    BOOL SetFlag(const char *pFlagStr, int *pFlag);
+    static string FlagStr(int flag);
+    static const char *FlagLst();
+
     long baudRate;
     int byteSize;
     int parity;
     int stopBits;
     int outCts;
     int outDsr;
+    int outX;
+    int inX;
+    int inDsr;
 };
 ///////////////////////////////////////////////////////////////
 

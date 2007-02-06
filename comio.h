@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.3  2007/02/06 11:53:33  vfrolov
+ * Added options --odsr, --ox, --ix and --idsr
+ * Added communications error reporting
+ *
  * Revision 1.2  2007/02/05 09:33:20  vfrolov
  * Implemented internal flow control
  *
@@ -59,6 +63,7 @@ class WriteOverlapped : private OVERLAPPED
     WriteOverlapped(ComPort &_port, const void *_pBuf, DWORD _len);
     ~WriteOverlapped();
     BOOL StartWrite();
+    DWORD FilterX();
 
   private:
     static VOID CALLBACK OnWrite(
