@@ -11,7 +11,8 @@ of the com0com project.
 It allows to send data received from one COM port to a number of COM
 ports and vice versa. In conjunction with the com0com driver the hub4com
 makes it possible to handle data from a single serial device by a number
-of different applications.
+of different applications. For example, several applications can share
+data from one GPS device.
 
 The homepage for com0com project is http://com0com.sourceforge.net/.
 
