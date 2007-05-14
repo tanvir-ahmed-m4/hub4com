@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2007/05/14 12:06:37  vfrolov
+ * Added read interval timeout option
+ *
  * Revision 1.4  2007/02/06 11:53:33  vfrolov
  * Added options --odsr, --ox, --ix and --idsr
  * Added communications error reporting
@@ -141,9 +144,15 @@ HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
     return INVALID_HANDLE_VALUE;
   }
 
-  timeouts.ReadTotalTimeoutMultiplier = MAXDWORD;
-  timeouts.ReadTotalTimeoutConstant = MAXDWORD - 1;
-  timeouts.ReadIntervalTimeout = MAXDWORD;
+  if (comParams.IntervalTimeout() > 0) {
+    timeouts.ReadTotalTimeoutMultiplier = 0;
+    timeouts.ReadTotalTimeoutConstant = 0;
+    timeouts.ReadIntervalTimeout = (DWORD)comParams.IntervalTimeout();
+  } else {
+    timeouts.ReadTotalTimeoutMultiplier = MAXDWORD;
+    timeouts.ReadTotalTimeoutConstant = MAXDWORD - 1;
+    timeouts.ReadIntervalTimeout = MAXDWORD;
+  }
 
   timeouts.WriteTotalTimeoutMultiplier = 0;
   timeouts.WriteTotalTimeoutConstant = 0;
@@ -165,6 +174,7 @@ HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
       << ", ox=" << ComParams::OutXStr(dcb.fOutX)
       << ", ix=" << ComParams::InXStr(dcb.fInX)
       << ", idsr=" << ComParams::InDsrStr(dcb.fDsrSensitivity)
+      << ", ito=" << comParams.IntervalTimeoutStr()
       << ") - OK" << endl;
   return handle;
 }

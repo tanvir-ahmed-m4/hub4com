@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2007/05/14 12:06:37  vfrolov
+ * Added read interval timeout option
+ *
  * Revision 1.4  2007/02/06 11:53:33  vfrolov
  * Added options --odsr, --ox, --ix and --idsr
  * Added communications error reporting
@@ -78,6 +81,8 @@ static void Usage(const char *pProgName)
   << "  --idsr=<c>               - set DSR sensitivity on input to <c>" << endl
   << "                             (" << ComParams().InDsrStr() << " by default), where <c> is" << endl
   << "                             " << ComParams::InDsrLst() << "." << endl
+  << "  --ito=<t>                - set read interval timeout to <t> (" << ComParams().IntervalTimeoutStr() << " by default)," << endl
+  << "                             where <t> is " << ComParams::IntervalTimeoutLst() << "." << endl
   << endl
   << "  The value c[urrent] above means to use current COM port settings." << endl
   << endl
@@ -258,6 +263,12 @@ int main(int argc, char* argv[])
     if ((pParam = GetParam(pArg, "idsr=")) != NULL) {
       if (!comParams.SetInDsr(pParam)) {
         cerr << "Unknown DSR sensitivity value " << pParam << endl;
+        exit(1);
+      }
+    } else
+    if ((pParam = GetParam(pArg, "ito=")) != NULL) {
+      if (!comParams.SetIntervalTimeout(pParam)) {
+        cerr << "Unknown read interval timeout value " << pParam << endl;
         exit(1);
       }
     } else
