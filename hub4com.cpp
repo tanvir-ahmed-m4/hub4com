@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2007/12/19 13:46:36  vfrolov
+ * Added ability to send data received from port to the same port
+ *
  * Revision 1.5  2007/05/14 12:06:37  vfrolov
  * Added read interval timeout option
  *
@@ -35,7 +38,6 @@
  * Revision 1.1  2007/01/23 09:13:10  vfrolov
  * Initial revision
  *
- *
  */
 
 #include "precomp.h"
@@ -48,7 +50,7 @@ static void Usage(const char *pProgName)
 {
   cerr
   << "Usage:" << endl
-  << "  " << pProgName << " [options] \\\\.\\<port0> [options] \\\\.\\<port1> ..." << endl
+  << "  " << pProgName << " [options] \\\\.\\<port0> [options] [\\\\.\\<port1> ...]" << endl
   << endl
   << "Common options:" << endl
   << "  --help                   - show this help." << endl
@@ -87,14 +89,17 @@ static void Usage(const char *pProgName)
   << "  The value c[urrent] above means to use current COM port settings." << endl
   << endl
   << "Route options:" << endl
-  << "  --route=<LstR>:<LstL>    - send data received from any ports from <LstR> to" << endl
-  << "                             all ports from <LstL>." << endl
-  << "  --bi-route=<LstR>:<LstL> - send data received from any ports from <LstR> to" << endl
-  << "                             all ports from <LstL> and vice versa." << endl
-  << "  --no-route=<LstR>:<LstL> - do not send data received from any ports from" << endl
+  << "  --route=<LstR>:<LstL>    - send data received from any port from <LstR> to" << endl
+  << "                             all ports (except this port) from <LstL>." << endl
+  << "  --bi-route=<LstR>:<LstL> - send data received from any port from <LstR> to" << endl
+  << "                             all ports (except this port) from <LstL> and vice" << endl
+  << "                             versa." << endl
+  << "  --echo-route=<Lst>       - send data received from any port from <Lst> back" << endl
+  << "                             to this port." << endl
+  << "  --no-route=<LstR>:<LstL> - do not send data received from any port from" << endl
   << "                             <LstR> to ports from <LstL>." << endl
   << endl
-  << "  The syntax of <LstR> and <LstL> above: <P1>[,<P2>...]" << endl
+  << "  The syntax of <LstR>, <LstL> and <Lst> above: <P1>[,<P2>...]" << endl
   << "  The <Pn> above is a zero based position number of port or All." << endl
   << "  If no any route option specified, then the options --route=0:All --route=1:0" << endl
   << "  used by default (route data from first port to all ports and from second" << endl
@@ -104,8 +109,39 @@ static void Usage(const char *pProgName)
   << "  " << pProgName << " \\\\.\\COM1 \\\\.\\CNCB1 \\\\.\\CNCB2" << endl
   << "  " << pProgName << " --route=All:All \\\\.\\CNCB0 \\\\.\\CNCB1 \\\\.\\CNCB2" << endl
   << "  " << pProgName << " --baud=9600 \\\\.\\COM1 --baud=19200 \\\\.\\CNCB1" << endl
+  << "  " << pProgName << " --echo-route=0 \\\\.\\COM2" << endl
   ;
   exit(1);
+}
+///////////////////////////////////////////////////////////////
+static BOOL EchoRoute(ComHub &hub, const char *pList)
+{
+  char *pTmpList = _strdup(pList);
+
+  if (!pTmpList) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
+
+  BOOL res = TRUE;
+  char *pSave;
+
+  for (char *p = STRTOK_R(pTmpList, ",", &pSave) ; p ; p = STRTOK_R(NULL, ",", &pSave)) {
+    int i;
+
+    if (_stricmp(p, "All") == 0) {
+      i = -1;
+    } else if (!StrToInt(p, &i) || i < 0 || i >= hub.NumPorts()) {
+      res = FALSE;
+      break;
+    }
+
+    hub.RouteData(i, i, FALSE, FALSE);
+  }
+
+  free(pTmpList);
+
+  return res;
 }
 ///////////////////////////////////////////////////////////////
 static BOOL Route(ComHub &hub, const char *pListFrom, const char *pListTo, BOOL noRoute)
@@ -143,7 +179,7 @@ static BOOL Route(ComHub &hub, const char *pListFrom, const char *pListTo, BOOL 
         break;
       }
 
-      hub.RouteData(iFrom, iTo, noRoute);
+      hub.RouteData(iFrom, iTo, noRoute, TRUE);
     }
   }
 
@@ -283,18 +319,24 @@ int main(int argc, char* argv[])
     if ((pParam = GetParam(pArg, "no-route=")) != NULL) {
       defaultRouteData = FALSE;
       Route(hub, pParam, FALSE, TRUE);
+    } else
+    if ((pParam = GetParam(pArg, "echo-route=")) != NULL) {
+      defaultRouteData = FALSE;
+      EchoRoute(hub, pParam);
     } else {
       cerr << "Unknown option " << pArg << endl;
       exit(1);
     }
   }
 
-  if (plugged < 2)
-    Usage(argv[0]);
-
+  if (plugged < 2) {
+    if (plugged < 1)
+      Usage(argv[0]);
+  }
+  else
   if (defaultRouteData) {
-    hub.RouteData(0, -1, FALSE);
-    hub.RouteData(1, 0, FALSE);
+    hub.RouteData(0, -1, FALSE, TRUE);
+    hub.RouteData(1, 0, FALSE, TRUE);
   }
 
   if (defaultRouteFlowControl) {
