@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2007 Vyacheslav Frolov
+ * Copyright (c) 2006-2008 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/02/04 10:08:49  vfrolov
+ * Fixed <LstR>:<LstL> parsing bug
+ *
  * Revision 1.6  2007/12/19 13:46:36  vfrolov
  * Added ability to send data received from port to the same port
  *
@@ -147,9 +150,8 @@ static BOOL EchoRoute(ComHub &hub, const char *pList)
 static BOOL Route(ComHub &hub, const char *pListFrom, const char *pListTo, BOOL noRoute)
 {
   char *pTmpListFrom = _strdup(pListFrom);
-  char *pTmpListTo = _strdup(pListTo);
 
-  if (!pTmpListFrom || !pTmpListTo) {
+  if (!pTmpListFrom) {
     cerr << "No enough memory." << endl;
     exit(2);
   }
@@ -167,6 +169,13 @@ static BOOL Route(ComHub &hub, const char *pListFrom, const char *pListTo, BOOL 
       break;
     }
 
+    char *pTmpListTo = _strdup(pListTo);
+
+    if (!pTmpListTo) {
+      cerr << "No enough memory." << endl;
+      exit(2);
+    }
+
     char *pSave2;
 
     for (char *pTo = STRTOK_R(pTmpListTo, ",", &pSave2) ; pTo ; pTo = STRTOK_R(NULL, ",", &pSave2)) {
@@ -181,9 +190,10 @@ static BOOL Route(ComHub &hub, const char *pListFrom, const char *pListTo, BOOL 
 
       hub.RouteData(iFrom, iTo, noRoute, TRUE);
     }
+
+    free(pTmpListTo);
   }
 
-  free(pTmpListTo);
   free(pTmpListFrom);
 
   return res;
