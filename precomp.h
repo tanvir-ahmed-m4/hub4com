@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2007 Vyacheslav Frolov
+ * Copyright (c) 2006-2008 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/03/26 08:15:24  vfrolov
+ * Added more includes
+ *
  * Revision 1.2  2007/02/01 12:14:59  vfrolov
  * Redesigned COM port params
  *
@@ -32,11 +35,13 @@
 #define _PRECOMP_H_
 
 #include <windows.h>
+#include <crtdbg.h>
 
 #include <string>
 #include <vector>
-#include <iostream>
 #include <map>
+#include <iostream>
+#include <fstream>
 #include <sstream>
 
 using namespace std;
