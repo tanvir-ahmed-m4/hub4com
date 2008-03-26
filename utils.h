@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2007 Vyacheslav Frolov
+ * Copyright (c) 2006-2008 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,17 +19,45 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/03/26 08:14:09  vfrolov
+ * Added
+ *   - class Args
+ *   - STRQTOK_R()
+ *   - CreateArgsVector()/FreeArgsVector()
+ *
  * Revision 1.1  2007/01/23 09:13:10  vfrolov
  * Initial revision
  *
- *
  */
 
-#ifndef _C0C_UTILS_H_
-#define _C0C_UTILS_H_
+#ifndef _UTILS_H_
+#define _UTILS_H_
 
+///////////////////////////////////////////////////////////////
+class Args : public vector<string>
+{
+  public:
+    Args(int argc, const char *const argv[]);
+
+  private:
+    void Add(const string &arg, const vector<string> &params);
+
+    int num_recursive;
+};
+///////////////////////////////////////////////////////////////
 char *STRTOK_R(char *pStr, const char *pDelims, char **ppSave);
+char *STRQTOK_R(char *pStr, const char *pDelims, char **ppSave);
 BOOL StrToInt(const char *pStr, int *pNum);
 const char *GetParam(const char *pArg, const char *pPattern);
+void CreateArgsVector(
+    const char *pName,
+    const char *pArgs,
+    int *pArgc,
+    const char ***pArgv,
+    void **ppTmp);
+void FreeArgsVector(
+    const char **argv,
+    void *pTmp);
+///////////////////////////////////////////////////////////////
 
-#endif /* _C0C_UTILS_H_ */
+#endif /* _UTILS_H_ */

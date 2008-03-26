@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2007 Vyacheslav Frolov
+ * Copyright (c) 2006-2008 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,15 +19,133 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/03/26 08:14:09  vfrolov
+ * Added
+ *   - class Args
+ *   - STRQTOK_R()
+ *   - CreateArgsVector()/FreeArgsVector()
+ *
  * Revision 1.1  2007/01/23 09:13:10  vfrolov
  * Initial revision
- *
  *
  */
 
 #include "precomp.h"
 #include "utils.h"
 
+///////////////////////////////////////////////////////////////
+Args::Args(int argc, const char *const argv[])
+  : num_recursive(0)
+{
+  for (int i = 0 ; i < argc ; i++)
+    Add(argv[i], vector<string>());
+}
+
+void Args::Add(const string &arg, const vector<string> &params)
+{
+  string argBuf = arg;
+
+  for (size_type off = argBuf.find("%%"); off != argBuf.npos ; off = argBuf.find("%%", off)) {
+    BOOL replaced = FALSE;
+
+    for (size_type i = 0 ; i < params.size() ; i++) {
+      stringstream par;
+
+      par << (i + 1) << "%%";
+
+      if (argBuf.compare(off + 2, par.str().length(), par.str()) == 0) {
+        argBuf.replace(off, par.str().length() + 2, params[i]);
+        replaced = TRUE;
+        off += params[i].length();
+        break;
+      }
+    }
+
+    if (!replaced)
+      off += 2;
+  }
+
+  const char *pLoad = GetParam(argBuf.c_str(), "--load=");
+
+  if (!pLoad) {
+    //cout << "<" << argBuf << ">" << endl;
+    push_back(argBuf);
+    return;
+  }
+
+  char *pTmp = _strdup(pLoad);
+
+  if (!pTmp) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
+
+  char *pSave;
+  char *pFile = STRQTOK_R(pTmp, ":", &pSave);
+
+  if (!pFile || !*pFile) {
+    cerr << "No file name in " << arg << endl;
+    exit(1);
+  }
+
+  ifstream ifile(pFile);
+
+  if (ifile.fail()) {
+    cerr << "Can't open file " << pFile << endl;
+    exit(1);
+  }
+
+  vector<string> paramsLoad;
+
+  for (char *p = STRQTOK_R(NULL, ",", &pSave) ; p ; p = STRQTOK_R(NULL, ",", &pSave))
+    paramsLoad.push_back(p);
+
+  free(pTmp);
+
+  while (ifile.good()) {
+    stringstream line;
+
+    ifile.get(*line.rdbuf());
+
+    if (!ifile.fail()) {
+      string str = line.str();
+      string::size_type first_non_space = string::npos;
+      string::size_type last_non_space = string::npos;
+
+      for (string::size_type i = 0 ; i < str.length() ; i++) {
+        if (!isspace(str[i])) {
+          if (first_non_space == string::npos) {
+            if (str[i] == '#')
+              break;
+
+            first_non_space = i;
+          }
+
+          last_non_space = i;
+        }
+      }
+
+      if (first_non_space != string::npos) {
+        str = str.substr(first_non_space, last_non_space + 1 - first_non_space);
+
+        if (num_recursive > 256) {
+          cerr << "Too many recursive options " << arg << endl;
+          exit(1);
+        }
+
+        num_recursive++;
+        Add(str, paramsLoad);
+        num_recursive--;
+      }
+    } else {
+      ifile.clear();
+    }
+
+    char ch;
+
+    ifile.get(ch);
+  }
+}
 ///////////////////////////////////////////////////////////////
 static BOOL IsDelim(char c, const char *pDelims)
 {
@@ -38,7 +156,7 @@ static BOOL IsDelim(char c, const char *pDelims)
 
   return FALSE;
 }
-
+///////////////////////////////////////////////////////////////
 char *STRTOK_R(char *pStr, const char *pDelims, char **ppSave)
 {
   if (!pStr)
@@ -56,6 +174,52 @@ char *STRTOK_R(char *pStr, const char *pDelims, char **ppSave)
 
   while (*pStr && !IsDelim(*pStr, pDelims))
     pStr++;
+
+  if (*pStr)
+    *pStr++ = 0;
+
+  *ppSave = pStr;
+
+  return pToken;
+}
+///////////////////////////////////////////////////////////////
+char *STRQTOK_R(char *pStr, const char *pDelims, char **ppSave)
+{
+  if (!pStr)
+    pStr = *ppSave;
+
+  while (IsDelim(*pStr, pDelims))
+    pStr++;
+
+  if (!*pStr) {
+    *ppSave = pStr;
+    return NULL;
+  }
+
+  char *pToken = pStr;
+  BOOL quoted = FALSE;
+  int cntMask = 0;
+
+  while (*pStr && (quoted || !IsDelim(*pStr, pDelims))) {
+    if (*pStr == '\"') {
+      if (cntMask%2 == 0) {
+        memmove(pStr, pStr + 1, strlen(pStr + 1) + 1);
+        quoted = !quoted;
+      } else {
+        memmove(pStr - (cntMask/2 + 1), pStr, strlen(pStr) + 1);
+        pStr -= cntMask/2;
+      }
+      cntMask = 0;
+      continue;
+    }
+
+    if (*pStr == '\\')
+      cntMask++;
+    else
+      cntMask = 0;
+
+    pStr++;
+  }
 
   if (*pStr)
     *pStr++ = 0;
@@ -116,5 +280,67 @@ const char *GetParam(const char *pArg, const char *pPattern)
     return NULL;
 
   return pArg + lenPattern;
+}
+///////////////////////////////////////////////////////////////
+void CreateArgsVector(
+    const char *pName,
+    const char *pArgs,
+    int *pArgc,
+    const char ***pArgv,
+    void **ppTmp)
+{
+  int argc = 1;
+  const char **argv = (const char **)malloc((argc + 1) * sizeof(argv[0]));
+
+  if (!argv) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
+
+  argv[0] = pName;
+
+  char *pTmp;
+
+  if (pArgs) {
+    pTmp = _strdup(pArgs);
+
+    if (!pTmp) {
+      cerr << "No enough memory." << endl;
+      exit(2);
+    }
+
+    char *pSave;
+
+    for (argv[argc] = STRQTOK_R(pTmp, " ", &pSave) ;
+         argv[argc] ;
+         argv[argc] = STRQTOK_R(NULL, " ", &pSave))
+    {
+      argc++;
+      argv = (const char **)realloc(argv, (argc + 1) * sizeof(argv[0]));
+
+      if (!argv) {
+        cerr << "No enough memory." << endl;
+        exit(2);
+      }
+    }
+  } else {
+    pTmp = NULL;
+    argv[argc] = NULL;
+  }
+
+  *pArgc = argc;
+  *pArgv = argv;
+  *ppTmp = pTmp;
+}
+
+void FreeArgsVector(
+    const char **argv,
+    void *pTmp)
+{
+  if (argv)
+    free(argv);
+
+  if (pTmp)
+    free(pTmp);
 }
 ///////////////////////////////////////////////////////////////
