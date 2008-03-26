@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2007 Vyacheslav Frolov
+ * Copyright (c) 2006-2008 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/03/26 08:48:18  vfrolov
+ * Initial revision
+ *
  * Revision 1.4  2007/12/19 13:46:36  vfrolov
  * Added ability to send data received from port to the same port
  *
@@ -35,151 +38,154 @@
 
 #include "precomp.h"
 #include "comhub.h"
-#include "comport.h"
+#include "port.h"
+#include "filters.h"
+#include "hubmsg.h"
 
 ///////////////////////////////////////////////////////////////
-typedef pair <ComPort*, ComPort*> ComPortPair;
-///////////////////////////////////////////////////////////////
-static ComPortMap::iterator FindPair(ComPortMap &map, const ComPortPair &pair)
+BOOL ComHub::CreatePort(
+    const PORT_ROUTINES_A *pPortRoutines,
+    int n,
+    HCONFIG hConfig,
+    const char *pPath)
 {
-  ComPortMap::iterator i;
-
-  for (i = map.find(pair.first) ; i != map.end() ; i++) {
-    if (i->first != pair.first)
-      return map.end();
-
-    if (i->second == pair.second)
-      break;
-  }
-
-  return i;
-}
-///////////////////////////////////////////////////////////////
-BOOL ComHub::Add(const char * /*pPath*/)
-{
-  ComPort *pPort = new ComPort(*this);
-
-  if (!pPort) {
-    cerr << "Can't create ComPort " << ports.size() << endl;
+  if (!ROUTINE_IS_VALID(pPortRoutines, pCreate)) {
+    cerr << "No create routine for port " << pPath << endl;
     return FALSE;
   }
 
-  ports.push_back(pPort);
+  HPORT hPort = pPortRoutines->pCreate(hConfig, pPath);
+
+  if (!hPort) {
+    cerr << "Can't create port " << pPath << endl;
+    return FALSE;
+  }
+
+  ports[n] = new Port(*this, n, pPortRoutines, hPort);
+
+  if (!ports[n]) {
+    cerr << "Can't create master port " << pPath << endl;
+    return FALSE;
+  }
 
   return TRUE;
 }
 
-BOOL ComHub::PlugIn(int n, const char *pPath, const ComParams &comParams)
+BOOL ComHub::StartAll() const
 {
-  ComPort *pPort = ports.at(n);
-
-  if (!pPort->Open(pPath, comParams))
+  if (pFilters && !pFilters->Init())
     return FALSE;
 
-  return TRUE;
-}
+  for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
+    if (!(*i)->Init())
+      return FALSE;
+  }
 
-BOOL ComHub::StartAll()
-{
-  BOOL res = TRUE;
-
-  for (ComPorts::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
+  for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
     if (!(*i)->Start())
-      res = FALSE;
+      return FALSE;
   }
 
-  return res;
+  return TRUE;
 }
 
-void ComHub::Write(ComPort *pFromPort, LPCVOID pData, DWORD len)
+void ComHub::OnRead(Port *pFromPort, HubMsg *pMsg) const
 {
-  ComPortMap::const_iterator i;
+  _ASSERTE(pFromPort != NULL);
+  _ASSERTE(pMsg != NULL);
 
-  for (i = routeDataMap.find(pFromPort) ; i != routeDataMap.end() ; i++) {
+  if (pFilters) {
+    HubMsg *pEchoMsg = NULL;
+
+    if (!pFilters->InMethod(pFromPort->Num(), pMsg, &pEchoMsg)) {
+      if (pEchoMsg) {
+        delete pEchoMsg;
+        pEchoMsg = NULL;
+      }
+    }
+
+    for (HubMsg *pCurMsg = pEchoMsg ; pCurMsg ; pCurMsg = pCurMsg->Next())
+      pFromPort->Write(pCurMsg);
+
+    if (pEchoMsg)
+      delete pEchoMsg;
+  }
+
+  for (PortMap::const_iterator i = routeDataMap.find(pFromPort) ; i != routeDataMap.end() ; i++) {
     if (i->first != pFromPort)
       break;
 
-    i->second->Write(pData, len);
+    HubMsg *pOutMsg = pMsg->Clone();
+
+    if (pFilters && pOutMsg) {
+      if (!pFilters->OutMethod(pFromPort->Num(), i->second->Num(), pOutMsg)) {
+        if (pOutMsg) {
+          delete pOutMsg;
+          pOutMsg = NULL;
+        }
+      }
+    }
+
+    for (HubMsg *pCurMsg = pOutMsg ; pCurMsg ; pCurMsg = pCurMsg->Next())
+      i->second->Write(pCurMsg);
+
+    if (pOutMsg)
+      delete pOutMsg;
   }
 }
 
-void ComHub::AddXoff(ComPort *pFromPort, int count)
+void ComHub::AddXoff(Port *pFromPort) const
 {
-  ComPortMap::const_iterator i;
-
-  for (i = routeFlowControlMap.find(pFromPort) ; i != routeFlowControlMap.end() ; i++) {
+  for (PortMap::const_iterator i = routeFlowControlMap.find(pFromPort) ; i != routeFlowControlMap.end() ; i++) {
     if (i->first != pFromPort)
       break;
 
-    i->second->AddXoff(count);
+    i->second->AddXoff();
+  }
+}
+
+void ComHub::AddXon(Port *pFromPort) const
+{
+  for (PortMap::const_iterator i = routeFlowControlMap.find(pFromPort) ; i != routeFlowControlMap.end() ; i++) {
+    if (i->first != pFromPort)
+      break;
+
+    i->second->AddXon();
   }
 }
 
 void ComHub::LostReport() const
 {
-  for (ComPorts::const_iterator i = ports.begin() ; i != ports.end() ; i++)
+  for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++)
     (*i)->LostReport();
 }
 
-void ComHub::RouteFlowControl(BOOL fromAnyDataReceiver)
+void ComHub::SetDataRoute(const PortNumMap &map)
 {
-  for (ComPortMap::const_iterator i = routeDataMap.begin() ; i != routeDataMap.end() ; i++) {
-    ComPortPair pair(i->second, i->first);
+  routeDataMap.clear();
 
-    if (FindPair(routeFlowControlMap, pair) == routeFlowControlMap.end()) {
-      if (fromAnyDataReceiver || FindPair(routeDataMap, pair) != routeDataMap.end())
-        routeFlowControlMap.insert(pair);
-    }
-  }
+  for (PortNumMap::const_iterator i = map.begin() ; i != map.end() ; i++)
+    routeDataMap.insert(pair<Port*, Port*>(ports.at(i->first), ports.at(i->second)));
 }
 
-void ComHub::Route(ComPortMap &map, int iFrom, int iTo, BOOL noRoute, BOOL noEcho) const
+void ComHub::SetFlowControlRoute(const PortNumMap &map)
 {
-  if (iFrom < 0) {
-    for (int iF = 0 ; iF < (int)ports.size() ; iF++) {
-      if(iTo < 0) {
-        for (int iT = 0 ; iT < (int)ports.size() ; iT++)
-          Route(map, iF, iT, noRoute, noEcho);
-      } else {
-        Route(map, iF, iTo, noRoute, noEcho);
-      }
-    }
-  } else {
-    if(iTo < 0) {
-      for (int iT = 0 ; iT < (int)ports.size() ; iT++)
-        Route(map, iFrom, iT, noRoute, noEcho);
-    }
-    else
-    if (iFrom != iTo || !noEcho || noRoute) {
-      ComPortPair pair(ports.at(iFrom), ports.at(iTo));
+  routeFlowControlMap.clear();
 
-      for (;;) {
-        ComPortMap::iterator i = FindPair(map, pair);
-
-        if (i == map.end()) {
-          if (!noRoute)
-            map.insert(pair);
-          break;
-        } else if (noRoute) {
-          map.erase(i);
-        } else {
-          break;
-        }
-      }
-    }
-  }
+  for (PortNumMap::const_iterator i = map.begin() ; i != map.end() ; i++)
+    routeFlowControlMap.insert(pair<Port*, Port*>(ports.at(i->first), ports.at(i->second)));
 }
 
-static void RouteReport(const ComPortMap &map, const char *pMapName)
+static void RouteReport(const PortMap &map, const char *pMapName)
 {
   if (!map.size()) {
     cout << "No route for " << pMapName << endl;
     return;
   }
 
-  ComPort *pLastPort = NULL;
+  Port *pLastPort = NULL;
 
-  for (ComPortMap::const_iterator i = map.begin() ; i != map.end() ; i++) {
+  for (PortMap::const_iterator i = map.begin() ; i != map.end() ; i++) {
     if (pLastPort != i->first) {
       if (pLastPort)
         cout << endl;

@@ -2,8 +2,8 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8,00"
-	Name="hub4com"
-	ProjectGUID="{AC4EC208-ED55-4F9D-ACDD-A57642C3C296}"
+	Name="port-serial"
+	ProjectGUID="{031557BD-5B2D-4B87-B40D-2DD9C43E68BC}"
 	RootNamespace="hub4com"
 	Keyword="Win32Proj"
 	>
@@ -19,7 +19,7 @@
 			Name="Debug|Win32"
 			OutputDirectory="Debug"
 			IntermediateDirectory="Debug"
-			ConfigurationType="1"
+			ConfigurationType="2"
 			UseOfMFC="0"
 			>
 			<Tool
@@ -62,7 +62,9 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				OutputFile="..\..\$(OutDir)\plugins\$(ProjectName).dll"
 				LinkIncremental="2"
+				ModuleDefinitionFile="..\plugins.def"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				TargetMachine="1"
@@ -96,7 +98,7 @@
 			Name="Release|Win32"
 			OutputDirectory="Release"
 			IntermediateDirectory="Release"
-			ConfigurationType="1"
+			ConfigurationType="2"
 			UseOfMFC="0"
 			>
 			<Tool
@@ -136,7 +138,9 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				OutputFile="..\..\$(OutDir)\plugins\$(ProjectName).dll"
 				LinkIncremental="2"
+				ModuleDefinitionFile="..\plugins.def"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				OptimizeReferences="2"
@@ -178,35 +182,23 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath=".\bufutils.h"
+				RelativePath=".\comio.h"
 				>
 			</File>
 			<File
-				RelativePath=".\comhub.h"
+				RelativePath=".\comparams.h"
 				>
 			</File>
 			<File
-				RelativePath=".\export.h"
+				RelativePath=".\comport.h"
 				>
 			</File>
 			<File
-				RelativePath=".\filters.h"
+				RelativePath=".\import.h"
 				>
 			</File>
 			<File
-				RelativePath=".\hubmsg.h"
-				>
-			</File>
-			<File
-				RelativePath=".\plugins.h"
-				>
-			</File>
-			<File
-				RelativePath=".\plugins\plugins_api.h"
-				>
-			</File>
-			<File
-				RelativePath=".\port.h"
+				RelativePath="..\plugins_api.h"
 				>
 			</File>
 			<File
@@ -214,25 +206,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\route.h"
-				>
-			</File>
-			<File
-				RelativePath=".\utils.h"
-				>
-			</File>
-			<File
-				RelativePath=".\version.h"
-				>
-			</File>
-		</Filter>
-		<Filter
-			Name="Resource Files"
-			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx"
-			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
-			>
-			<File
-				RelativePath=".\hub4com.rc"
+				RelativePath="..\..\utils.h"
 				>
 			</File>
 		</Filter>
@@ -242,27 +216,19 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath=".\comhub.cpp"
+				RelativePath=".\comio.cpp"
 				>
 			</File>
 			<File
-				RelativePath=".\export.cpp"
+				RelativePath=".\comparams.cpp"
 				>
 			</File>
 			<File
-				RelativePath=".\filters.cpp"
+				RelativePath=".\comport.cpp"
 				>
 			</File>
 			<File
-				RelativePath=".\hub4com.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\hubmsg.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\plugins.cpp"
+				RelativePath="..\plugins.def"
 				>
 			</File>
 			<File
@@ -290,11 +256,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath=".\route.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\utils.cpp"
+				RelativePath="..\..\utils.cpp"
 				>
 			</File>
 		</Filter>
