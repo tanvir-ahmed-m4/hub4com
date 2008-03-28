@@ -19,9 +19,11 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/03/28 15:55:09  vfrolov
+ * Fixed help
+ *
  * Revision 1.1  2008/03/26 08:41:18  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -42,7 +44,7 @@ static const PLUGIN_ABOUT_A about = {
   "serial",
   "Copyright (c) 2008 Vyacheslav Frolov",
   "GNU General Public License",
-  "Serial port",
+  "Serial port driver",
 };
 
 static const PLUGIN_ABOUT_A * CALLBACK GetPluginAbout()
@@ -53,7 +55,10 @@ static const PLUGIN_ABOUT_A * CALLBACK GetPluginAbout()
 static void CALLBACK Help(const char *pProgPath)
 {
   cerr
-  << "COM port options:" << endl
+  << "Usage:" << endl
+  << "  " << pProgPath << " ... [--use-port-module=" << GetPluginAbout()->pName << "] <com port> ..." << endl
+  << endl
+  << "Options:" << endl
   << "  --baud=<b>               - set baud rate to <b> (" << ComParams().BaudRateStr() << " by default)," << endl
   << "                             where <b> is " << ComParams::BaudRateLst() << "." << endl
   << "  --data=<d>               - set data bits to <d> (" << ComParams().ByteSizeStr() << " by default)," << endl
@@ -90,9 +95,23 @@ static void CALLBACK Help(const char *pProgPath)
   << "  The syntax of <LstEv> above is" << endl
   << "  " << ComParams::EventsLst() << "." << endl
   << endl
+  << "Output data stream description:" << endl
+  << "  LINE_DATA(<data>) - write <data> to serial port." << endl
+  << "  COM_FUNCTION(<function>) - direct serial port to perform <function>." << endl
+  << endl
+  << "Input data stream description:" << endl
+  << "  LINE_DATA(<data>) - readed <data> from serial port." << endl
+  << "  CONNECT(TRUE) - serial port started." << endl
+  << "  MODEM_STATUS(<value>) - modem control register changed to <value>." << endl
+  << "  COM_ERRORS(<mask>) - occured communications errors indicated in <mask>." << endl
+  << endl
   << "Examples:" << endl
   << "  " << pProgPath << " COM1 \\\\.\\CNCB1 \\\\.\\CNCB2" << endl
-  << "  " << pProgPath << " --baud=9600 COM1 --baud=19200 \\\\.\\CNCB1" << endl
+  << "    - receive data from COM1 and send it to CNCB1 and CNCB2," << endl
+  << "      receive data from CNCB1 and send it to COM1." << endl
+  << "  " << pProgPath << " --baud=9600 COM1 --baud=19200 COM2" << endl
+  << "    - receive data at speed 9600 from COM1 and send it to COM2 at speed 19200," << endl
+  << "      receive data at speed 19200 from COM2 and send it to COM1 at speed 9600." << endl
   ;
 }
 ///////////////////////////////////////////////////////////////
