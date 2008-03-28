@@ -19,9 +19,11 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/03/28 16:01:13  vfrolov
+ * Fixed Help
+ *
  * Revision 1.1  2008/03/27 17:19:18  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -42,7 +44,7 @@ static const PLUGIN_ABOUT_A about = {
   "tcp",
   "Copyright (c) 2008 Vyacheslav Frolov",
   "GNU General Public License",
-  "TCP port",
+  "TCP port driver",
 };
 
 static const PLUGIN_ABOUT_A * CALLBACK GetPluginAbout()
@@ -58,10 +60,28 @@ static void CALLBACK Help(const char *pProgPath)
   << "Usage  (server mode):" << endl
   << "  " << pProgPath << " ... [--use-port-module=" << GetPluginAbout()->pName << "] [*]<listen port> ..." << endl
   << endl
-  << "  The sign * above means that connection shold be permanent as it possible." << endl
+  << "  The sign * above means that connection shold be permanent as it's possible." << endl
+  << "  In client mode it will force connection to remote host on start or on" << endl
+  << "  disconnect." << endl
   << endl
   << "Options:" << endl
   << "  --interface=<if>         - use interface <if>." << endl
+  << endl
+  << "Output data stream description:" << endl
+  << "  LINE_DATA(<data>) - send <data> to remote host." << endl
+  << "  CONNECT(TRUE) - increment connection counter." << endl
+  << "  CONNECT(FALSE) - decrement connection counter." << endl
+  << endl
+  << "In client mode if there is not connection to remote host the incrementing of" << endl
+  << "the connection counter will force connection to remote host." << endl
+  << "If sign * is not used and there is connection to remote host the decrementing" << endl
+  << "of the connection counter to 0 will force disconnection from remote host." << endl
+  << endl
+  << "Input data stream description:" << endl
+  << "  LINE_DATA(<data>) - received <data> from remote host." << endl
+  << "  CONNECT(TRUE) - connected to remote host." << endl
+  << "  CONNECT(FALSE) - disconnected." << endl
+  << endl
   << "Examples:" << endl
   << "  " << pProgPath << " --use-port-module=" << GetPluginAbout()->pName << " 1111 222.22.22.22:2222" << endl
   << "    - listen TCP port 1111 and on incoming connection connect to" << endl
