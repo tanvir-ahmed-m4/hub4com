@@ -9,6 +9,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "port-tcp", "plugins\tcp\tcp
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-telnet", "plugins\telnet\telnet.vcproj", "{BE3A1495-71A9-4B47-B1AC-44CB14A6E721}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-awakseq", "plugins\awakseq\awakseq.vcproj", "{58AC48ED-1D7D-4947-8BAA-4CD813B24760}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -31,6 +33,10 @@ Global
 		{BE3A1495-71A9-4B47-B1AC-44CB14A6E721}.Debug|Win32.Build.0 = Debug|Win32
 		{BE3A1495-71A9-4B47-B1AC-44CB14A6E721}.Release|Win32.ActiveCfg = Release|Win32
 		{BE3A1495-71A9-4B47-B1AC-44CB14A6E721}.Release|Win32.Build.0 = Release|Win32
+		{58AC48ED-1D7D-4947-8BAA-4CD813B24760}.Debug|Win32.ActiveCfg = Debug|Win32
+		{58AC48ED-1D7D-4947-8BAA-4CD813B24760}.Debug|Win32.Build.0 = Debug|Win32
+		{58AC48ED-1D7D-4947-8BAA-4CD813B24760}.Release|Win32.ActiveCfg = Release|Win32
+		{58AC48ED-1D7D-4947-8BAA-4CD813B24760}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
