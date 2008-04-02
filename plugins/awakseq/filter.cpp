@@ -19,9 +19,11 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/04/02 10:39:54  vfrolov
+ * Added discarding CONNECT(FALSE) from the input stream
+ *
  * Revision 1.1  2008/04/01 14:52:46  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -147,7 +149,8 @@ static void CALLBACK Help(const char *pProgPath)
   << "IN method input data stream description:" << endl
   << "  LINE_DATA(<data>) - <data> is the raw bytes." << endl
   << "  CONNECT(TRUE)     - it will be discarded from stream." << endl
-  << "  CONNECT(FALSE)    - start awakening sequence waiting." << endl
+  << "  CONNECT(FALSE)    - it will be discarded from stream if CONNECT(TRUE) was not" << endl
+  << "                      added yet. Start awakening sequence waiting." << endl
   << endl
   << "IN method output data stream description:" << endl
   << "  LINE_DATA(<data>) - <data> is the raw bytes w/o awakening sequence and all" << endl
@@ -164,8 +167,9 @@ static void CALLBACK Help(const char *pProgPath)
   << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0:" << GetPluginAbout()->pName << " COM1 --use-port-module=tcp 111.11.11.11:1111" << endl
   << "    - wait first byte from COM1 and then establish connection to" << endl
   << "      111.11.11.11:1111." << endl
-  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << ":\"--awak-seq=aaa\" --add-filters=0:" << GetPluginAbout()->pName << " COM1 --use-port-module=tcp 111.11.11.11:1111" << endl
+  << "  " << pProgPath << " --create-filter=pin2con --create-filter=" << GetPluginAbout()->pName << ":\"--awak-seq=aaa\" --add-filters=0:pin2con," << GetPluginAbout()->pName << " --rt-events=dsr COM1 --use-port-module=tcp 111.11.11.11:1111" << endl
   << "    - wait \"aaa\" from COM1 and then establish connection to 111.11.11.11:1111." << endl
+  << "      and disconnect on DSR OFF." << endl
   ;
 }
 ///////////////////////////////////////////////////////////////
@@ -236,6 +240,8 @@ static BOOL CALLBACK InMethod(
           pInMsg->u.buf.size = size;
         }
       } else {
+        // insert CONNECT(TRUE) instead data
+
         pInMsg = pMsgReplaceVal(pInMsg, HUB_MSG_TYPE_CONNECT, TRUE);
       }
     } else {
@@ -249,12 +255,17 @@ static BOOL CALLBACK InMethod(
       // discard CONNECT(TRUE) from the input stream
       pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
     } else {
-      // start awakening sequence waiting
       State *pState = ((Filter *)hFilter)->GetState(nFromPort);
 
       if (!pState)
         return FALSE;
 
+      // discard CONNECT(FALSE) from the input stream
+      // if CONNECT(TRUE) was not added yet
+      if (pState->waitAwakSeq)
+        pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
+
+      // start awakening sequence waiting
       pState->StartAwakSeq(((Filter *)hFilter)->pAwakSeq);
     }
   }
