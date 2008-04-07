@@ -19,9 +19,11 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/04/07 12:20:51  vfrolov
+ * Added HUB_MSG_TYPE_SET_RT_EVENTS
+ *
  * Revision 1.1  2008/03/26 08:38:37  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -44,6 +46,7 @@ extern "C" {
 #define HUB_MSG_TYPE_MODEM_STATUS  (HUB_MSG_UNION_TYPE_VAL   |   3)
 #define HUB_MSG_TYPE_COM_ERRORS    (HUB_MSG_UNION_TYPE_VAL   |   4)
 #define HUB_MSG_TYPE_COM_FUNCTION  (HUB_MSG_UNION_TYPE_VAL   |   5)
+#define HUB_MSG_TYPE_SET_RT_EVENTS (HUB_MSG_UNION_TYPE_VAL   |   6)
 /*******************************************************************/
 typedef struct _HUB_MSG {
   WORD type;
