@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/04/07 12:28:03  vfrolov
+ * Replaced --rt-events option by SET_RT_EVENTS message
+ *
  * Revision 1.2  2008/03/28 15:55:09  vfrolov
  * Fixed help
  *
@@ -88,22 +91,20 @@ static void CALLBACK Help(const char *pProgPath)
   << "                             " << ComParams::InDsrLst() << "." << endl
   << "  --ito=<t>                - set read interval timeout to <t> (" << ComParams().IntervalTimeoutStr() << " by default)," << endl
   << "                             where <t> is " << ComParams::IntervalTimeoutLst() << "." << endl
-  << "  --rt-events=<LstEv>      - set events that should be handled in real-time to" << endl
-  << "                             <LstEv> (" << ComParams().EventsStr() << " by default)." << endl
   << endl
   << "  The value c[urrent] above means to use current COM port settings." << endl
-  << "  The syntax of <LstEv> above is" << endl
-  << "  " << ComParams::EventsLst() << "." << endl
   << endl
   << "Output data stream description:" << endl
-  << "  LINE_DATA(<data>) - write <data> to serial port." << endl
+  << "  LINE_DATA(<data>)        - write <data> to serial port." << endl
   << "  COM_FUNCTION(<function>) - direct serial port to perform <function>." << endl
+  << "  SET_RT_EVENTS(<mask>)    - direct serial port to monitor <mask> real-time" << endl
+  << "                             events." << endl
   << endl
   << "Input data stream description:" << endl
-  << "  LINE_DATA(<data>) - readed <data> from serial port." << endl
-  << "  CONNECT(TRUE) - serial port started." << endl
-  << "  MODEM_STATUS(<value>) - modem control register changed to <value>." << endl
-  << "  COM_ERRORS(<mask>) - occured communications errors indicated in <mask>." << endl
+  << "  LINE_DATA(<data>)        - readed <data> from serial port." << endl
+  << "  CONNECT(TRUE)            - serial port started." << endl
+  << "  MODEM_STATUS(<value>)    - modem control register changed to <value>." << endl
+  << "  COM_ERRORS(<mask>)       - occured communications errors indicated in <mask>." << endl
   << endl
   << "Examples:" << endl
   << "  " << pProgPath << " COM1 \\\\.\\CNCB1 \\\\.\\CNCB2" << endl
@@ -194,12 +195,6 @@ static BOOL CALLBACK Config(
   if ((pParam = GetParam(pArg, "--ito=")) != NULL) {
     if (!comParams.SetIntervalTimeout(pParam)) {
       cerr << "Unknown read interval timeout value in " << pArg << endl;
-      exit(1);
-    }
-  } else
-  if ((pParam = GetParam(pArg, "--rt-events=")) != NULL) {
-    if (!comParams.SetEvents(pParam)) {
-      cerr << "Unknown events in " << pArg << endl;
       exit(1);
     }
   } else {

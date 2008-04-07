@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/04/07 12:28:02  vfrolov
+ * Replaced --rt-events option by SET_RT_EVENTS message
+ *
  * Revision 1.1  2008/03/26 08:43:50  vfrolov
  * Redesigned for using plugins
  *
@@ -61,7 +64,7 @@ static BOOL myGetCommState(HANDLE handle, DCB *dcb)
 {
   dcb->DCBlength = sizeof(*dcb);
 
-  if (!GetCommState(handle, dcb)) {
+  if (!::GetCommState(handle, dcb)) {
     TraceError(GetLastError(), "GetCommState()");
     return FALSE;
   }
@@ -70,11 +73,50 @@ static BOOL myGetCommState(HANDLE handle, DCB *dcb)
 
 static BOOL mySetCommState(HANDLE handle, DCB *dcb)
 {
-  if (!SetCommState(handle, dcb)) {
+  if (!::SetCommState(handle, dcb)) {
     TraceError(GetLastError(), "SetCommState()");
+    myGetCommState(handle, dcb);
+    return FALSE;
+  }
+  return myGetCommState(handle, dcb);
+}
+///////////////////////////////////////////////////////////////
+static BOOL myGetCommTimeouts(HANDLE handle, COMMTIMEOUTS *timeouts)
+{
+  if (!::GetCommTimeouts(handle, timeouts)) {
+    TraceError(GetLastError(), "GetCommTimeouts()");
     return FALSE;
   }
   return TRUE;
+}
+
+static BOOL mySetCommTimeouts(HANDLE handle, COMMTIMEOUTS *timeouts)
+{
+  if (!::SetCommTimeouts(handle, timeouts)) {
+    TraceError(GetLastError(), "SetCommTimeouts()");
+    myGetCommTimeouts(handle, timeouts);
+    return FALSE;
+  }
+  return myGetCommTimeouts(handle, timeouts);
+}
+///////////////////////////////////////////////////////////////
+static BOOL myGetCommMask(HANDLE handle, DWORD *events)
+{
+  if (!::GetCommMask(handle, events)) {
+    TraceError(GetLastError(), "GetCommMask()");
+    return FALSE;
+  }
+  return TRUE;
+}
+
+BOOL SetComEvents(HANDLE handle, DWORD *events)
+{
+  if (!::SetCommMask(handle, *events)) {
+    TraceError(GetLastError(), "SetCommMask()");
+    myGetCommMask(handle, events);
+    return FALSE;
+  }
+  return myGetCommMask(handle, events);
 }
 ///////////////////////////////////////////////////////////////
 HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
@@ -141,8 +183,7 @@ HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
 
   COMMTIMEOUTS timeouts;
 
-  if (!GetCommTimeouts(handle, &timeouts)) {
-    TraceError(GetLastError(), "OpenComPort(): GetCommTimeouts()");
+  if (!myGetCommTimeouts(handle, &timeouts)) {
     CloseHandle(handle);
     return INVALID_HANDLE_VALUE;
   }
@@ -160,14 +201,7 @@ HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
   timeouts.WriteTotalTimeoutMultiplier = 0;
   timeouts.WriteTotalTimeoutConstant = 0;
 
-  if (!SetCommTimeouts(handle, &timeouts)) {
-    TraceError(GetLastError(), "OpenComPort(): SetCommTimeouts()");
-    CloseHandle(handle);
-    return INVALID_HANDLE_VALUE;
-  }
-
-  if (!::SetCommMask(handle, comParams.Events())) {
-    TraceError(GetLastError(), "OpenComPort(): SetCommMask()");
+  if (!mySetCommTimeouts(handle, &timeouts)) {
     CloseHandle(handle);
     return INVALID_HANDLE_VALUE;
   }
@@ -183,8 +217,7 @@ HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
       << ", ox=" << ComParams::OutXStr(dcb.fOutX)
       << ", ix=" << ComParams::InXStr(dcb.fInX)
       << ", idsr=" << ComParams::InDsrStr(dcb.fDsrSensitivity)
-      << ", ito=" << comParams.IntervalTimeoutStr()
-      << ", rt-events=" << comParams.EventsStr()
+      << ", ito=" << ComParams::IntervalTimeoutStr(timeouts.ReadIntervalTimeout)
       << ") - OK" << endl;
   return handle;
 }

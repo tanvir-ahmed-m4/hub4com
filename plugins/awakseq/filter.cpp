@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/04/07 12:29:11  vfrolov
+ * Replaced --rt-events option by SET_RT_EVENTS message
+ *
  * Revision 1.2  2008/04/02 10:39:54  vfrolov
  * Added discarding CONNECT(FALSE) from the input stream
  *
@@ -167,7 +170,7 @@ static void CALLBACK Help(const char *pProgPath)
   << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0:" << GetPluginAbout()->pName << " COM1 --use-port-module=tcp 111.11.11.11:1111" << endl
   << "    - wait first byte from COM1 and then establish connection to" << endl
   << "      111.11.11.11:1111." << endl
-  << "  " << pProgPath << " --create-filter=pin2con --create-filter=" << GetPluginAbout()->pName << ":\"--awak-seq=aaa\" --add-filters=0:pin2con," << GetPluginAbout()->pName << " --rt-events=dsr COM1 --use-port-module=tcp 111.11.11.11:1111" << endl
+  << "  " << pProgPath << " --create-filter=pin2con --create-filter=" << GetPluginAbout()->pName << ":\"--awak-seq=aaa\" --add-filters=0:pin2con," << GetPluginAbout()->pName << " COM1 --use-port-module=tcp 111.11.11.11:1111" << endl
   << "    - wait \"aaa\" from COM1 and then establish connection to 111.11.11.11:1111." << endl
   << "      and disconnect on DSR OFF." << endl
   ;

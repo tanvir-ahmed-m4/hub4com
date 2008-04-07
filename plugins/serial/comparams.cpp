@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/04/07 12:28:03  vfrolov
+ * Replaced --rt-events option by SET_RT_EVENTS message
+ *
  * Revision 1.1  2008/03/26 08:44:13  vfrolov
  * Redesigned for using plugins
  *
@@ -65,8 +68,7 @@ ComParams::ComParams()
     outX(0),
     inX(0),
     inDsr(0),
-    intervalTimeout(0),
-    events(0)
+    intervalTimeout(0)
 {
 }
 
@@ -138,44 +140,6 @@ BOOL ComParams::SetIntervalTimeout(const char *pIntervalTimeout)
   }
 
   return FALSE;
-}
-
-BOOL ComParams::SetEvents(const char *pEvents)
-{
-  char *pTmp = _strdup(pEvents);
-
-  if (!pTmp) {
-    cerr << "No enough memory." << endl;
-    exit(2);
-  }
-
-  events = 0;
-
-  char *pSave;
-
-  for (char *pName = STRTOK_R(pTmp, ",", &pSave) ;
-       pName ;
-       pName = STRTOK_R(NULL, ",", &pSave))
-  {
-    BOOL found = FALSE;
-
-    for (int i = 0 ; i < sizeof(event_names)/sizeof(event_names[0]) ; i++) {
-      if (_stricmp(pName, event_names[i].pName) == 0) {
-        events |= event_names[i].val;
-        found = TRUE;
-        break;
-      }
-    }
-
-    if (!found && _stricmp(pName, "none") != 0) {
-      free(pTmp);
-      return FALSE;
-    }
-  }
-
-  free(pTmp);
-
-  return TRUE;
 }
 
 BOOL ComParams::SetFlag(const char *pFlagStr, int *pFlag)
@@ -254,29 +218,6 @@ string ComParams::IntervalTimeoutStr(long intervalTimeout)
   return "0";
 }
 
-string ComParams::EventsStr(DWORD events)
-{
-  if (events > 0) {
-    stringstream buf;
-    BOOL first = TRUE;
-
-    for (int i = 0 ; i < sizeof(event_names)/sizeof(event_names[0]) ; i++) {
-      if ((events & event_names[i].val) != 0) {
-        if (first)
-          first = FALSE;
-        else
-          buf << ",";
-
-        buf << event_names[i].pName;
-      }
-    }
-
-    return buf.str();
-  }
-
-  return "none";
-}
-
 string ComParams::FlagStr(int flag)
 {
   switch (flag) {
@@ -310,11 +251,6 @@ const char *ComParams::StopBitsLst()
 const char *ComParams::IntervalTimeoutLst()
 {
   return "a positive number or 0 milliseconds";
-}
-
-const char *ComParams::EventsLst()
-{
-  return "<E1>[,<E2>...], where <En> is cts, dsr, dcd, ring, break, err or none";
 }
 
 const char *ComParams::FlagLst()

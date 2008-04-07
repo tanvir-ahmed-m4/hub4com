@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/04/07 12:24:17  vfrolov
+ * Replaced --rt-events option by SET_RT_EVENTS message
+ *
  * Revision 1.1  2008/04/02 10:33:23  vfrolov
  * Initial revision
  *
@@ -27,12 +30,6 @@
 #include "precomp.h"
 #include "../plugins_api.h"
 
-///////////////////////////////////////////////////////////////
-#ifndef _DEBUG
-  #define DEBUG_PARAM(par)
-#else   /* _DEBUG */
-  #define DEBUG_PARAM(par) par
-#endif  /* _DEBUG */
 ///////////////////////////////////////////////////////////////
 static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal = NULL;
 static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone = NULL;
@@ -64,6 +61,8 @@ class Filter {
 
     DWORD pin;
     BOOL negative;
+    DWORD myEvents;
+    DWORD events;
 
   private:
     PortsMap portsMap;
@@ -72,11 +71,12 @@ class Filter {
 static struct {
   DWORD val;
   const char *pName;
+  DWORD events;
 } pin_names[] = {
-  {MS_CTS_ON,   "cts"},
-  {MS_DSR_ON,   "dsr"},
-  {MS_RLSD_ON,  "dcd"},
-  {MS_RING_ON,  "ring"},
+  {MS_CTS_ON,   "cts",  EV_CTS},
+  {MS_DSR_ON,   "dsr",  EV_DSR},
+  {MS_RLSD_ON,  "dcd",  EV_RLSD},
+  {MS_RING_ON,  "ring", EV_RING},
 };
 
 Filter::Filter(int argc, const char *const argv[])
@@ -114,6 +114,15 @@ Filter::Filter(int argc, const char *const argv[])
       cerr << "Unknown option " << pArg << endl;
     }
   }
+
+  myEvents = 0;
+
+  for (int i = 0 ; i < sizeof(pin_names)/sizeof(pin_names[0]) ; i++) {
+    if ((pin & pin_names[i].val) != 0)
+      myEvents |= pin_names[i].events;
+  }
+
+  events = myEvents;
 }
 
 State *Filter::GetState(int nPort)
@@ -171,8 +180,18 @@ static void CALLBACK Help(const char *pProgPath)
   << "  CONNECT(TRUE)         - will be added on appropriate pin state changing." << endl
   << "  CONNECT(FALSE)        - will be added on appropriate pin state changing." << endl
   << endl
+  << "IN method echo data stream description:" << endl
+  << "  SET_RT_EVENTS(<mask>) - will be added on CONNECT(TRUE) in input data stream." << endl
+  << endl
+  << "OUT method input data stream description:" << endl
+  << "  SET_RT_EVENTS(<mask>) - <mask> is the events mask." << endl
+  << endl
+  << "OUT method output data stream description:" << endl
+  << "  SET_RT_EVENTS(<mask>) - <mask> is the events mask with event required by this" << endl
+  << "                          filter." << endl
+  << endl
   << "Examples:" << endl
-  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0:" << GetPluginAbout()->pName << " --rt-events=dsr COM1 --use-port-module=tcp 111.11.11.11:1111" << endl
+  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0:" << GetPluginAbout()->pName << " COM1 --use-port-module=tcp 111.11.11.11:1111" << endl
   << "    - wait DSR ON from COM1 and then establish connection to 111.11.11.11:1111" << endl
   << "      and disconnect on DSR OFF." << endl
   ;
@@ -190,7 +209,7 @@ static BOOL CALLBACK InMethod(
     HFILTER hFilter,
     int nFromPort,
     HUB_MSG *pInMsg,
-    HUB_MSG **DEBUG_PARAM(ppEchoMsg))
+    HUB_MSG **ppEchoMsg)
 {
   _ASSERTE(hFilter != NULL);
   _ASSERTE(pInMsg != NULL);
@@ -198,6 +217,15 @@ static BOOL CALLBACK InMethod(
   _ASSERTE(*ppEchoMsg == NULL);
 
   if (pInMsg->type == HUB_MSG_TYPE_CONNECT) {
+    if (pInMsg->u.val) {
+      *ppEchoMsg = pMsgInsertVal(NULL,
+                                 HUB_MSG_TYPE_SET_RT_EVENTS,
+                                 ((Filter *)hFilter)->events);
+
+      if (!*ppEchoMsg)
+        return FALSE;
+    }
+
     // discard any CONNECT messages from the input stream
     pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
   }
@@ -227,6 +255,24 @@ static BOOL CALLBACK InMethod(
   return pInMsg != NULL;
 }
 ///////////////////////////////////////////////////////////////
+static BOOL CALLBACK OutMethod(
+    HFILTER hFilter,
+    int /*nFromPort*/,
+    int /*nToPort*/,
+    HUB_MSG *pOutMsg)
+{
+  _ASSERTE(hFilter != NULL);
+  _ASSERTE(pOutMsg != NULL);
+
+  if (pOutMsg->type == HUB_MSG_TYPE_SET_RT_EVENTS) {
+    // Add event required by this filter
+    pOutMsg->u.val |= ((Filter *)hFilter)->myEvents;
+    ((Filter *)hFilter)->events = pOutMsg->u.val;
+  }
+
+  return TRUE;
+}
+///////////////////////////////////////////////////////////////
 static const FILTER_ROUTINES_A routines = {
   sizeof(FILTER_ROUTINES_A),
   GetPluginType,
@@ -238,7 +284,7 @@ static const FILTER_ROUTINES_A routines = {
   Create,
   NULL,           // Init
   InMethod,
-  NULL,           // OutMethod
+  OutMethod,
 };
 
 static const PLUGIN_ROUTINES_A *const plugins[] = {

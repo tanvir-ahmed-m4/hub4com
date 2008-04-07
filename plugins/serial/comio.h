@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/04/07 12:28:03  vfrolov
+ * Replaced --rt-events option by SET_RT_EVENTS message
+ *
  * Revision 1.1  2008/03/26 08:43:50  vfrolov
  * Redesigned for using plugins
  *
@@ -42,6 +45,7 @@ class ComPort;
 class ComParams;
 ///////////////////////////////////////////////////////////////
 extern HANDLE OpenComPort(const char *pPath, const ComParams &comParams);
+extern BOOL SetComEvents(HANDLE handle, DWORD *events);
 ///////////////////////////////////////////////////////////////
 class ReadOverlapped : private OVERLAPPED
 {
