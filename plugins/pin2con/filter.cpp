@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/04/11 14:48:42  vfrolov
+ * Replaced SET_RT_EVENTS by INIT_LSR_MASK and INIT_MST_MASK
+ * Replaced COM_ERRORS by LINE_STATUS
+ *
  * Revision 1.2  2008/04/07 12:24:17  vfrolov
  * Replaced --rt-events option by SET_RT_EVENTS message
  *
@@ -61,26 +65,24 @@ class Filter {
 
     DWORD pin;
     BOOL negative;
-    DWORD myEvents;
-    DWORD events;
 
   private:
     PortsMap portsMap;
 };
 
 static struct {
-  DWORD val;
   const char *pName;
-  DWORD events;
+  WORD val;
 } pin_names[] = {
-  {MS_CTS_ON,   "cts",  EV_CTS},
-  {MS_DSR_ON,   "dsr",  EV_DSR},
-  {MS_RLSD_ON,  "dcd",  EV_RLSD},
-  {MS_RING_ON,  "ring", EV_RING},
+  {"cts",  MODEM_STATUS_CTS},
+  {"dsr",  MODEM_STATUS_DSR},
+  {"dcd",  MODEM_STATUS_DCD},
+  {"ring", MODEM_STATUS_RI},
+  {"break", LINE_STATUS_BI << 8},
 };
 
 Filter::Filter(int argc, const char *const argv[])
-  : pin(MS_DSR_ON),
+  : pin(MODEM_STATUS_DSR),
     negative(FALSE)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
@@ -98,31 +100,22 @@ Filter::Filter(int argc, const char *const argv[])
         negative = TRUE;
         pParam++;
       }
-      BOOL found = FALSE;
+
+      pin = 0;
 
       for (int i = 0 ; i < sizeof(pin_names)/sizeof(pin_names[0]) ; i++) {
         if (_stricmp(pParam, pin_names[i].pName) == 0) {
           pin = pin_names[i].val;
-          found = TRUE;
           break;
         }
       }
 
-      if (!found)
+      if (!pin)
         cerr << "Unknown pin " << pParam << endl;
     } else {
       cerr << "Unknown option " << pArg << endl;
     }
   }
-
-  myEvents = 0;
-
-  for (int i = 0 ; i < sizeof(pin_names)/sizeof(pin_names[0]) ; i++) {
-    if ((pin & pin_names[i].val) != 0)
-      myEvents |= pin_names[i].events;
-  }
-
-  events = myEvents;
 }
 
 State *Filter::GetState(int nPort)
@@ -154,7 +147,7 @@ static const PLUGIN_ABOUT_A about = {
   "pin2con",
   "Copyright (c) 2008 Vyacheslav Frolov",
   "GNU General Public License",
-  "Connect on pin state changing filter",
+  "Connect or disconnect on changing of line or modem state filter",
 };
 
 static const PLUGIN_ABOUT_A * CALLBACK GetPluginAbout()
@@ -169,26 +162,20 @@ static void CALLBACK Help(const char *pProgPath)
   << "  " << pProgPath << " ... --create-filter=" << GetPluginAbout()->pName << "[,<FID>][:<options>] ... --add-filters=<ports>:[...,]<FID>[,...] ..." << endl
   << endl
   << "Options:" << endl
-  << "  --connect=[!]<pin>    - <pin> is cts, dsr, dcd or ring (dsr by default)." << endl
+  << "  --connect=[!]<state>  - <state> is cts, dsr, dcd, ring or break (dsr by" << endl
+  << "                          default)." << endl
   << endl
   << "IN method input data stream description:" << endl
-  << "  CONNECT(TRUE)         - it will be discarded from stream." << endl
-  << "  CONNECT(FALSE)        - it will be discarded from stream." << endl
-  << "  MODEM_STATUS(<value>) - current state of pins" << endl
+  << "  INIT_LSR_MASK(<pval>) - the value pointed by <pval> will be or'ed with the" << endl
+  << "                          required line status mask." << endl
+  << "  INIT_MST_MASK(<pval>) - the value pointed by <pval> will be or'ed with the" << endl
+  << "                          required modem status mask." << endl
+  << "  CONNECT(TRUE/FALSE)   - will be discarded from stream." << endl
+  << "  LINE_STATUS(<val>)    - current state of line" << endl
+  << "  MODEM_STATUS(<val>)   - current state of modem" << endl
   << endl
   << "IN method output data stream description:" << endl
-  << "  CONNECT(TRUE)         - will be added on appropriate pin state changing." << endl
-  << "  CONNECT(FALSE)        - will be added on appropriate pin state changing." << endl
-  << endl
-  << "IN method echo data stream description:" << endl
-  << "  SET_RT_EVENTS(<mask>) - will be added on CONNECT(TRUE) in input data stream." << endl
-  << endl
-  << "OUT method input data stream description:" << endl
-  << "  SET_RT_EVENTS(<mask>) - <mask> is the events mask." << endl
-  << endl
-  << "OUT method output data stream description:" << endl
-  << "  SET_RT_EVENTS(<mask>) - <mask> is the events mask with event required by this" << endl
-  << "                          filter." << endl
+  << "  CONNECT(TRUE/FALSE)   - will be added on appropriate state changing." << endl
   << endl
   << "Examples:" << endl
   << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0:" << GetPluginAbout()->pName << " COM1 --use-port-module=tcp 111.11.11.11:1111" << endl
@@ -216,22 +203,30 @@ static BOOL CALLBACK InMethod(
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
 
+  if (pInMsg->type == HUB_MSG_TYPE_INIT_LSR_MASK) {
+    _ASSERTE(pInMsg->u.pVal != NULL);
+    *pInMsg->u.pVal |= (((Filter *)hFilter)->pin >> 8);
+  }
+  else
+  if (pInMsg->type == HUB_MSG_TYPE_INIT_MST_MASK) {
+    _ASSERTE(pInMsg->u.pVal != NULL);
+    *pInMsg->u.pVal |= (((Filter *)hFilter)->pin & 0xFF);
+  }
+  else
   if (pInMsg->type == HUB_MSG_TYPE_CONNECT) {
-    if (pInMsg->u.val) {
-      *ppEchoMsg = pMsgInsertVal(NULL,
-                                 HUB_MSG_TYPE_SET_RT_EVENTS,
-                                 ((Filter *)hFilter)->events);
-
-      if (!*ppEchoMsg)
-        return FALSE;
-    }
-
     // discard any CONNECT messages from the input stream
     pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
   }
   else
-  if (pInMsg->type == HUB_MSG_TYPE_MODEM_STATUS) {
-    BOOL connect = ((pInMsg->u.val & ((Filter *)hFilter)->pin) != 0);
+  if (pInMsg->type == HUB_MSG_TYPE_LINE_STATUS ||
+      pInMsg->type == HUB_MSG_TYPE_MODEM_STATUS)
+  {
+    BOOL connect;
+
+    if (pInMsg->type == HUB_MSG_TYPE_LINE_STATUS)
+      connect = ((pInMsg->u.val & (((Filter *)hFilter)->pin >> 8)) != 0);
+    else
+      connect = ((pInMsg->u.val & (((Filter *)hFilter)->pin & 0xFF)) != 0);
 
     if (((Filter *)hFilter)->negative)
       connect = !connect;
@@ -255,24 +250,6 @@ static BOOL CALLBACK InMethod(
   return pInMsg != NULL;
 }
 ///////////////////////////////////////////////////////////////
-static BOOL CALLBACK OutMethod(
-    HFILTER hFilter,
-    int /*nFromPort*/,
-    int /*nToPort*/,
-    HUB_MSG *pOutMsg)
-{
-  _ASSERTE(hFilter != NULL);
-  _ASSERTE(pOutMsg != NULL);
-
-  if (pOutMsg->type == HUB_MSG_TYPE_SET_RT_EVENTS) {
-    // Add event required by this filter
-    pOutMsg->u.val |= ((Filter *)hFilter)->myEvents;
-    ((Filter *)hFilter)->events = pOutMsg->u.val;
-  }
-
-  return TRUE;
-}
-///////////////////////////////////////////////////////////////
 static const FILTER_ROUTINES_A routines = {
   sizeof(FILTER_ROUTINES_A),
   GetPluginType,
@@ -284,7 +261,7 @@ static const FILTER_ROUTINES_A routines = {
   Create,
   NULL,           // Init
   InMethod,
-  OutMethod,
+  NULL,           // OutMethod
 };
 
 static const PLUGIN_ROUTINES_A *const plugins[] = {

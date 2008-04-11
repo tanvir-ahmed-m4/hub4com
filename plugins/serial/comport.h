@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/04/11 14:48:42  vfrolov
+ * Replaced SET_RT_EVENTS by INIT_LSR_MASK and INIT_MST_MASK
+ * Replaced COM_ERRORS by LINE_STATUS
+ *
  * Revision 1.2  2008/04/07 12:28:03  vfrolov
  * Replaced --rt-events option by SET_RT_EVENTS message
  *
@@ -82,6 +86,8 @@ class ComPort
     int countXoff;
     BOOL filterX;
     DWORD events;
+    BYTE maskLsr;
+    BYTE maskMst;
 
     DWORD writeQueueLimit;
     DWORD writeQueued;

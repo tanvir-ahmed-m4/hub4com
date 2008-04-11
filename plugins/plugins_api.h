@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/04/11 14:48:42  vfrolov
+ * Replaced SET_RT_EVENTS by INIT_LSR_MASK and INIT_MST_MASK
+ * Replaced COM_ERRORS by LINE_STATUS
+ *
  * Revision 1.2  2008/04/07 12:20:51  vfrolov
  * Added HUB_MSG_TYPE_SET_RT_EVENTS
  *
@@ -39,14 +43,16 @@ extern "C" {
 #define HUB_MSG_UNION_TYPE_NONE    0x0000
 #define HUB_MSG_UNION_TYPE_BUF     0x1000
 #define HUB_MSG_UNION_TYPE_VAL     0x2000
+#define HUB_MSG_UNION_TYPE_PVAL    0x3000
 /*******************************************************************/
-#define HUB_MSG_TYPE_EMPTY         (HUB_MSG_UNION_TYPE_NONE  |   0)
-#define HUB_MSG_TYPE_LINE_DATA     (HUB_MSG_UNION_TYPE_BUF   |   1)
-#define HUB_MSG_TYPE_CONNECT       (HUB_MSG_UNION_TYPE_VAL   |   2)
-#define HUB_MSG_TYPE_MODEM_STATUS  (HUB_MSG_UNION_TYPE_VAL   |   3)
-#define HUB_MSG_TYPE_COM_ERRORS    (HUB_MSG_UNION_TYPE_VAL   |   4)
-#define HUB_MSG_TYPE_COM_FUNCTION  (HUB_MSG_UNION_TYPE_VAL   |   5)
-#define HUB_MSG_TYPE_SET_RT_EVENTS (HUB_MSG_UNION_TYPE_VAL   |   6)
+#define HUB_MSG_TYPE_EMPTY         (0   | HUB_MSG_UNION_TYPE_NONE)
+#define HUB_MSG_TYPE_LINE_DATA     (1   | HUB_MSG_UNION_TYPE_BUF)
+#define HUB_MSG_TYPE_CONNECT       (2   | HUB_MSG_UNION_TYPE_VAL)
+#define HUB_MSG_TYPE_MODEM_STATUS  (3   | HUB_MSG_UNION_TYPE_VAL)
+#define HUB_MSG_TYPE_LINE_STATUS   (4   | HUB_MSG_UNION_TYPE_VAL)
+#define HUB_MSG_TYPE_COM_FUNCTION  (5   | HUB_MSG_UNION_TYPE_VAL)
+#define HUB_MSG_TYPE_INIT_LSR_MASK (6   | HUB_MSG_UNION_TYPE_PVAL)
+#define HUB_MSG_TYPE_INIT_MST_MASK (7   | HUB_MSG_UNION_TYPE_PVAL)
 /*******************************************************************/
 typedef struct _HUB_MSG {
   WORD type;
@@ -55,6 +61,7 @@ typedef struct _HUB_MSG {
       BYTE *pBuf;
       DWORD size;
     } buf;
+    DWORD *pVal;
     DWORD val;
   } u;
 } HUB_MSG;
@@ -243,6 +250,24 @@ typedef struct _PORT_ROUTINES_A {
 
 #define ROUTINE_IS_VALID(pStruct, pRoutine) \
         (ROUTINE_GET(pStruct, pRoutine) != NULL)
+/*******************************************************************/
+#define LINE_STATUS_DR             0x01
+#define LINE_STATUS_OE             0x02
+#define LINE_STATUS_PE             0x04
+#define LINE_STATUS_FE             0x08
+#define LINE_STATUS_BI             0x10
+#define LINE_STATUS_THRE           0x20
+#define LINE_STATUS_TEMT           0x40
+#define LINE_STATUS_FIFOERR        0x80
+/*******************************************************************/
+#define MODEM_STATUS_DCTS          0x01
+#define MODEM_STATUS_DDSR          0x02
+#define MODEM_STATUS_TERI          0x04
+#define MODEM_STATUS_DDCD          0x08
+#define MODEM_STATUS_CTS           0x10
+#define MODEM_STATUS_DSR           0x20
+#define MODEM_STATUS_RI            0x40
+#define MODEM_STATUS_DCD           0x80
 /*******************************************************************/
 
 #ifdef  __cplusplus
