@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.10  2008/04/14 07:32:03  vfrolov
+ * Renamed option --use-port-module to --use-driver
+ *
  * Revision 1.9  2008/03/28 15:53:48  vfrolov
  * Fixed help
  *
@@ -92,10 +95,9 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << endl
   << "Filter options:" << endl
   << "  --create-filter=<MID>[,<FID>][:<Args>]" << endl
-  << "                           - by using module with type 'filter' and with name" << endl
-  << "                             <MID> create a filter with name <FID> (<FID> is" << endl
-  << "                             <MID> by default) and put arguments <Args> (if" << endl
-  << "                             any) to the filter." << endl
+  << "                           - by using filter module with name <MID> create a" << endl
+  << "                             filter with name <FID> (<FID> is <MID> by default)" << endl
+  << "                             and put arguments <Args> (if any) to the filter." << endl
   << "  --add-filters=<Lst>:<LstF>" << endl
   << "                           - attach the filters listed in <LstF> to the ports" << endl
   << "                             listed in <Lst>. These filters will handle the" << endl
@@ -108,9 +110,8 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "  equivalent to <FID>.IN,<FID>.OUT" << endl
   << endl
   << "Port options:" << endl
-  << "  --use-port-module=<MID>  - use module with type 'port' and with name <MID> to" << endl
-  << "                             create the following ports (<MID> is serial by" << endl
-  << "                             default)." << endl
+  << "  --use-driver=<MID>       - use driver module with name <MID> to create the" << endl
+  << "                             following ports (<MID> is serial by default)." << endl
   << endl
   << "The syntax of <LstR>, <LstL> and <Lst> above is <P1>[,<P2>...], where <Pn> is a" << endl
   << "zero based position number of port or All." << endl
@@ -374,7 +375,7 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
   PortNumMap routeDataMap;
   PortNumMap routeFlowControlMap;
 
-  const char *pUsePortModule = "serial";
+  const char *pUseDriver = "serial";
 
   for (vector<string>::const_iterator i = args.begin() ; i != args.end() ; i++) {
     BOOL ok = pPlugins->Config(i->c_str());
@@ -384,10 +385,10 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
       HCONFIG hConfig;
 
       const PORT_ROUTINES_A *pPortRoutines =
-          (const PORT_ROUTINES_A *)pPlugins->GetRoutines(PLUGIN_TYPE_PORT, pUsePortModule, &hConfig);
+          (const PORT_ROUTINES_A *)pPlugins->GetRoutines(PLUGIN_TYPE_DRIVER, pUseDriver, &hConfig);
 
       if (!pPortRoutines) {
-        cerr << "No port module " << pUsePortModule << endl;
+        cerr << "No driver " << pUseDriver << endl;
         exit(1);
       }
 
@@ -454,8 +455,8 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
 
       AddFilters(hub, *pFilters, pParam);
     } else
-    if ((pParam = GetParam(pArg, "use-port-module=")) != NULL) {
-      pUsePortModule = pParam;
+    if ((pParam = GetParam(pArg, "use-driver=")) != NULL) {
+      pUseDriver = pParam;
     } else {
       if (!ok) {
         cerr << "Unknown option " << i->c_str() << endl;

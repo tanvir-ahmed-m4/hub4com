@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/04/14 07:32:04  vfrolov
+ * Renamed option --use-port-module to --use-driver
+ *
  * Revision 1.2  2008/03/28 16:01:13  vfrolov
  * Fixed Help
  *
@@ -36,7 +39,7 @@
 ///////////////////////////////////////////////////////////////
 static PLUGIN_TYPE CALLBACK GetPluginType()
 {
-  return PLUGIN_TYPE_PORT;
+  return PLUGIN_TYPE_DRIVER;
 }
 ///////////////////////////////////////////////////////////////
 static const PLUGIN_ABOUT_A about = {
@@ -56,9 +59,9 @@ static void CALLBACK Help(const char *pProgPath)
 {
   cerr
   << "Usage  (client mode):" << endl
-  << "  " << pProgPath << " ... [--use-port-module=" << GetPluginAbout()->pName << "] [*]<host addr>:<host port> ..." << endl
+  << "  " << pProgPath << " ... [--use-driver=" << GetPluginAbout()->pName << "] [*]<host addr>:<host port> ..." << endl
   << "Usage  (server mode):" << endl
-  << "  " << pProgPath << " ... [--use-port-module=" << GetPluginAbout()->pName << "] [*]<listen port> ..." << endl
+  << "  " << pProgPath << " ... [--use-driver=" << GetPluginAbout()->pName << "] [*]<listen port> ..." << endl
   << endl
   << "  The sign * above means that connection shold be permanent as it's possible." << endl
   << "  In client mode it will force connection to remote host on start or on" << endl
@@ -83,17 +86,17 @@ static void CALLBACK Help(const char *pProgPath)
   << "  CONNECT(FALSE) - disconnected." << endl
   << endl
   << "Examples:" << endl
-  << "  " << pProgPath << " --use-port-module=" << GetPluginAbout()->pName << " 1111 222.22.22.22:2222" << endl
+  << "  " << pProgPath << " --use-driver=" << GetPluginAbout()->pName << " 1111 222.22.22.22:2222" << endl
   << "    - listen TCP port 1111 and on incoming connection connect to" << endl
   << "      222.22.22.22:2222, receive data from 1111 and send it to" << endl
   << "      222.22.22.22:2222, receive data from 222.22.22.22:2222 and send it to" << endl
   << "      1111, on disconnecting any connection disconnect paired connection." << endl
-  << "  " << pProgPath << " --use-port-module=" << GetPluginAbout()->pName << " *111.11.11.11:1111 *222.22.22.22:2222" << endl
+  << "  " << pProgPath << " --use-driver=" << GetPluginAbout()->pName << " *111.11.11.11:1111 *222.22.22.22:2222" << endl
   << "    - connect to 111.11.11.11:1111 and connect to 222.22.22.22:2222," << endl
   << "      receive data from 111.11.11.11:1111 and send it to 222.22.22.22:2222," << endl
   << "      receive data from 222.22.22.22:2222 and send it to 111.11.11.11:1111," << endl
   << "      on disconnecting any connection reconnect it." << endl
-  << "  " << pProgPath << " --route=All:All --use-port-module=" << GetPluginAbout()->pName << " *1111 *1111 *1111" << endl
+  << "  " << pProgPath << " --route=All:All --use-driver=" << GetPluginAbout()->pName << " *1111 *1111 *1111" << endl
   << "    - up to 3 clients can connect to port 2222 and talk each others." << endl
   ;
 }

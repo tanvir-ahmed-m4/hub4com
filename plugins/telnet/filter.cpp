@@ -19,9 +19,11 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/04/14 07:32:04  vfrolov
+ * Renamed option --use-port-module to --use-driver
+ *
  * Revision 1.1  2008/03/28 16:05:44  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -162,7 +164,7 @@ static void CALLBACK Help(const char *pProgPath)
   << "  LINE_DATA(<data>) - <data> is the telnet protocol wrapped raw bytes." << endl
   << endl
   << "Examples:" << endl
-  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << ":\"--terminal=ANSI\" --add-filters=1:" << GetPluginAbout()->pName << " COM1 --use-port-module=tcp *your.telnet.server:telnet" << endl
+  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << ":\"--terminal=ANSI\" --add-filters=1:" << GetPluginAbout()->pName << " COM1 --use-driver=tcp *your.telnet.server:telnet" << endl
   << "    - use the ANSI terminal connected to the port COM1 for working on the" << endl
   << "      telnet server your.telnet.server." << endl
   ;

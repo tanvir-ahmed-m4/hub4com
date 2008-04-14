@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/04/14 07:32:03  vfrolov
+ * Renamed option --use-port-module to --use-driver
+ *
  * Revision 1.3  2008/04/07 12:29:11  vfrolov
  * Replaced --rt-events option by SET_RT_EVENTS message
  *
@@ -167,10 +170,10 @@ static void CALLBACK Help(const char *pProgPath)
   << "                      waiting." << endl
   << endl
   << "Examples:" << endl
-  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0:" << GetPluginAbout()->pName << " COM1 --use-port-module=tcp 111.11.11.11:1111" << endl
+  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0:" << GetPluginAbout()->pName << " COM1 --use-driver=tcp 111.11.11.11:1111" << endl
   << "    - wait first byte from COM1 and then establish connection to" << endl
   << "      111.11.11.11:1111." << endl
-  << "  " << pProgPath << " --create-filter=pin2con --create-filter=" << GetPluginAbout()->pName << ":\"--awak-seq=aaa\" --add-filters=0:pin2con," << GetPluginAbout()->pName << " COM1 --use-port-module=tcp 111.11.11.11:1111" << endl
+  << "  " << pProgPath << " --create-filter=pin2con --create-filter=" << GetPluginAbout()->pName << ":\"--awak-seq=aaa\" --add-filters=0:pin2con," << GetPluginAbout()->pName << " COM1 --use-driver=tcp 111.11.11.11:1111" << endl
   << "    - wait \"aaa\" from COM1 and then establish connection to 111.11.11.11:1111." << endl
   << "      and disconnect on DSR OFF." << endl
   ;

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/04/14 07:32:03  vfrolov
+ * Renamed option --use-port-module to --use-driver
+ *
  * Revision 1.3  2008/04/11 14:48:42  vfrolov
  * Replaced SET_RT_EVENTS by INIT_LSR_MASK and INIT_MST_MASK
  * Replaced COM_ERRORS by LINE_STATUS
@@ -133,7 +136,7 @@ typedef struct _HUB_ROUTINES_A {
 typedef enum _PLUGIN_TYPE {
   PLUGIN_TYPE_INVALID,
   PLUGIN_TYPE_FILTER,
-  PLUGIN_TYPE_PORT,
+  PLUGIN_TYPE_DRIVER,
 } PLUGIN_TYPE;
 /*******************************************************************/
 DECLARE_HANDLE(HCONFIG);

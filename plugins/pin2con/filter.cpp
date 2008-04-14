@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/04/14 07:32:04  vfrolov
+ * Renamed option --use-port-module to --use-driver
+ *
  * Revision 1.3  2008/04/11 14:48:42  vfrolov
  * Replaced SET_RT_EVENTS by INIT_LSR_MASK and INIT_MST_MASK
  * Replaced COM_ERRORS by LINE_STATUS
@@ -178,7 +181,7 @@ static void CALLBACK Help(const char *pProgPath)
   << "  CONNECT(TRUE/FALSE)   - will be added on appropriate state changing." << endl
   << endl
   << "Examples:" << endl
-  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0:" << GetPluginAbout()->pName << " COM1 --use-port-module=tcp 111.11.11.11:1111" << endl
+  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0:" << GetPluginAbout()->pName << " COM1 --use-driver=tcp 111.11.11.11:1111" << endl
   << "    - wait DSR ON from COM1 and then establish connection to 111.11.11.11:1111" << endl
   << "      and disconnect on DSR OFF." << endl
   ;
