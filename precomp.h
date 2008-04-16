@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/04/16 14:09:41  vfrolov
+ * Included <set>
+ *
  * Revision 1.3  2008/03/26 08:15:24  vfrolov
  * Added more includes
  *
@@ -27,7 +30,6 @@
  *
  * Revision 1.1  2007/01/23 09:13:10  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -39,6 +41,7 @@
 
 #include <string>
 #include <vector>
+#include <set>
 #include <map>
 #include <iostream>
 #include <fstream>
