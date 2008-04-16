@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/04/16 14:07:12  vfrolov
+ * Extended STRQTOK_R()
+ *
  * Revision 1.2  2008/03/26 08:14:09  vfrolov
  * Added
  *   - class Args
@@ -183,7 +186,12 @@ char *STRTOK_R(char *pStr, const char *pDelims, char **ppSave)
   return pToken;
 }
 ///////////////////////////////////////////////////////////////
-char *STRQTOK_R(char *pStr, const char *pDelims, char **ppSave)
+char *STRQTOK_R(
+    char *pStr,
+    const char *pDelims,
+    char **ppSave,
+    const char *pQuotes,
+    BOOL discard)
 {
   if (!pStr)
     pStr = *ppSave;
@@ -201,9 +209,10 @@ char *STRQTOK_R(char *pStr, const char *pDelims, char **ppSave)
   int cntMask = 0;
 
   while (*pStr && (quoted || !IsDelim(*pStr, pDelims))) {
-    if (*pStr == '\"') {
+    if (quoted ? (*pStr == pQuotes[1]) : (*pStr == pQuotes[0])) {
       if (cntMask%2 == 0) {
-        memmove(pStr, pStr + 1, strlen(pStr + 1) + 1);
+        if (discard)
+          memmove(pStr, pStr + 1, strlen(pStr + 1) + 1);
         quoted = !quoted;
       } else {
         memmove(pStr - (cntMask/2 + 1), pStr, strlen(pStr) + 1);

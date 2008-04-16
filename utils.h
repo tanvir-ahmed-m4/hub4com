@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/04/16 14:07:12  vfrolov
+ * Extended STRQTOK_R()
+ *
  * Revision 1.2  2008/03/26 08:14:09  vfrolov
  * Added
  *   - class Args
@@ -46,7 +49,12 @@ class Args : public vector<string>
 };
 ///////////////////////////////////////////////////////////////
 char *STRTOK_R(char *pStr, const char *pDelims, char **ppSave);
-char *STRQTOK_R(char *pStr, const char *pDelims, char **ppSave);
+char *STRQTOK_R(
+    char *pStr,
+    const char *pDelims,
+    char **ppSave,
+    const char *pQuotes = "\"\"",
+    BOOL discard = TRUE);
 BOOL StrToInt(const char *pStr, int *pNum);
 const char *GetParam(const char *pArg, const char *pPattern);
 void CreateArgsVector(
