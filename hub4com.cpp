@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.11  2008/04/16 14:13:59  vfrolov
+ * Added ability to specify source posts for OUT method
+ *
  * Revision 1.10  2008/04/14 07:32:03  vfrolov
  * Renamed option --use-port-module to --use-driver
  *
@@ -105,9 +108,12 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "                             listed in <Lst> or by OUT method just before" << endl
   << "                             sending to ports listed in <Lst>." << endl
   << endl
-  << "  The syntax of <LstF> above is <FID0>[.<Method>][,<FID1>[.<Method>]...], where" << endl
-  << "  <FIDn> is a filter name and <Method> is IN or OUT. The <FID> w/o <Method> is" << endl
-  << "  equivalent to <FID>.IN,<FID>.OUT" << endl
+  << "  The syntax of <LstF> above is <F1>[,<F2>...], where the syntax of <Fn> is" << endl
+  << "  <FID>[.<Method>][(<Lst>)], where <FID> is a filter name, <Method> is IN or" << endl
+  << "  OUT and <Lst> lists the source ports (the data only from them will be handled" << endl
+  << "  by OUT method). The <FID> w/o <Method> is equivalent to <FID>.IN,<FID>.OUT." << endl
+  << "  If the list of the source ports is not specified then the data routed from" << endl
+  << "  any port will be handled by OUT method." << endl
   << endl
   << "Port options:" << endl
   << "  --use-driver=<MID>       - use driver module with name <MID> to create the" << endl
@@ -159,6 +165,7 @@ static BOOL EnumPortList(
       if (!pFunc(hub, i, p0, p1, p2))
         res = FALSE;
     } else {
+      cerr << "Invalid port " << p << endl;
       res = FALSE;
     }
   }
@@ -284,7 +291,7 @@ static void CreateFilter(
   free(pTmp);
 }
 ///////////////////////////////////////////////////////////////
-static BOOL AddFilters(ComHub &/*hub*/, int iPort, PVOID pFilters, PVOID pListFlt, PVOID /*p2*/)
+static BOOL AddFilters(ComHub &hub, int iPort, PVOID pFilters, PVOID pListFlt, PVOID /*p2*/)
 {
   char *pTmpList = _strdup((const char *)pListFlt);
 
@@ -295,29 +302,66 @@ static BOOL AddFilters(ComHub &/*hub*/, int iPort, PVOID pFilters, PVOID pListFl
 
   char *pSave;
 
-  for (char *pFilter = STRTOK_R(pTmpList, ",", &pSave) ;
+  for (char *pFilter = STRQTOK_R(pTmpList, ",", &pSave, "()", FALSE) ;
        pFilter ;
-       pFilter = STRTOK_R(NULL, ",", &pSave))
+       pFilter = STRQTOK_R(NULL, ",", &pSave, "()", FALSE))
   {
-    string filter(pFilter);
+    char *pSave2;
+
+    string filter(STRTOK_R(pFilter, "(", &pSave2));
+    char *pList = STRTOK_R(NULL, ")", &pSave2);
+
+    set<int> *pSrcPorts = NULL;
+
+    if (pList) {
+      for (char *p = STRTOK_R(pList, ",", &pSave2) ; p ; p = STRTOK_R(NULL, ",", &pSave2)) {
+        int i;
+
+        if (_stricmp(p, "All") == 0) {
+          if (pSrcPorts) {
+            delete pSrcPorts;
+            pSrcPorts = NULL;
+          }
+          break;
+        } else if (StrToInt(p, &i) && i >= 0 && i < hub.NumPorts()) {
+          if (!pSrcPorts) {
+            pSrcPorts = new set<int>;
+
+            if (!pSrcPorts) {
+              cerr << "No enough memory." << endl;
+              exit(2);
+            }
+          }
+
+          pSrcPorts->insert(i);
+        } else {
+          cerr << "Invalid port " << p << endl;
+          exit(1);
+        }
+      }
+    }
+
     string::size_type dot = filter.rfind('.');
     string method(dot != filter.npos ? filter.substr(dot) : "");
 
     if (method == ".IN") {
-      if (!((Filters *)pFilters)->AddFilter(iPort, filter.substr(0, dot).c_str(), TRUE))
+      if (!((Filters *)pFilters)->AddFilter(iPort, filter.substr(0, dot).c_str(), TRUE, NULL))
         exit(1);
     }
     else
     if (method == ".OUT") {
-      if (!((Filters *)pFilters)->AddFilter(iPort, filter.substr(0, dot).c_str(), FALSE))
+      if (!((Filters *)pFilters)->AddFilter(iPort, filter.substr(0, dot).c_str(), FALSE, pSrcPorts))
         exit(1);
     }
     else {
-      if (!((Filters *)pFilters)->AddFilter(iPort, filter.c_str(), TRUE))
+      if (!((Filters *)pFilters)->AddFilter(iPort, filter.c_str(), TRUE, NULL))
         exit(1);
-      if (!((Filters *)pFilters)->AddFilter(iPort, filter.c_str(), FALSE))
+      if (!((Filters *)pFilters)->AddFilter(iPort, filter.c_str(), FALSE, pSrcPorts))
         exit(1);
     }
+
+    if (pSrcPorts)
+      delete pSrcPorts;
   }
 
   free(pTmpList);

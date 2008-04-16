@@ -19,9 +19,11 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/04/16 14:13:59  vfrolov
+ * Added ability to specify source posts for OUT method
+ *
  * Revision 1.1  2008/03/26 08:35:32  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -57,12 +59,19 @@ class Filter {
 ///////////////////////////////////////////////////////////////
 class FilterMethod {
   public:
-    FilterMethod(const Filter &_filter, BOOL _isInMethod)
+    FilterMethod(const Filter &_filter, BOOL _isInMethod, const set<int> *_pSrcPorts)
       : filter(_filter),
-        isInMethod(_isInMethod) {}
+        isInMethod(_isInMethod),
+        pSrcPorts(_pSrcPorts) {}
+
+    ~FilterMethod() {
+      if (pSrcPorts)
+        delete pSrcPorts;
+    }
 
     const Filter &filter;
     const BOOL isInMethod;
+    const set<int> *const pSrcPorts;
 };
 ///////////////////////////////////////////////////////////////
 typedef pair<int, FilterMethodArray*> PortFilters;
@@ -131,7 +140,8 @@ BOOL Filters::CreateFilter(
 BOOL Filters::AddFilter(
     int iPort,
     const char *pName,
-    BOOL isInMethod)
+    BOOL isInMethod,
+    const set<int> *pSrcPorts)
 {
   PortFiltersMap::iterator iPair = portFilters.find(iPort);
 
@@ -160,7 +170,16 @@ BOOL Filters::AddFilter(
   for (FilterArray::const_iterator i = allFilters.begin() ; i != allFilters.end() ; i++) {
     if (*i && (*i)->name == pName) {
       if ((isInMethod && (*i)->pInMethod) || (!isInMethod && (*i)->pOutMethod)) {
-        FilterMethod *pFilterMethod = new FilterMethod(*(*i), isInMethod);
+        if (pSrcPorts) {
+          pSrcPorts = new set<int>(*pSrcPorts);
+
+          if (!pSrcPorts) {
+            cerr << "No enough memory." << endl;
+            return FALSE;
+          }
+        }
+
+        FilterMethod *pFilterMethod = new FilterMethod(*(*i), isInMethod, pSrcPorts);
 
         if (!pFilterMethod) {
           cerr << "No enough memory." << endl;
@@ -231,7 +250,21 @@ void Filters::Report() const
           bufs[1] << "/";
           bufs[2] << "-";
         } else {
-          bufs[2] << "{" << (*i)->filter.name << ".OUT" << "}<-";
+          bufs[2] << "{" << (*i)->filter.name << ".OUT";
+          if ((*i)->pSrcPorts) {
+            bufs[2] << "(";
+            for (set<int>::const_iterator iSrc = (*i)->pSrcPorts->begin() ;
+                 iSrc != (*i)->pSrcPorts->end() ; iSrc++)
+            {
+              if (iSrc != (*i)->pSrcPorts->begin())
+                bufs[2] << ",";
+
+              bufs[2] << *iSrc;
+            }
+            bufs[2] << ")";
+          }
+          bufs[2] << "}<-";
+
           string::size_type len = (*i)->filter.name.length();
 
           for (int i = 0 ; i < 2 ; i++) {
@@ -392,7 +425,9 @@ BOOL Filters::OutMethod(
     return TRUE;
 
   for (FilterMethodArray::const_reverse_iterator i = pFilters->rbegin() ; i != pFilters->rend() ; i++) {
-    if (!(*i)->isInMethod) {
+    if (!(*i)->isInMethod && (!(*i)->pSrcPorts ||
+        (*i)->pSrcPorts->find(nFromPort) != (*i)->pSrcPorts->end()))
+    {
       FILTER_OUT_METHOD *pOutMethod = (*i)->filter.pOutMethod;
       HFILTER hFilter = (*i)->filter.hFilter;
 
