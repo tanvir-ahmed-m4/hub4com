@@ -19,6 +19,16 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/08/11 07:15:34  vfrolov
+ * Replaced
+ *   HUB_MSG_TYPE_COM_FUNCTION
+ *   HUB_MSG_TYPE_INIT_LSR_MASK
+ *   HUB_MSG_TYPE_INIT_MST_MASK
+ * by
+ *   HUB_MSG_TYPE_SET_PIN_STATE
+ *   HUB_MSG_TYPE_GET_OPTIONS
+ *   HUB_MSG_TYPE_SET_OPTIONS
+ *
  * Revision 1.3  2008/04/11 14:48:42  vfrolov
  * Replaced SET_RT_EVENTS by INIT_LSR_MASK and INIT_MST_MASK
  * Replaced COM_ERRORS by LINE_STATUS
@@ -61,6 +71,7 @@ ComPort::ComPort(
     countXoff(0),
     filterX(FALSE),
     events(0),
+    maskOutPins(0),
     writeQueueLimit(256),
     writeQueued(0),
     writeLost(0),
@@ -93,44 +104,37 @@ BOOL ComPort::Start()
   _ASSERTE(handle != INVALID_HANDLE_VALUE);
 
   HUB_MSG msg;
-  DWORD mask;
 
-  mask = 0;
-  msg.type = HUB_MSG_TYPE_INIT_LSR_MASK;
-  msg.u.pVal = &mask;
+  DWORD options = 0;
+  msg.type = HUB_MSG_TYPE_GET_OPTIONS;
+  msg.u.pv.pVal = &options;
+  msg.u.pv.val = 0xFFFFFFFF;
   pOnRead(hHub, hMasterPort, &msg);
-  maskLsr = (BYTE)mask;
+  optsLsr = GO_O2V_LINE_STATUS(options);
+  optsMst = GO_O2V_MODEM_STATUS(options);
 
-  mask = 0;
-  msg.type = HUB_MSG_TYPE_INIT_MST_MASK;
-  msg.u.pVal = &mask;
-  pOnRead(hHub, hMasterPort, &msg);
-  maskMst = (BYTE)mask;
-
-  CheckComEvents(DWORD(-1));
-
-  if (maskLsr || maskMst) {
-    if ((maskMst & MODEM_STATUS_CTS) != 0)
+  if (optsLsr || optsMst) {
+    if ((optsMst & MODEM_STATUS_CTS) != 0)
       events |= EV_CTS;
 
-    if ((maskMst & MODEM_STATUS_DSR) != 0)
+    if ((optsMst & MODEM_STATUS_DSR) != 0)
       events |= EV_DSR;
 
-    if ((maskMst & MODEM_STATUS_DCD) != 0)
+    if ((optsMst & MODEM_STATUS_DCD) != 0)
       events |= EV_RLSD;
 
-    if ((maskMst & MODEM_STATUS_RI) != 0)
+    if ((optsMst & MODEM_STATUS_RI) != 0)
       events |= EV_RING;
 
-    if (maskMst & ~(MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_DCD|MODEM_STATUS_RI)) {
-      cout << "WARNING: Changing of MODEM STATUS bits 0x" << hex
-           << (unsigned)(maskMst & ~(MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_DCD|MODEM_STATUS_RI))
+    if (optsMst & ~(MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_DCD|MODEM_STATUS_RI)) {
+      cout << name << " WARNING: Changing of MODEM STATUS bit(s) 0x" << hex
+           << (unsigned)(optsMst & ~(MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_DCD|MODEM_STATUS_RI))
            << dec << " will be ignored" << endl;
     }
 
-    if (maskLsr) {
-      cout << "WARNING: Changing of LINE STATUS bits 0x" << hex
-           << (unsigned)maskLsr
+    if (optsLsr) {
+      cout << name << " WARNING: Changing of LINE STATUS bit(s) 0x" << hex
+           << (unsigned)optsLsr
            << dec << " will be ignored" << endl;
     }
   }
@@ -141,7 +145,11 @@ BOOL ComPort::Start()
 
     if (!StartWaitCommEvent())
       return FALSE;
+
+    cout << name << " Event(s) 0x" << hex << events << dec << " will be monitired" << endl;
   }
+
+  CheckComEvents(DWORD(-1));
 
   if (!StartRead())
     return FALSE;
@@ -175,7 +183,7 @@ BOOL ComPort::StartRead()
 
   countReadOverlapped++;
 
-  //cout << "Started Read " << name << " " << countReadOverlapped << endl;
+  //cout << name << " Started Read " << countReadOverlapped << endl;
 
   return TRUE;
 }
@@ -243,15 +251,65 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
 
     writeQueued += len;
 
-    //cout << "Started Write " << name << " " << len << " " << writeQueued << endl;
+    //cout << name << " Started Write " << len << " " << writeQueued << endl;
   }
   else
-  if (pMsg->type == HUB_MSG_TYPE_COM_FUNCTION) {
+  if (pMsg->type == HUB_MSG_TYPE_SET_PIN_STATE) {
     if (handle == INVALID_HANDLE_VALUE)
       return FALSE;
 
-    if (!::EscapeCommFunction(handle, pMsg->u.val))
+    cout << name << " SET_PIN_STATE 0x" << hex << pMsg->u.val << dec << endl;
+
+    WORD mask = (SPS_MASK2PIN(pMsg->u.val) & maskOutPins);
+
+    if (mask & PIN_STATE_RTS) {
+      if (!CommFunction(handle, (pMsg->u.val & PIN_STATE_RTS) ? SETRTS : CLRRTS))
+        cerr << name << " WARNING! can't change RTS state" << endl;
+    }
+    if (mask & PIN_STATE_DTR) {
+      if (!CommFunction(handle, (pMsg->u.val & PIN_STATE_DTR) ? SETDTR : CLRDTR))
+        cerr << name << " WARNING! can't change DTR state" << endl;
+    }
+    if (mask & PIN_STATE_OUT1) {
+      cerr << name << " WARNING! can't change OUT1 state" << endl;
+    }
+    if (mask & PIN_STATE_OUT2) {
+      cerr << name << " WARNING! can't change OUT2 state" << endl;
+    }
+    if (mask & PIN_STATE_BREAK) {
+      if (!CommFunction(handle, (pMsg->u.val & PIN_STATE_BREAK) ? SETBREAK : CLRBREAK))
+        cerr << name << " WARNING! can't change BREAK state" << endl;
+    }
+  }
+  else
+  if (pMsg->type == HUB_MSG_TYPE_SET_OPTIONS) {
+    if (handle == INVALID_HANDLE_VALUE)
       return FALSE;
+
+    BYTE addedPins = (~maskOutPins & SO_O2V_PIN_STATE(pMsg->u.val));
+
+    if (addedPins & PIN_STATE_RTS) {
+      if (!SetManualRtsControl(handle)) {
+        addedPins &= ~PIN_STATE_RTS;
+        cerr << name << " WARNING! can't set manual RTS state mode" << endl;
+      }
+    }
+    if (addedPins & PIN_STATE_DTR) {
+      if (!SetManualDtrControl(handle)) {
+        addedPins &= ~PIN_STATE_DTR;
+        cerr << name << " WARNING! can't set manual DTR state mode" << endl;
+      }
+    }
+    if (addedPins & PIN_STATE_OUT1) {
+      addedPins &= ~PIN_STATE_OUT1;
+      cerr << name << " WARNING! can't set manual OUT1 state mode" << endl;
+    }
+    if (addedPins & PIN_STATE_OUT2) {
+      addedPins &= ~PIN_STATE_OUT2;
+      cerr << name << " WARNING! can't set manual OUT2 state mode" << endl;
+    }
+
+    maskOutPins |= addedPins;
   }
 
   return TRUE;
@@ -279,7 +337,7 @@ BOOL ComPort::StartWaitCommEvent()
 
   countWaitCommEventOverlapped++;
 
-  //cout << "Started WaitCommEvent " << name << " " << countReadOverlapped
+  //cout << name << " Started WaitCommEvent " << countReadOverlapped
   //     << " " << hex << events << dec << endl;
 
   return TRUE;
@@ -312,7 +370,7 @@ void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)
     delete pOverlapped;
     countReadOverlapped--;
 
-    //cout << "Stopped Read " << name << " " << countReadOverlapped << endl;
+    //cout << name << " Stopped Read " << countReadOverlapped << endl;
   }
 }
 
@@ -324,7 +382,7 @@ void ComPort::OnCommEvent(WaitCommEventOverlapped *pOverlapped, DWORD eMask)
     delete pOverlapped;
     countWaitCommEventOverlapped--;
 
-    //cout << "Stopped WaitCommEvent " << name << " " << countWaitCommEventOverlapped << endl;
+    //cout << name << " Stopped WaitCommEvent " << countWaitCommEventOverlapped << endl;
   }
 }
 

@@ -19,6 +19,16 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/08/11 07:15:33  vfrolov
+ * Replaced
+ *   HUB_MSG_TYPE_COM_FUNCTION
+ *   HUB_MSG_TYPE_INIT_LSR_MASK
+ *   HUB_MSG_TYPE_INIT_MST_MASK
+ * by
+ *   HUB_MSG_TYPE_SET_PIN_STATE
+ *   HUB_MSG_TYPE_GET_OPTIONS
+ *   HUB_MSG_TYPE_SET_OPTIONS
+ *
  * Revision 1.4  2008/04/14 07:32:03  vfrolov
  * Renamed option --use-port-module to --use-driver
  *
@@ -52,10 +62,39 @@ extern "C" {
 #define HUB_MSG_TYPE_LINE_DATA     (1   | HUB_MSG_UNION_TYPE_BUF)
 #define HUB_MSG_TYPE_CONNECT       (2   | HUB_MSG_UNION_TYPE_VAL)
 #define HUB_MSG_TYPE_MODEM_STATUS  (3   | HUB_MSG_UNION_TYPE_VAL)
+#define   MODEM_STATUS_DCTS        0x01
+#define   MODEM_STATUS_DDSR        0x02
+#define   MODEM_STATUS_TERI        0x04
+#define   MODEM_STATUS_DDCD        0x08
+#define   MODEM_STATUS_CTS         0x10
+#define   MODEM_STATUS_DSR         0x20
+#define   MODEM_STATUS_RI          0x40
+#define   MODEM_STATUS_DCD         0x80
 #define HUB_MSG_TYPE_LINE_STATUS   (4   | HUB_MSG_UNION_TYPE_VAL)
-#define HUB_MSG_TYPE_COM_FUNCTION  (5   | HUB_MSG_UNION_TYPE_VAL)
-#define HUB_MSG_TYPE_INIT_LSR_MASK (6   | HUB_MSG_UNION_TYPE_PVAL)
-#define HUB_MSG_TYPE_INIT_MST_MASK (7   | HUB_MSG_UNION_TYPE_PVAL)
+#define   LINE_STATUS_DR           0x01
+#define   LINE_STATUS_OE           0x02
+#define   LINE_STATUS_PE           0x04
+#define   LINE_STATUS_FE           0x08
+#define   LINE_STATUS_BI           0x10
+#define   LINE_STATUS_THRE         0x20
+#define   LINE_STATUS_TEMT         0x40
+#define   LINE_STATUS_FIFOERR      0x80
+#define HUB_MSG_TYPE_SET_PIN_STATE (5   | HUB_MSG_UNION_TYPE_VAL)
+#define   SPS_PIN2MASK(p)          ((DWORD)(BYTE)(p) << 16)
+#define   SPS_MASK2PIN(m)          ((BYTE)((m) >> 16))
+#define   PIN_STATE_RTS            0x01
+#define   PIN_STATE_DTR            0x02
+#define   PIN_STATE_OUT1           0x04
+#define   PIN_STATE_OUT2           0x08
+#define   PIN_STATE_BREAK          0x10
+#define HUB_MSG_TYPE_GET_OPTIONS   (6   | HUB_MSG_UNION_TYPE_PVAL)
+#define   GO_O2V_MODEM_STATUS(o)   ((BYTE)(o))
+#define   GO_V2O_MODEM_STATUS(v)   ((DWORD)(BYTE)(v))
+#define   GO_O2V_LINE_STATUS(o)    ((BYTE)((o) >> 8))
+#define   GO_V2O_LINE_STATUS(v)    ((DWORD)(BYTE)(v) << 8)
+#define HUB_MSG_TYPE_SET_OPTIONS   (7   | HUB_MSG_UNION_TYPE_VAL)
+#define   SO_O2V_PIN_STATE(o)      ((BYTE)(o))
+#define   SO_V2O_PIN_STATE(v)      ((DWORD)(BYTE)(v))
 /*******************************************************************/
 typedef struct _HUB_MSG {
   WORD type;
@@ -64,7 +103,10 @@ typedef struct _HUB_MSG {
       BYTE *pBuf;
       DWORD size;
     } buf;
-    DWORD *pVal;
+    struct {
+      DWORD *pVal;
+      DWORD val;
+    } pv;
     DWORD val;
   } u;
 } HUB_MSG;
@@ -253,24 +295,6 @@ typedef struct _PORT_ROUTINES_A {
 
 #define ROUTINE_IS_VALID(pStruct, pRoutine) \
         (ROUTINE_GET(pStruct, pRoutine) != NULL)
-/*******************************************************************/
-#define LINE_STATUS_DR             0x01
-#define LINE_STATUS_OE             0x02
-#define LINE_STATUS_PE             0x04
-#define LINE_STATUS_FE             0x08
-#define LINE_STATUS_BI             0x10
-#define LINE_STATUS_THRE           0x20
-#define LINE_STATUS_TEMT           0x40
-#define LINE_STATUS_FIFOERR        0x80
-/*******************************************************************/
-#define MODEM_STATUS_DCTS          0x01
-#define MODEM_STATUS_DDSR          0x02
-#define MODEM_STATUS_TERI          0x04
-#define MODEM_STATUS_DDCD          0x08
-#define MODEM_STATUS_CTS           0x10
-#define MODEM_STATUS_DSR           0x20
-#define MODEM_STATUS_RI            0x40
-#define MODEM_STATUS_DCD           0x80
 /*******************************************************************/
 
 #ifdef  __cplusplus

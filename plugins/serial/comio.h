@@ -19,6 +19,16 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/08/11 07:15:34  vfrolov
+ * Replaced
+ *   HUB_MSG_TYPE_COM_FUNCTION
+ *   HUB_MSG_TYPE_INIT_LSR_MASK
+ *   HUB_MSG_TYPE_INIT_MST_MASK
+ * by
+ *   HUB_MSG_TYPE_SET_PIN_STATE
+ *   HUB_MSG_TYPE_GET_OPTIONS
+ *   HUB_MSG_TYPE_SET_OPTIONS
+ *
  * Revision 1.2  2008/04/07 12:28:03  vfrolov
  * Replaced --rt-events option by SET_RT_EVENTS message
  *
@@ -45,7 +55,10 @@ class ComPort;
 class ComParams;
 ///////////////////////////////////////////////////////////////
 extern HANDLE OpenComPort(const char *pPath, const ComParams &comParams);
+extern BOOL SetManualRtsControl(HANDLE handle);
+extern BOOL SetManualDtrControl(HANDLE handle);
 extern BOOL SetComEvents(HANDLE handle, DWORD *events);
+extern BOOL CommFunction(HANDLE handle, DWORD func);
 ///////////////////////////////////////////////////////////////
 class ReadOverlapped : private OVERLAPPED
 {

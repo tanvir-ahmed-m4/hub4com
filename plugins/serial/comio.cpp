@@ -19,6 +19,16 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/08/11 07:15:33  vfrolov
+ * Replaced
+ *   HUB_MSG_TYPE_COM_FUNCTION
+ *   HUB_MSG_TYPE_INIT_LSR_MASK
+ *   HUB_MSG_TYPE_INIT_MST_MASK
+ * by
+ *   HUB_MSG_TYPE_SET_PIN_STATE
+ *   HUB_MSG_TYPE_GET_OPTIONS
+ *   HUB_MSG_TYPE_SET_OPTIONS
+ *
  * Revision 1.2  2008/04/07 12:28:02  vfrolov
  * Replaced --rt-events option by SET_RT_EVENTS message
  *
@@ -117,6 +127,15 @@ BOOL SetComEvents(HANDLE handle, DWORD *events)
     return FALSE;
   }
   return myGetCommMask(handle, events);
+}
+///////////////////////////////////////////////////////////////
+BOOL CommFunction(HANDLE handle, DWORD func)
+{
+  if (!::EscapeCommFunction(handle, func)) {
+    TraceError(GetLastError(), "EscapeCommFunction(%lu)", (long)func);
+    return FALSE;
+  }
+  return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
@@ -220,6 +239,30 @@ HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
       << ", ito=" << ComParams::IntervalTimeoutStr(timeouts.ReadIntervalTimeout)
       << ") - OK" << endl;
   return handle;
+}
+///////////////////////////////////////////////////////////////
+BOOL SetManualRtsControl(HANDLE handle)
+{
+  DCB dcb;
+
+  if (!myGetCommState(handle, &dcb))
+    return FALSE;
+
+  dcb.fRtsControl = RTS_CONTROL_DISABLE;
+
+  return mySetCommState(handle, &dcb);
+}
+
+BOOL SetManualDtrControl(HANDLE handle)
+{
+  DCB dcb;
+
+  if (!myGetCommState(handle, &dcb))
+    return FALSE;
+
+  dcb.fDtrControl = DTR_CONTROL_DISABLE;
+
+  return mySetCommState(handle, &dcb);
 }
 ///////////////////////////////////////////////////////////////
 WriteOverlapped::WriteOverlapped(ComPort &_port, BYTE *_pBuf, DWORD _len)

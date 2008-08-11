@@ -19,6 +19,16 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/08/11 07:15:33  vfrolov
+ * Replaced
+ *   HUB_MSG_TYPE_COM_FUNCTION
+ *   HUB_MSG_TYPE_INIT_LSR_MASK
+ *   HUB_MSG_TYPE_INIT_MST_MASK
+ * by
+ *   HUB_MSG_TYPE_SET_PIN_STATE
+ *   HUB_MSG_TYPE_GET_OPTIONS
+ *   HUB_MSG_TYPE_SET_OPTIONS
+ *
  * Revision 1.5  2008/03/26 08:48:18  vfrolov
  * Initial revision
  *
@@ -79,6 +89,13 @@ BOOL ComHub::StartAll() const
   for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
     if (!(*i)->Init())
       return FALSE;
+  }
+
+  for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
+    HubMsg msg;
+
+    msg.type = HUB_MSG_TYPE_SET_OPTIONS;
+    OnRead(*i, &msg);
   }
 
   for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
