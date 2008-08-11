@@ -15,6 +15,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-pin2con", "plugins\p
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-echo", "plugins\echo\echo.vcproj", "{F0ACE42D-3488-4054-B683-3B4BC43CD239}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-pinmap", "plugins\pinmap\pinmap.vcproj", "{DC90F370-D011-4C9A-BD59-6BDC9BC161C0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -49,6 +51,10 @@ Global
 		{F0ACE42D-3488-4054-B683-3B4BC43CD239}.Debug|Win32.Build.0 = Debug|Win32
 		{F0ACE42D-3488-4054-B683-3B4BC43CD239}.Release|Win32.ActiveCfg = Release|Win32
 		{F0ACE42D-3488-4054-B683-3B4BC43CD239}.Release|Win32.Build.0 = Release|Win32
+		{DC90F370-D011-4C9A-BD59-6BDC9BC161C0}.Debug|Win32.ActiveCfg = Debug|Win32
+		{DC90F370-D011-4C9A-BD59-6BDC9BC161C0}.Debug|Win32.Build.0 = Debug|Win32
+		{DC90F370-D011-4C9A-BD59-6BDC9BC161C0}.Release|Win32.ActiveCfg = Release|Win32
+		{DC90F370-D011-4C9A-BD59-6BDC9BC161C0}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
