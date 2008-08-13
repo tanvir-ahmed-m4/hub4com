@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/08/13 15:14:02  vfrolov
+ * Print bit values in readable form
+ *
  * Revision 1.4  2008/08/11 07:15:34  vfrolov
  * Replaced
  *   HUB_MSG_TYPE_COM_FUNCTION
@@ -97,6 +100,75 @@ BOOL ComPort::Init(HMASTERPORT _hMasterPort, HHUB _hHub)
   return TRUE;
 }
 
+struct FIELD2NAME {
+  DWORD code;
+  DWORD mask;
+  const char *name;
+};
+
+static string FieldToName(const FIELD2NAME *pTable, DWORD mask, const char *pDelimiter = "|")
+{
+  stringstream str;
+  int count = 0;
+
+  if (pTable) {
+    while (pTable->name) {
+      DWORD m = (mask & pTable->mask);
+
+      if (m == pTable->code) {
+        mask &= ~pTable->mask;
+        if (count)
+          str << pDelimiter;
+        str << pTable->name;
+        count++;
+      }
+      pTable++;
+    }
+  }
+
+  if (mask) {
+    if (count)
+      str << pDelimiter;
+    str << "0x" << hex << (long)mask << dec;
+  }
+
+  return str.str();
+}
+
+#define TOFIELD2NAME2(p, s) { (ULONG)p##s, (ULONG)p##s, #s }
+
+static FIELD2NAME codeNameTableModemStatus[] = {
+  TOFIELD2NAME2(MODEM_STATUS_, DCTS),
+  TOFIELD2NAME2(MODEM_STATUS_, DDSR),
+  TOFIELD2NAME2(MODEM_STATUS_, TERI),
+  TOFIELD2NAME2(MODEM_STATUS_, DDCD),
+  TOFIELD2NAME2(MODEM_STATUS_, CTS),
+  TOFIELD2NAME2(MODEM_STATUS_, DSR),
+  TOFIELD2NAME2(MODEM_STATUS_, RI),
+  TOFIELD2NAME2(MODEM_STATUS_, DCD),
+  {0, 0, NULL}
+};
+
+static FIELD2NAME codeNameTableLineStatus[] = {
+  TOFIELD2NAME2(LINE_STATUS_, DR),
+  TOFIELD2NAME2(LINE_STATUS_, OE),
+  TOFIELD2NAME2(LINE_STATUS_, PE),
+  TOFIELD2NAME2(LINE_STATUS_, FE),
+  TOFIELD2NAME2(LINE_STATUS_, BI),
+  TOFIELD2NAME2(LINE_STATUS_, THRE),
+  TOFIELD2NAME2(LINE_STATUS_, TEMT),
+  TOFIELD2NAME2(LINE_STATUS_, FIFOERR),
+  {0, 0, NULL}
+};
+
+static FIELD2NAME codeNameTableComEvents[] = {
+  TOFIELD2NAME2(EV_, CTS),
+  TOFIELD2NAME2(EV_, DSR),
+  TOFIELD2NAME2(EV_, RLSD),
+  TOFIELD2NAME2(EV_, RING),
+  {0, 0, NULL}
+};
+
 BOOL ComPort::Start()
 {
   _ASSERTE(hMasterPort != NULL);
@@ -110,8 +182,9 @@ BOOL ComPort::Start()
   msg.u.pv.pVal = &options;
   msg.u.pv.val = 0xFFFFFFFF;
   pOnRead(hHub, hMasterPort, &msg);
-  optsLsr = GO_O2V_LINE_STATUS(options);
-  optsMst = GO_O2V_MODEM_STATUS(options);
+
+  BYTE optsLsr = GO_O2V_LINE_STATUS(options);
+  BYTE optsMst = GO_O2V_MODEM_STATUS(options);
 
   if (optsLsr || optsMst) {
     if ((optsMst & MODEM_STATUS_CTS) != 0)
@@ -126,16 +199,20 @@ BOOL ComPort::Start()
     if ((optsMst & MODEM_STATUS_RI) != 0)
       events |= EV_RING;
 
-    if (optsMst & ~(MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_DCD|MODEM_STATUS_RI)) {
-      cout << name << " WARNING: Changing of MODEM STATUS bit(s) 0x" << hex
-           << (unsigned)(optsMst & ~(MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_DCD|MODEM_STATUS_RI))
-           << dec << " will be ignored" << endl;
+    optsMst &= ~(MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_DCD|MODEM_STATUS_RI);
+
+    if (optsMst) {
+      cout << name << " WARNING: Changing of MODEM STATUS bit(s) 0x"
+           << hex << (unsigned)optsMst << dec << " ["
+           << FieldToName(codeNameTableModemStatus, optsMst)
+           << "] will be ignored" << endl;
     }
 
     if (optsLsr) {
-      cout << name << " WARNING: Changing of LINE STATUS bit(s) 0x" << hex
-           << (unsigned)optsLsr
-           << dec << " will be ignored" << endl;
+      cout << name << " WARNING: Changing of LINE STATUS bit(s) 0x"
+           << hex << (unsigned)optsLsr << dec << " ["
+           << FieldToName(codeNameTableLineStatus, optsLsr)
+           << "] will be ignored" << endl;
     }
   }
 
@@ -146,7 +223,9 @@ BOOL ComPort::Start()
     if (!StartWaitCommEvent())
       return FALSE;
 
-    cout << name << " Event(s) 0x" << hex << events << dec << " will be monitired" << endl;
+    cout << name << " Event(s) 0x" << hex << events << dec << " ["
+           << FieldToName(codeNameTableComEvents, events)
+           << "] will be monitired" << endl;
   }
 
   CheckComEvents(DWORD(-1));
@@ -187,6 +266,15 @@ BOOL ComPort::StartRead()
 
   return TRUE;
 }
+
+static FIELD2NAME codeNameTableSetPinState[] = {
+  TOFIELD2NAME2(PIN_STATE_, RTS),
+  TOFIELD2NAME2(PIN_STATE_, DTR),
+  TOFIELD2NAME2(PIN_STATE_, OUT1),
+  TOFIELD2NAME2(PIN_STATE_, OUT2),
+  TOFIELD2NAME2(PIN_STATE_, BREAK),
+  {0, 0, NULL}
+};
 
 BOOL ComPort::Write(HUB_MSG *pMsg)
 {
@@ -258,9 +346,15 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     if (handle == INVALID_HANDLE_VALUE)
       return FALSE;
 
-    cout << name << " SET_PIN_STATE 0x" << hex << pMsg->u.val << dec << endl;
+    WORD mask = SPS_MASK2PIN(pMsg->u.val);
 
-    WORD mask = (SPS_MASK2PIN(pMsg->u.val) & maskOutPins);
+    cout << name << " SET_PIN_STATE 0x" << hex << pMsg->u.val << dec << " SET["
+         << FieldToName(codeNameTableSetPinState, pMsg->u.val & mask)
+         << "] CLR["
+         << FieldToName(codeNameTableSetPinState, ~pMsg->u.val & mask)
+         << "]" << endl;
+
+    mask &= maskOutPins;
 
     if (mask & PIN_STATE_RTS) {
       if (!CommFunction(handle, (pMsg->u.val & PIN_STATE_RTS) ? SETRTS : CLRRTS))
@@ -338,7 +432,9 @@ BOOL ComPort::StartWaitCommEvent()
   countWaitCommEventOverlapped++;
 
   //cout << name << " Started WaitCommEvent " << countReadOverlapped
-  //     << " " << hex << events << dec << endl;
+  //     << " " << hex << events << dec << " ["
+  //     << FieldToName(codeNameTableComEvents, events)
+  //     << "] << endl;
 
   return TRUE;
 }
@@ -419,6 +515,16 @@ void ComPort::AddXoff(int count)
     StartRead();
 }
 
+static FIELD2NAME codeNameTableCommErrors[] = {
+  TOFIELD2NAME2(CE_, RXOVER),
+  TOFIELD2NAME2(CE_, OVERRUN),
+  TOFIELD2NAME2(CE_, RXPARITY),
+  TOFIELD2NAME2(CE_, FRAME),
+  TOFIELD2NAME2(CE_, BREAK),
+  TOFIELD2NAME2(CE_, TXFULL),
+  {0, 0, NULL}
+};
+
 void ComPort::LostReport()
 {
   _ASSERTE(handle != INVALID_HANDLE_VALUE);
@@ -432,15 +538,8 @@ void ComPort::LostReport()
   CheckComEvents(EV_BREAK|EV_ERR);
 
   if (errors) {
-    cout << "Error " << name << ":";
-
-    if (errors & CE_RXOVER) { cout << " RXOVER"; errors &= ~CE_RXOVER; }
-    if (errors & CE_OVERRUN) { cout << " OVERRUN"; errors &= ~CE_OVERRUN; }
-    if (errors & CE_RXPARITY) { cout << " RXPARITY"; errors &= ~CE_RXPARITY; }
-    if (errors & CE_FRAME) { cout << " FRAME"; errors &= ~CE_FRAME; }
-    if (errors & CE_BREAK) { cout << " BREAK"; errors &= ~CE_BREAK; }
-    if (errors & CE_TXFULL) { cout << " TXFULL"; errors &= ~CE_TXFULL; }
-    if (errors) { cout << " 0x" << hex << errors << dec; errors = 0; }
+    cout << "Error " << name << ": " << FieldToName(codeNameTableCommErrors, errors, " ");
+    errors = 0;
 
     #define IOCTL_SERIAL_GET_STATS CTL_CODE(FILE_DEVICE_SERIAL_PORT,35,METHOD_BUFFERED,FILE_ANY_ACCESS)
 
