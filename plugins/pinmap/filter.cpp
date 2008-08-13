@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/08/13 14:31:41  vfrolov
+ * Fixed Help
+ *
  * Revision 1.1  2008/08/11 07:26:48  vfrolov
  * Initial revision
  *
@@ -244,14 +247,15 @@ static void CALLBACK Help(const char *pProgPath)
   << "  default." << endl
   << endl
   << "OUT method input data stream description:" << endl
-  << "  HUB_MSG_TYPE_GET_OPTIONS(<pOptions>)" << endl
-  << "                        - the value pointed by <pOptions> will be or'ed with" << endl
+  << "  SET_OPTIONS(<opts>)   - the value <opts> will be or'ed with the required mask" << endl
+  << "                          to to set pin state." << endl
+  << "  GET_OPTIONS(<pOpts>)  - the value pointed by <pOpts> will be or'ed with" << endl
   << "                          the required mask to get line status and modem" << endl
   << "                          status." << endl
   << "  SET_PIN_STATE(<set>)  - pin settings controlled by this filter will be" << endl
   << "                          discarded from <set>." << endl
-  << "  LINE_STATUS(<val>)    - current state of line" << endl
-  << "  MODEM_STATUS(<val>)   - current state of modem" << endl
+  << "  LINE_STATUS(<val>)    - current state of line." << endl
+  << "  MODEM_STATUS(<val>)   - current state of modem." << endl
   << endl
   << "OUT method output data stream description:" << endl
   << "  SET_PIN_STATE(<set>)  - will be added on appropriate state changing." << endl
@@ -259,7 +263,9 @@ static void CALLBACK Help(const char *pProgPath)
   << "Examples:" << endl
   << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0,1:" << GetPluginAbout()->pName << " COM1 COM2" << endl
   << "    - transfer data and signals between COM1 and COM2." << endl
-  << "  " << pProgPath << " --echo-route=0 COM2" << endl
+  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << ":\"--rts=cts\" --add-filters=0,1:" << GetPluginAbout()->pName << " --octs=off COM1 COM2" << endl
+  << "    - allow end-to-end RTS/CTS handshaking between COM1 and COM2." << endl
+  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0:" << GetPluginAbout()->pName << " --echo-route=0 COM2" << endl
   << "    - receive data and signals from COM2 and send it back to COM2." << endl
   ;
 }

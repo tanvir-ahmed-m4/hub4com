@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/08/13 14:33:18  vfrolov
+ * Fixed Help
+ *
  * Revision 1.4  2008/04/14 07:32:04  vfrolov
  * Renamed option --use-port-module to --use-driver
  *
@@ -98,16 +101,17 @@ static void CALLBACK Help(const char *pProgPath)
   << "  The value c[urrent] above means to use current COM port settings." << endl
   << endl
   << "Output data stream description:" << endl
+  << "  SET_OPTIONS(<opts>)      - or'e <opts> with the output data stream options." << endl
   << "  LINE_DATA(<data>)        - write <data> to serial port." << endl
-  << "  COM_FUNCTION(<function>) - direct serial port to perform <function>." << endl
-  << "  SET_RT_EVENTS(<mask>)    - direct serial port to monitor <mask> real-time" << endl
-  << "                             events." << endl
+  << "  SET_PIN_STATE(<state>)   - set serial port pins to required state." << endl
   << endl
   << "Input data stream description:" << endl
+  << "  GET_OPTIONS(<pOpts>)     - the port sends this message at starting to get the" << endl
+  << "                             required input data stream options." << endl
   << "  LINE_DATA(<data>)        - readed <data> from serial port." << endl
   << "  CONNECT(TRUE)            - serial port started." << endl
-  << "  MODEM_STATUS(<value>)    - modem control register changed to <value>." << endl
-  << "  COM_ERRORS(<mask>)       - occured communications errors indicated in <mask>." << endl
+  << "  LINE_STATUS(<val>)       - current state of line." << endl
+  << "  MODEM_STATUS(<val>)      - current state of modem." << endl
   << endl
   << "Examples:" << endl
   << "  " << pProgPath << " COM1 \\\\.\\CNCB1 \\\\.\\CNCB2" << endl
