@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/08/14 09:49:45  vfrolov
+ * Fixed output pins masking
+ *
  * Revision 1.2  2008/08/13 14:31:41  vfrolov
  * Fixed Help
  *
@@ -306,12 +309,12 @@ static void InsertPinState(
     if ((inMask & pinIn_names[iIn].val) == 0)
       continue;
 
-    mask |= (DWORD)filter.pinMap[iIn].mask;
+    mask |= filter.pinMap[iIn].mask;
 
     if ((inVal & pinIn_names[iIn].val) != 0)
-      val |= (filter.pinMap[iIn].val & mask);
+      val |= (filter.pinMap[iIn].val & filter.pinMap[iIn].mask);
     else
-      val |= (~filter.pinMap[iIn].val & mask);
+      val |= (~filter.pinMap[iIn].val & filter.pinMap[iIn].mask);
   }
 
   if (mask) {
