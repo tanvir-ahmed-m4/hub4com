@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/08/14 15:19:07  vfrolov
+ * Execute OnCommEvent() in main thread context
+ *
  * Revision 1.3  2008/08/11 07:15:34  vfrolov
  * Replaced
  *   HUB_MSG_TYPE_COM_FUNCTION
@@ -106,6 +109,7 @@ class WaitCommEventOverlapped : private OVERLAPPED
     static VOID CALLBACK OnCommEvent(
       PVOID pParameter,
       BOOLEAN timerOrWaitFired);
+    static VOID CALLBACK OnCommEvent(ULONG_PTR pOverlapped);
 
     ComPort &port;
     HANDLE hWait;

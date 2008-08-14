@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/08/14 15:19:07  vfrolov
+ * Execute OnCommEvent() in main thread context
+ *
  * Revision 1.3  2008/08/11 07:15:33  vfrolov
  * Replaced
  *   HUB_MSG_TYPE_COM_FUNCTION
@@ -350,10 +353,32 @@ BOOL ReadOverlapped::StartRead()
   return FALSE;
 }
 ///////////////////////////////////////////////////////////////
+static HANDLE hThread = INVALID_HANDLE_VALUE;
+
 WaitCommEventOverlapped::WaitCommEventOverlapped(ComPort &_port)
   : port(_port),
     hWait(INVALID_HANDLE_VALUE)
 {
+  if (hThread == INVALID_HANDLE_VALUE) {
+    if (!::DuplicateHandle(::GetCurrentProcess(),
+                           ::GetCurrentThread(),
+                           ::GetCurrentProcess(),
+                           &hThread,
+                           0,
+                           FALSE,
+                           DUPLICATE_SAME_ACCESS))
+    {
+      hThread = INVALID_HANDLE_VALUE;
+
+      TraceError(
+          GetLastError(),
+          "WaitCommEventOverlapped::WaitCommEventOverlapped(): DuplicateHandle() %s",
+          port.Name().c_str());
+
+      return;
+    }
+  }
+
   ::memset((OVERLAPPED *)this, 0, sizeof(OVERLAPPED));
 
   hEvent = ::CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -367,7 +392,7 @@ WaitCommEventOverlapped::WaitCommEventOverlapped(ComPort &_port)
     return;
   }
 
-  if (!::RegisterWaitForSingleObject(&hWait, hEvent, OnCommEvent, this, INFINITE, WT_EXECUTEINIOTHREAD)) {
+  if (!::RegisterWaitForSingleObject(&hWait, hEvent, OnCommEvent, this, INFINITE, WT_EXECUTEINWAITTHREAD)) {
     TraceError(
         GetLastError(),
         "WaitCommEventOverlapped::StartWaitCommEvent(): RegisterWaitForSingleObject() %s",
@@ -403,6 +428,11 @@ WaitCommEventOverlapped::~WaitCommEventOverlapped()
 VOID CALLBACK WaitCommEventOverlapped::OnCommEvent(
     PVOID pOverlapped,
     BOOLEAN /*timerOrWaitFired*/)
+{
+  ::QueueUserAPC(OnCommEvent, hThread, (ULONG_PTR)pOverlapped);
+}
+
+VOID CALLBACK WaitCommEventOverlapped::OnCommEvent(ULONG_PTR pOverlapped)
 {
   WaitCommEventOverlapped *pOver = (WaitCommEventOverlapped *)pOverlapped;
 
