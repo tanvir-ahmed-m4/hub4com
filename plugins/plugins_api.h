@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/08/15 12:44:59  vfrolov
+ * Added fake read filter method to ports
+ *
  * Revision 1.5  2008/08/11 07:15:33  vfrolov
  * Replaced
  *   HUB_MSG_TYPE_COM_FUNCTION
@@ -265,6 +268,9 @@ typedef BOOL (CALLBACK PORT_INIT)(
         HHUB hHub);
 typedef BOOL (CALLBACK PORT_START)(
         HPORT hPort);
+typedef BOOL (CALLBACK PORT_FAKE_READ_FILTER)(
+        HPORT hPort,
+        HUB_MSG *pInMsg);
 typedef BOOL (CALLBACK PORT_WRITE)(
         HPORT hPort,
         HUB_MSG *pMsg);
@@ -282,6 +288,7 @@ typedef struct _PORT_ROUTINES_A {
   PORT_SET_NAME_A *pSetPortName;
   PORT_INIT *pInit;
   PORT_START *pStart;
+  PORT_FAKE_READ_FILTER *pFakeReadFilter;
   PORT_WRITE *pWrite;
   PORT_ADD_XOFF *pAddXoff;
   PORT_ADD_XON *pAddXon;

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/08/15 12:44:59  vfrolov
+ * Added fake read filter method to ports
+ *
  * Revision 1.6  2008/08/11 07:15:33  vfrolov
  * Replaced
  *   HUB_MSG_TYPE_COM_FUNCTION
@@ -95,13 +98,42 @@ BOOL ComHub::StartAll() const
     HubMsg msg;
 
     msg.type = HUB_MSG_TYPE_SET_OPTIONS;
-    OnRead(*i, &msg);
+
+    if (!OnFakeRead(*i, &msg))
+      return FALSE;
+  }
+
+  for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
+    HubMsg msg;
+    DWORD options = 0;
+
+    msg.type = HUB_MSG_TYPE_GET_OPTIONS;
+    msg.u.pv.pVal = &options;
+    msg.u.pv.val = DWORD(-1);
+
+    if (!OnFakeRead(*i, &msg))
+      return FALSE;
+
+    if (options) {
+      cout << (*i)->Name() << " WARNING: Requested option(s) 0x"
+           << hex << options << dec << " not supported" << endl;
+    }
   }
 
   for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
     if (!(*i)->Start())
       return FALSE;
   }
+
+  return TRUE;
+}
+
+BOOL ComHub::OnFakeRead(Port *pFromPort, HubMsg *pMsg) const
+{
+  if (!pFromPort->FakeReadFilter(pMsg))
+    return FALSE;
+
+  OnRead(pFromPort, pMsg);
 
   return TRUE;
 }

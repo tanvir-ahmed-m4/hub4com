@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/08/15 12:44:59  vfrolov
+ * Added fake read filter method to ports
+ *
  * Revision 1.3  2008/04/14 07:32:04  vfrolov
  * Renamed option --use-port-module to --use-driver
  *
@@ -246,6 +249,7 @@ static const PORT_ROUTINES_A routines = {
   SetPortName,
   Init,
   Start,
+  NULL,      // FakeReadFilter
   Write,
   AddXoff,
   AddXon,

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/08/15 12:44:59  vfrolov
+ * Added fake read filter method to ports
+ *
  * Revision 1.5  2008/08/13 14:33:18  vfrolov
  * Fixed Help
  *
@@ -106,12 +109,21 @@ static void CALLBACK Help(const char *pProgPath)
   << "  SET_PIN_STATE(<state>)   - set serial port pins to required state." << endl
   << endl
   << "Input data stream description:" << endl
-  << "  GET_OPTIONS(<pOpts>)     - the port sends this message at starting to get the" << endl
-  << "                             required input data stream options." << endl
   << "  LINE_DATA(<data>)        - readed <data> from serial port." << endl
   << "  CONNECT(TRUE)            - serial port started." << endl
   << "  LINE_STATUS(<val>)       - current state of line." << endl
   << "  MODEM_STATUS(<val>)      - current state of modem." << endl
+  << endl
+  << "Fake read filter input data stream description:" << endl
+  << "  GET_OPTIONS(<pOpts>,<mask>)" << endl
+  << "                           - the port removes bits from <mask> in this message" << endl
+  << "                             for locally supported input data stream options." << endl
+  << endl
+  << "Fake read filter output data stream description:" << endl
+  << "  GET_OPTIONS(<pOpts>,<mask>)" << endl
+  << "                           - the port adds this message at detecting the" << endl
+  << "                             GET_OPTIONS message in the stream to get the" << endl
+  << "                             required input data stream options." << endl
   << endl
   << "Examples:" << endl
   << "  " << pProgPath << " COM1 \\\\.\\CNCB1 \\\\.\\CNCB2" << endl
@@ -270,6 +282,16 @@ static BOOL CALLBACK Start(HPORT hPort)
   return ((ComPort *)hPort)->Start();
 }
 ///////////////////////////////////////////////////////////////
+static BOOL CALLBACK FakeReadFilter(
+    HPORT hPort,
+    HUB_MSG *pMsg)
+{
+  _ASSERTE(hPort != NULL);
+  _ASSERTE(pMsg != NULL);
+
+  return ((ComPort *)hPort)->FakeReadFilter(pMsg);
+}
+///////////////////////////////////////////////////////////////
 static BOOL CALLBACK Write(
     HPORT hPort,
     HUB_MSG *pMsg)
@@ -317,6 +339,7 @@ static const PORT_ROUTINES_A routines = {
   SetPortName,
   Init,
   Start,
+  FakeReadFilter,
   Write,
   AddXoff,
   AddXon,
@@ -330,6 +353,7 @@ static const PLUGIN_ROUTINES_A *const plugins[] = {
 ///////////////////////////////////////////////////////////////
 ROUTINE_BUF_ALLOC *pBufAlloc;
 ROUTINE_BUF_FREE *pBufFree;
+ROUTINE_MSG_INSERT_NONE *pMsgInsertNone;
 ROUTINE_ON_XOFF *pOnXoff;
 ROUTINE_ON_XON *pOnXon;
 ROUTINE_ON_READ *pOnRead;
@@ -340,6 +364,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 {
   if (!ROUTINE_IS_VALID(pHubRoutines, pBufAlloc) ||
       !ROUTINE_IS_VALID(pHubRoutines, pBufFree) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pMsgInsertNone) ||
       !ROUTINE_IS_VALID(pHubRoutines, pOnXoff) ||
       !ROUTINE_IS_VALID(pHubRoutines, pOnXon) ||
       !ROUTINE_IS_VALID(pHubRoutines, pOnRead))
@@ -349,6 +374,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 
   pBufAlloc = pHubRoutines->pBufAlloc;
   pBufFree = pHubRoutines->pBufFree;
+  pMsgInsertNone = pHubRoutines->pMsgInsertNone;
   pOnXoff = pHubRoutines->pOnXoff;
   pOnXon = pHubRoutines->pOnXon;
   pOnRead = pHubRoutines->pOnRead;

@@ -19,9 +19,11 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/08/15 12:44:59  vfrolov
+ * Added fake read filter method to ports
+ *
  * Revision 1.1  2008/03/26 08:41:18  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -33,6 +35,7 @@
 ///////////////////////////////////////////////////////////////
 extern ROUTINE_BUF_ALLOC *pBufAlloc;
 extern ROUTINE_BUF_FREE *pBufFree;
+extern ROUTINE_MSG_INSERT_NONE *pMsgInsertNone;
 extern ROUTINE_ON_XOFF *pOnXoff;
 extern ROUTINE_ON_XON *pOnXon;
 extern ROUTINE_ON_READ *pOnRead;

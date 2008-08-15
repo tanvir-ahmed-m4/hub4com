@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/08/15 12:44:59  vfrolov
+ * Added fake read filter method to ports
+ *
  * Revision 1.5  2008/03/26 08:48:18  vfrolov
  * Initial revision
  *
@@ -75,6 +78,7 @@ class ComHub
         HCONFIG hConfig,
         const char *pPath);
     BOOL StartAll() const;
+    BOOL OnFakeRead(Port *pFromPort, HubMsg *pMsg) const;
     void OnRead(Port *pFromPort, HubMsg *pMsg) const;
     void AddXoff(Port *pFromPort) const;
     void AddXon(Port *pFromPort) const;

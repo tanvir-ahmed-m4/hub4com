@@ -19,9 +19,11 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/08/15 12:44:59  vfrolov
+ * Added fake read filter method to ports
+ *
  * Revision 1.1  2008/03/26 08:36:47  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -33,7 +35,7 @@
 Port::Port(ComHub &_hub, int _num, const PORT_ROUTINES_A *pPortRoutines, HPORT _hPort)
   : hub(_hub),
     num(_num),
-    hPort(_hPort)    
+    hPort(_hPort)
 {
 #ifdef _DEBUG
   signature = PORT_SIGNATURE;
@@ -60,8 +62,8 @@ Port::Port(ComHub &_hub, int _num, const PORT_ROUTINES_A *pPortRoutines, HPORT _
 
   pInit = ROUTINE_GET(pPortRoutines, pInit);
   pStart = ROUTINE_GET(pPortRoutines, pStart);
+  pFakeReadFilter = ROUTINE_GET(pPortRoutines, pFakeReadFilter);
   pWrite = ROUTINE_GET(pPortRoutines, pWrite);
-
   pAddXoff = ROUTINE_GET(pPortRoutines, pAddXoff);
   pAddXon = ROUTINE_GET(pPortRoutines, pAddXon);
   pLostReport = ROUTINE_GET(pPortRoutines, pLostReport);
@@ -88,6 +90,16 @@ BOOL Port::Start()
   cout << "Started " << name << endl;
 
   return TRUE;
+}
+
+BOOL Port::FakeReadFilter(HubMsg *pMsg)
+{
+  _ASSERTE(pMsg != NULL);
+
+  if (!pFakeReadFilter)
+    return TRUE;
+
+  return pFakeReadFilter(hPort, (HUB_MSG *)pMsg);
 }
 
 BOOL Port::Write(HubMsg *pMsg)

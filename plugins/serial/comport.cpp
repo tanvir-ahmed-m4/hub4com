@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/08/15 12:44:59  vfrolov
+ * Added fake read filter method to ports
+ *
  * Revision 1.5  2008/08/13 15:14:02  vfrolov
  * Print bit values in readable form
  *
@@ -75,6 +78,7 @@ ComPort::ComPort(
     filterX(FALSE),
     events(0),
     maskOutPins(0),
+    options(0),
     writeQueueLimit(256),
     writeQueued(0),
     writeLost(0),
@@ -171,17 +175,11 @@ static FIELD2NAME codeNameTableComEvents[] = {
 
 BOOL ComPort::Start()
 {
+  //cout << name << " Start " << ::GetCurrentThreadId() << endl;
+
   _ASSERTE(hMasterPort != NULL);
   _ASSERTE(hHub != NULL);
   _ASSERTE(handle != INVALID_HANDLE_VALUE);
-
-  HUB_MSG msg;
-
-  DWORD options = 0;
-  msg.type = HUB_MSG_TYPE_GET_OPTIONS;
-  msg.u.pv.pVal = &options;
-  msg.u.pv.val = 0xFFFFFFFF;
-  pOnRead(hHub, hMasterPort, &msg);
 
   BYTE optsLsr = GO_O2V_LINE_STATUS(options);
   BYTE optsMst = GO_O2V_MODEM_STATUS(options);
@@ -233,6 +231,8 @@ BOOL ComPort::Start()
   if (!StartRead())
     return FALSE;
 
+  HUB_MSG msg;
+
   msg.type = HUB_MSG_TYPE_CONNECT;
   msg.u.val = TRUE;
   pOnRead(hHub, hMasterPort, &msg);
@@ -265,6 +265,25 @@ BOOL ComPort::StartRead()
   //cout << name << " Started Read " << countReadOverlapped << endl;
 
   return TRUE;
+}
+
+BOOL ComPort::FakeReadFilter(HUB_MSG *pInMsg)
+{
+  _ASSERTE(pInMsg != NULL);
+
+  if (pInMsg->type == HUB_MSG_TYPE_GET_OPTIONS) {
+    pInMsg->u.pv.val &= ~(GO_V2O_MODEM_STATUS(-1) | GO_V2O_LINE_STATUS(-1));
+
+    pInMsg = pMsgInsertNone(pInMsg, HUB_MSG_TYPE_EMPTY);
+
+    if (pInMsg) {
+      pInMsg->type = HUB_MSG_TYPE_GET_OPTIONS;
+      pInMsg->u.pv.pVal = &options;
+      pInMsg->u.pv.val = GO_V2O_MODEM_STATUS(-1) | GO_V2O_LINE_STATUS(-1);
+    }
+  }
+
+  return pInMsg != NULL;
 }
 
 static FIELD2NAME codeNameTableSetPinState[] = {
@@ -431,16 +450,20 @@ BOOL ComPort::StartWaitCommEvent()
 
   countWaitCommEventOverlapped++;
 
-  //cout << name << " Started WaitCommEvent " << countReadOverlapped
-  //     << " " << hex << events << dec << " ["
-  //     << FieldToName(codeNameTableComEvents, events)
-  //     << "] << endl;
+  /*
+  cout << name << " Started WaitCommEvent " << countReadOverlapped
+       << " " << hex << events << dec << " ["
+       << FieldToName(codeNameTableComEvents, events)
+       << "] << endl;
+  */
 
   return TRUE;
 }
 
 void ComPort::OnWrite(WriteOverlapped *pOverlapped, DWORD len, DWORD done)
 {
+  //cout << name << " OnWrite " << ::GetCurrentThreadId() << endl;
+
   delete pOverlapped;
 
   if (len > done)
@@ -454,6 +477,8 @@ void ComPort::OnWrite(WriteOverlapped *pOverlapped, DWORD len, DWORD done)
 
 void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)
 {
+  //cout << name << " OnRead " << ::GetCurrentThreadId() << endl;
+
   HUB_MSG msg;
 
   msg.type = HUB_MSG_TYPE_LINE_DATA;
@@ -466,19 +491,27 @@ void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)
     delete pOverlapped;
     countReadOverlapped--;
 
-    //cout << name << " Stopped Read " << countReadOverlapped << endl;
+    cout << name << " Stopped Read " << countReadOverlapped << endl;
   }
 }
 
 void ComPort::OnCommEvent(WaitCommEventOverlapped *pOverlapped, DWORD eMask)
 {
+  //cout << name << " OnCommEvent " << ::GetCurrentThreadId() << endl;
+
+  /*
+  cout << name << " Event(s): 0x" << hex << eMask << dec << " ["
+       << FieldToName(codeNameTableComEvents, eMask)
+       << "]" << endl;
+  */
+
   CheckComEvents(eMask);
 
   if (!events || !pOverlapped->StartWaitCommEvent()) {
     delete pOverlapped;
     countWaitCommEventOverlapped--;
 
-    //cout << name << " Stopped WaitCommEvent " << countWaitCommEventOverlapped << endl;
+    cout << name << " Stopped WaitCommEvent " << countWaitCommEventOverlapped << endl;
   }
 }
 
@@ -488,6 +521,13 @@ void ComPort::CheckComEvents(DWORD eMask)
     DWORD stat;
 
     if (::GetCommModemStatus(handle, &stat)) {
+      /*
+      cout << name << " MODEM STATUS bit(s): 0x"
+           << hex << stat << dec << " ["
+           << FieldToName(codeNameTableModemStatus, stat)
+           << "]" << endl;
+      */
+
       HUB_MSG msg;
 
       msg.type = HUB_MSG_TYPE_MODEM_STATUS;

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/08/15 12:44:59  vfrolov
+ * Added fake read filter method to ports
+ *
  * Revision 1.5  2008/08/13 15:14:02  vfrolov
  * Print bit values in readable form
  *
@@ -74,6 +77,7 @@ class ComPort
 
     BOOL Init(HMASTERPORT _hMasterPort, HHUB _hHub);
     BOOL Start();
+    BOOL FakeReadFilter(HUB_MSG *pInMsg);
     BOOL Write(HUB_MSG *pMsg);
     void OnWrite(WriteOverlapped *pOverlapped, DWORD len, DWORD done);
     void OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done);
@@ -100,6 +104,7 @@ class ComPort
     BOOL filterX;
     DWORD events;
     BYTE maskOutPins;
+    DWORD options;
 
     DWORD writeQueueLimit;
     DWORD writeQueued;
