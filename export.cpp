@@ -19,9 +19,11 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/08/19 16:45:27  vfrolov
+ * Added missing size setting to msg_insert_buf()
+ *
  * Revision 1.1  2008/03/26 08:35:03  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -46,7 +48,9 @@ static VOID CALLBACK buf_free(BYTE *pBuf)
 static HUB_MSG *CALLBACK msg_replace_buf(HUB_MSG *pMsg, WORD type, const BYTE *pSrc, DWORD sizeSrc)
 {
   _ASSERTE((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_BUF);
-  _ASSERTE(pMsg != NULL);
+
+  if (!pMsg)
+    return NULL;
 
   if ((pMsg->type & HUB_MSG_UNION_TYPE_MASK) != HUB_MSG_UNION_TYPE_BUF)
     ((HubMsg *)pMsg)->Clean();
@@ -70,6 +74,7 @@ static HUB_MSG *CALLBACK msg_insert_buf(HUB_MSG *pPrevMsg, WORD type, const BYTE
 
   if (pPrevMsg && pPrevMsg->type == type) {
     BufAppend(&pPrevMsg->u.buf.pBuf, pPrevMsg->u.buf.size, pSrc, sizeSrc);
+    pPrevMsg->u.buf.size += sizeSrc;
     return pPrevMsg;
   }
 
@@ -101,7 +106,9 @@ static HUB_MSG *CALLBACK msg_insert_buf(HUB_MSG *pPrevMsg, WORD type, const BYTE
 static HUB_MSG *CALLBACK msg_replace_val(HUB_MSG *pMsg, WORD type, DWORD val)
 {
   _ASSERTE((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_VAL);
-  _ASSERTE(pMsg != NULL);
+
+  if (!pMsg)
+    return NULL;
 
   ((HubMsg *)pMsg)->Clean();
 
@@ -134,7 +141,9 @@ static HUB_MSG *CALLBACK msg_insert_val(HUB_MSG *pPrevMsg, WORD type, DWORD val)
 static HUB_MSG *CALLBACK msg_replace_none(HUB_MSG *pMsg, WORD type)
 {
   _ASSERTE((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_NONE);
-  _ASSERTE(pMsg != NULL);
+
+  if (!pMsg)
+    return NULL;
 
   ((HubMsg *)pMsg)->Clean();
 
