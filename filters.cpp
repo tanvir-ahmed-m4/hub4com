@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/08/20 08:32:35  vfrolov
+ * Implemented Filters::FilterName()
+ *
  * Revision 1.2  2008/04/16 14:13:59  vfrolov
  * Added ability to specify source posts for OUT method
  *
@@ -311,6 +314,16 @@ BOOL Filters::Init() const
   }
 
   return res;
+}
+///////////////////////////////////////////////////////////////
+const char *Filters::FilterName(HFILTER hFilter) const
+{
+  for (FilterArray::const_iterator i = allFilters.begin() ; i != allFilters.end() ; i++) {
+    if (*i && (*i)->hFilter == hFilter)
+      return (*i)->name.c_str();
+  }
+
+  return NULL;
 }
 ///////////////////////////////////////////////////////////////
 static BOOL InMethod(
