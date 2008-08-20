@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/08/20 14:30:19  vfrolov
+ * Redesigned serial port options
+ *
  * Revision 1.6  2008/08/15 12:44:59  vfrolov
  * Added fake read filter method to ports
  *
@@ -76,7 +79,6 @@ ComPort::ComPort(
     countWaitCommEventOverlapped(0),
     countXoff(0),
     filterX(FALSE),
-    events(0),
     maskOutPins(0),
     options(0),
     writeQueueLimit(256),
@@ -181,61 +183,87 @@ BOOL ComPort::Start()
   _ASSERTE(hHub != NULL);
   _ASSERTE(handle != INVALID_HANDLE_VALUE);
 
-  BYTE optsLsr = GO_O2V_LINE_STATUS(options);
-  BYTE optsMst = GO_O2V_MODEM_STATUS(options);
+  DWORD events = 0;
+  BYTE *pBuf = NULL;
+  DWORD done = 0;
 
-  if (optsLsr || optsMst) {
-    if ((optsMst & MODEM_STATUS_CTS) != 0)
+  if (options & GO_ESCAPE_MODE) {
+    options = SetEscMode(handle, options, 'a'/*0xFF*/, &pBuf, &done);
+  } else {
+    if ((options & GO_V2O_MODEM_STATUS(MODEM_STATUS_CTS)) != 0)
       events |= EV_CTS;
 
-    if ((optsMst & MODEM_STATUS_DSR) != 0)
+    if ((options & GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR)) != 0)
       events |= EV_DSR;
 
-    if ((optsMst & MODEM_STATUS_DCD) != 0)
+    if ((options & GO_V2O_MODEM_STATUS(MODEM_STATUS_DCD)) != 0)
       events |= EV_RLSD;
 
-    if ((optsMst & MODEM_STATUS_RI) != 0)
+    if ((options & GO_V2O_MODEM_STATUS(MODEM_STATUS_RI)) != 0)
       events |= EV_RING;
 
-    optsMst &= ~(MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_DCD|MODEM_STATUS_RI);
+    options &= ~GO_V2O_MODEM_STATUS(
+        MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_DCD|MODEM_STATUS_RI);
+  }
 
-    if (optsMst) {
-      cout << name << " WARNING: Changing of MODEM STATUS bit(s) 0x"
-           << hex << (unsigned)optsMst << dec << " ["
-           << FieldToName(codeNameTableModemStatus, optsMst)
-           << "] will be ignored" << endl;
-    }
+  BYTE optsMst = GO_O2V_MODEM_STATUS(options);
 
-    if (optsLsr) {
-      cout << name << " WARNING: Changing of LINE STATUS bit(s) 0x"
-           << hex << (unsigned)optsLsr << dec << " ["
-           << FieldToName(codeNameTableLineStatus, optsLsr)
-           << "] will be ignored" << endl;
-    }
+  if (optsMst) {
+    cerr << name << " WARNING: Changing of MODEM STATUS bit(s) 0x"
+         << hex << (unsigned)optsMst << dec << " ["
+         << FieldToName(codeNameTableModemStatus, optsMst)
+         << "] will be ignored" << endl;
+  }
+
+  BYTE optsLsr = GO_O2V_LINE_STATUS(options);
+
+  if (optsLsr) {
+    cerr << name << " WARNING: Changing of LINE STATUS bit(s) 0x"
+         << hex << (unsigned)optsLsr << dec << " ["
+         << FieldToName(codeNameTableLineStatus, optsLsr)
+         << "] will be ignored" << endl;
+  }
+
+  HUB_MSG msg;
+
+  if (options) {
+    cerr << name << " WARNING: Requested option(s) 0x"
+         << hex << options << dec << " will be ignored" << endl;
+
+    msg.type = HUB_MSG_TYPE_FAIL_IN_OPTS;
+    msg.u.val = options;
+    pOnRead(hHub, hMasterPort, &msg);
   }
 
   if (events) {
-    if (!SetComEvents(handle, &events))
+    if (!SetComEvents(handle, &events) || !StartWaitCommEvent()) {
+      pBufFree(pBuf);
       return FALSE;
-
-    if (!StartWaitCommEvent())
-      return FALSE;
+    }
 
     cout << name << " Event(s) 0x" << hex << events << dec << " ["
-           << FieldToName(codeNameTableComEvents, events)
-           << "] will be monitired" << endl;
+         << FieldToName(codeNameTableComEvents, events)
+         << "] will be monitired" << endl;
   }
 
   CheckComEvents(DWORD(-1));
 
-  if (!StartRead())
+  if (!StartRead()) {
+    pBufFree(pBuf);
     return FALSE;
-
-  HUB_MSG msg;
+  }
 
   msg.type = HUB_MSG_TYPE_CONNECT;
   msg.u.val = TRUE;
   pOnRead(hHub, hMasterPort, &msg);
+
+  if (pBuf) {
+    msg.type = HUB_MSG_TYPE_LINE_DATA;
+    msg.u.buf.pBuf = pBuf;
+    msg.u.buf.size = done;
+
+    pOnRead(hHub, hMasterPort, &msg);
+  }
 
   return TRUE;
 }
@@ -271,15 +299,24 @@ BOOL ComPort::FakeReadFilter(HUB_MSG *pInMsg)
 {
   _ASSERTE(pInMsg != NULL);
 
-  if (pInMsg->type == HUB_MSG_TYPE_GET_OPTIONS) {
-    pInMsg->u.pv.val &= ~(GO_V2O_MODEM_STATUS(-1) | GO_V2O_LINE_STATUS(-1));
+  if (pInMsg->type == HUB_MSG_TYPE_GET_IN_OPTS) {
+    // get supported options from subsequent filters separately
+
+    DWORD supported_options = pInMsg->u.pv.val & (
+        GO_ESCAPE_MODE |
+        GO_RBR_STATUS |
+        GO_RLC_STATUS |
+        GO_V2O_MODEM_STATUS(-1) |
+        GO_V2O_LINE_STATUS(-1));
+
+    pInMsg->u.pv.val &= ~supported_options;
 
     pInMsg = pMsgInsertNone(pInMsg, HUB_MSG_TYPE_EMPTY);
 
     if (pInMsg) {
-      pInMsg->type = HUB_MSG_TYPE_GET_OPTIONS;
+      pInMsg->type = HUB_MSG_TYPE_GET_IN_OPTS;
       pInMsg->u.pv.pVal = &options;
-      pInMsg->u.pv.val = GO_V2O_MODEM_STATUS(-1) | GO_V2O_LINE_STATUS(-1);
+      pInMsg->u.pv.val = supported_options;
     }
   }
 
@@ -395,7 +432,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     }
   }
   else
-  if (pMsg->type == HUB_MSG_TYPE_SET_OPTIONS) {
+  if (pMsg->type == HUB_MSG_TYPE_SET_OUT_OPTS) {
     if (handle == INVALID_HANDLE_VALUE)
       return FALSE;
 
@@ -507,7 +544,7 @@ void ComPort::OnCommEvent(WaitCommEventOverlapped *pOverlapped, DWORD eMask)
 
   CheckComEvents(eMask);
 
-  if (!events || !pOverlapped->StartWaitCommEvent()) {
+  if (!pOverlapped->StartWaitCommEvent()) {
     delete pOverlapped;
     countWaitCommEventOverlapped--;
 

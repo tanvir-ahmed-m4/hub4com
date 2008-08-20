@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/08/20 14:30:19  vfrolov
+ * Redesigned serial port options
+ *
  * Revision 1.3  2008/08/14 09:49:45  vfrolov
  * Fixed output pins masking
  *
@@ -35,6 +38,8 @@
 
 ///////////////////////////////////////////////////////////////
 static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal = NULL;
+static ROUTINE_PORT_NAME_A *pPortName = NULL;
+static ROUTINE_FILTER_NAME_A *pFilterName = NULL;
 ///////////////////////////////////////////////////////////////
 const char *GetParam(const char *pArg, const char *pPattern)
 {
@@ -57,37 +62,46 @@ class Valid {
 ///////////////////////////////////////////////////////////////
 static struct {
   const char *pName;
-  DWORD val;
+  WORD val;
 } pinOut_names[] = {
-  {"rts=",    SO_V2O_PIN_STATE(PIN_STATE_RTS)},
-  {"dtr=",    SO_V2O_PIN_STATE(PIN_STATE_DTR)},
-  {"out1=",   SO_V2O_PIN_STATE(PIN_STATE_OUT1)},
-  {"out2=",   SO_V2O_PIN_STATE(PIN_STATE_OUT2)},
-  {"break=",  SO_V2O_PIN_STATE(PIN_STATE_BREAK)},
+  {"rts=",    PIN_STATE_RTS},
+  {"dtr=",    PIN_STATE_DTR},
+  {"out1=",   PIN_STATE_OUT1},
+  {"out2=",   PIN_STATE_OUT2},
+  {"break=",  PIN_STATE_BREAK},
 };
 ///////////////////////////////////////////////////////////////
+#define MST2LSRMST(m) ((WORD)((BYTE)(m)))
+#define LSR2LSRMST(l) ((WORD)(((WORD)(BYTE)(l)) << 8))
+#define LSRMST2MST(lm) ((BYTE)(lm))
+#define LSRMST2LSR(lm) ((BYTE)((lm) >> 8))
+#define LSRMST2GO(lm) (GO_V2O_MODEM_STATUS(LSRMST2MST(lm)) | GO_V2O_LINE_STATUS(LSRMST2LSR(lm)))
+
 static struct {
   const char *pName;
-  DWORD val;
+  WORD lmVal;
 } pinIn_names[] = {
-  {"cts",   GO_V2O_MODEM_STATUS(MODEM_STATUS_CTS)},
-  {"dsr",   GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR)},
-  {"dcd",   GO_V2O_MODEM_STATUS(MODEM_STATUS_DCD)},
-  {"ring",  GO_V2O_MODEM_STATUS(MODEM_STATUS_RI)},
-  {"break", GO_V2O_LINE_STATUS(LINE_STATUS_BI)},
+  {"cts",   MST2LSRMST(MODEM_STATUS_CTS)},
+  {"dsr",   MST2LSRMST(MODEM_STATUS_DSR)},
+  {"dcd",   MST2LSRMST(MODEM_STATUS_DCD)},
+  {"ring",  MST2LSRMST(MODEM_STATUS_RI)},
+  {"break", LSR2LSRMST(LINE_STATUS_BI)},
 };
 ///////////////////////////////////////////////////////////////
 class State {
   public:
-    State() : inVal(0) {}
+    State() : lmInVal(0) {}
 
-    WORD inVal;
+    WORD lmInVal;
 };
 ///////////////////////////////////////////////////////////////
 class Filter : public Valid {
   public:
     Filter(int argc, const char *const argv[]);
+    void SetHub(HHUB _hHub) { hHub = _hHub; }
     State *GetState(int nPort);
+    const char *PortName(int nPort) const { return pPortName(hHub, nPort); }
+    const char *FilterName() const { return pFilterName(hHub, (HFILTER)this); }
 
     struct PinOuts {
       PinOuts() : mask(0), val(0) {}
@@ -98,9 +112,11 @@ class Filter : public Valid {
 
     PinOuts pinMap[sizeof(pinIn_names)/sizeof(pinIn_names[0])];
     WORD outMask;
-    WORD inMask;
+    WORD lmInMask;
 
   private:
+    HHUB hHub;
+
     typedef map<int, State*> PortsMap;
     typedef pair<int, State*> PortPair;
 
@@ -111,7 +127,8 @@ class Filter : public Valid {
 
 Filter::Filter(int argc, const char *const argv[])
   : outMask(0),
-    inMask(0)
+    lmInMask(0),
+    hHub(NULL)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
@@ -125,7 +142,7 @@ Filter::Filter(int argc, const char *const argv[])
     Parse(pArg);
   }
 
-  if (!inMask) {
+  if (!lmInMask) {
     Parse("rts=cts");
     Parse("dtr=dsr");
     Parse("break=break");
@@ -167,7 +184,7 @@ void Filter::Parse(const char *pArg)
     for (int iIn = 0 ; iIn < sizeof(pinIn_names)/sizeof(pinIn_names[0]) ; iIn++) {
       if (_stricmp(pParam, pinIn_names[iIn].pName) == 0) {
         foundIn = TRUE;
-        inMask |= pinIn_names[iIn].val;
+        lmInMask |= pinIn_names[iIn].lmVal;
 
         pinMap[iIn].mask |= pinOut_names[iOut].val;
 
@@ -250,9 +267,9 @@ static void CALLBACK Help(const char *pProgPath)
   << "  default." << endl
   << endl
   << "OUT method input data stream description:" << endl
-  << "  SET_OPTIONS(<opts>)   - the value <opts> will be or'ed with the required mask" << endl
+  << "  SET_OUT_OPTS(<opts>)  - the value <opts> will be or'ed with the required mask" << endl
   << "                          to to set pin state." << endl
-  << "  GET_OPTIONS(<pOpts>)  - the value pointed by <pOpts> will be or'ed with" << endl
+  << "  GET_IN_OPTS(<pOpts>)  - the value pointed by <pOpts> will be or'ed with" << endl
   << "                          the required mask to get line status and modem" << endl
   << "                          status." << endl
   << "  SET_PIN_STATE(<set>)  - pin settings controlled by this filter will be" << endl
@@ -291,27 +308,39 @@ static HFILTER CALLBACK Create(
   return (HFILTER)pFilter;
 }
 ///////////////////////////////////////////////////////////////
+static BOOL CALLBACK Init(
+    HFILTER hFilter,
+    HHUB hHub)
+{
+  _ASSERTE(hFilter != NULL);
+  _ASSERTE(hHub != NULL);
+
+  ((Filter *)hFilter)->SetHub(hHub);
+
+  return TRUE;
+}
+///////////////////////////////////////////////////////////////
 static void InsertPinState(
     Filter &filter,
-    WORD inMask,
-    WORD inVal,
+    WORD lmInMask,
+    WORD lmInVal,
     HUB_MSG **ppOutMsg)
 {
-  if (!inMask)
+  if (!lmInMask)
     return;
 
-  //cout << "InsertPinState inMask=0x" << hex << inMask << " inVal=0x" << inVal << dec << endl;
+  //cout << "InsertPinState lmInMask=0x" << hex << lmInMask << " lmInVal=0x" << lmInVal << dec << endl;
 
   WORD mask = 0;
   WORD val = 0;
 
   for (int iIn = 0 ; iIn < sizeof(pinIn_names)/sizeof(pinIn_names[0]) ; iIn++) {
-    if ((inMask & pinIn_names[iIn].val) == 0)
+    if ((lmInMask & pinIn_names[iIn].lmVal) == 0)
       continue;
 
     mask |= filter.pinMap[iIn].mask;
 
-    if ((inVal & pinIn_names[iIn].val) != 0)
+    if ((lmInVal & pinIn_names[iIn].lmVal) != 0)
       val |= (filter.pinMap[iIn].val & filter.pinMap[iIn].mask);
     else
       val |= (~filter.pinMap[iIn].val & filter.pinMap[iIn].mask);
@@ -326,7 +355,7 @@ static void InsertPinState(
 
 static BOOL CALLBACK OutMethod(
     HFILTER hFilter,
-    int /*nFromPort*/,
+    int nFromPort,
     int nToPort,
     HUB_MSG *pOutMsg)
 {
@@ -334,17 +363,27 @@ static BOOL CALLBACK OutMethod(
   _ASSERTE(pOutMsg != NULL);
 
   switch (pOutMsg->type) {
-    case HUB_MSG_TYPE_SET_OPTIONS: {
+    case HUB_MSG_TYPE_SET_OUT_OPTS: {
       // or'e with the required mask to set pin state
-      pOutMsg->u.val |= ((Filter *)hFilter)->outMask;
+      pOutMsg->u.val |= SO_V2O_PIN_STATE(((Filter *)hFilter)->outMask);
       break;
     }
-    case HUB_MSG_TYPE_GET_OPTIONS: {
+    case HUB_MSG_TYPE_GET_IN_OPTS: {
       _ASSERTE(pOutMsg->u.pv.pVal != NULL);
 
       // or'e with the required mask to get line status and modem status
-      WORD mask = (WORD)(((Filter *)hFilter)->inMask & pOutMsg->u.pv.val);
-      *pOutMsg->u.pv.pVal |= mask;
+      *pOutMsg->u.pv.pVal |= (LSRMST2GO(((Filter *)hFilter)->lmInMask) & pOutMsg->u.pv.val);
+      break;
+    }
+    case HUB_MSG_TYPE_FAIL_IN_OPTS: {
+      DWORD fail_options = (pOutMsg->u.val & LSRMST2GO(((Filter *)hFilter)->lmInMask));
+
+      if (fail_options) {
+        cerr << ((Filter *)hFilter)->PortName(nFromPort)
+             << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
+             << " option(s) 0x" << hex << fail_options << dec
+             << " not accepted" << endl;
+      }
       break;
     }
     case HUB_MSG_TYPE_SET_PIN_STATE:
@@ -358,17 +397,17 @@ static BOOL CALLBACK OutMethod(
       if (!pState)
         return FALSE;
 
-      WORD inVal;
+      WORD lmInVal;
 
       if (pOutMsg->type == HUB_MSG_TYPE_MODEM_STATUS)
-        inVal = ((WORD)pOutMsg->u.val & 0x00FF) | (pState->inVal & 0xFF00);
+        lmInVal = (MST2LSRMST(pOutMsg->u.val) | (pState->lmInVal & LSR2LSRMST(-1)));
       else
-        inVal = ((WORD)pOutMsg->u.val << 8) | (pState->inVal & 0x00FF);
+        lmInVal = (LSR2LSRMST(pOutMsg->u.val) | (pState->lmInVal & MST2LSRMST(-1)));
 
-      inVal &= ((Filter *)hFilter)->inMask;
+      lmInVal &= ((Filter *)hFilter)->lmInMask;
 
-      InsertPinState(*(Filter *)hFilter, pState->inVal ^ inVal, inVal, &pOutMsg);
-      pState->inVal = inVal;
+      InsertPinState(*(Filter *)hFilter, pState->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
+      pState->lmInVal = lmInVal;
       break;
     }
   }
@@ -385,7 +424,7 @@ static const FILTER_ROUTINES_A routines = {
   NULL,           // Config
   NULL,           // ConfigStop
   Create,
-  NULL,           // Init
+  Init,
   NULL,           // InMethod
   OutMethod,
 };
@@ -399,11 +438,16 @@ PLUGIN_INIT_A InitA;
 const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
     const HUB_ROUTINES_A * pHubRoutines)
 {
-  if (!ROUTINE_IS_VALID(pHubRoutines, pMsgInsertVal)) {
+  if (!ROUTINE_IS_VALID(pHubRoutines, pMsgInsertVal) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pPortName) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pFilterName))
+  {
     return NULL;
   }
 
   pMsgInsertVal = pHubRoutines->pMsgInsertVal;
+  pPortName = pHubRoutines->pPortName;
+  pFilterName = pHubRoutines->pFilterName;
 
   return plugins;
 }

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.9  2008/08/20 14:30:18  vfrolov
+ * Redesigned serial port options
+ *
  * Revision 1.8  2008/08/20 08:46:06  vfrolov
  * Implemented ComHub::FilterName()
  *
@@ -100,26 +103,51 @@ BOOL ComHub::StartAll() const
   for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
     HubMsg msg;
 
-    msg.type = HUB_MSG_TYPE_SET_OPTIONS;
+    msg.type = HUB_MSG_TYPE_SET_OUT_OPTS;
 
     if (!OnFakeRead(*i, &msg))
       return FALSE;
   }
 
   for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
-    HubMsg msg;
-    DWORD options = 0;
+    DWORD fail_options = 0;
+    DWORD repeats = 0;
 
-    msg.type = HUB_MSG_TYPE_GET_OPTIONS;
-    msg.u.pv.pVal = &options;
-    msg.u.pv.val = DWORD(-1);
+    {
+      HubMsg msg;
 
-    if (!OnFakeRead(*i, &msg))
-      return FALSE;
+      msg.type = HUB_MSG_TYPE_COUNT_REPEATS;
+      msg.u.pv.pVal = &repeats;
+      msg.u.pv.val = HUB_MSG_TYPE_GET_IN_OPTS;
 
-    if (options) {
-      cout << (*i)->Name() << " WARNING: Requested option(s) 0x"
-           << hex << options << dec << " not supported" << endl;
+      if (!OnFakeRead(*i, &msg))
+        return FALSE;
+    }
+
+    do {
+      HubMsg msg;
+
+      msg.type = HUB_MSG_TYPE_GET_IN_OPTS;
+      msg.u.pv.pVal = &fail_options;
+      msg.u.pv.val = DWORD(-1);
+
+      if (!OnFakeRead(*i, &msg))
+        return FALSE;
+    } while (repeats--);
+
+    if (fail_options) {
+      cerr << (*i)->Name() << " WARNING: Requested option(s) 0x"
+           << hex << fail_options << dec << " not supported" << endl;
+    }
+
+    {
+      HubMsg msg;
+
+      msg.type = HUB_MSG_TYPE_FAIL_IN_OPTS;
+      msg.u.val = fail_options;
+
+      if (!OnFakeRead(*i, &msg))
+        return FALSE;
     }
   }
 

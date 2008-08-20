@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/08/20 14:30:19  vfrolov
+ * Redesigned serial port options
+ *
  * Revision 1.5  2008/08/11 07:15:33  vfrolov
  * Replaced
  *   HUB_MSG_TYPE_COM_FUNCTION
@@ -50,6 +53,8 @@
 ///////////////////////////////////////////////////////////////
 static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal = NULL;
 static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone = NULL;
+static ROUTINE_PORT_NAME_A *pPortName = NULL;
+static ROUTINE_FILTER_NAME_A *pFilterName = NULL;
 ///////////////////////////////////////////////////////////////
 const char *GetParam(const char *pArg, const char *pPattern)
 {
@@ -68,18 +73,23 @@ class State {
     BOOL connect;
 };
 ///////////////////////////////////////////////////////////////
-typedef map<int, State*> PortsMap;
-typedef pair<int, State*> PortPair;
-
 class Filter {
   public:
     Filter(int argc, const char *const argv[]);
+    void SetHub(HHUB _hHub) { hHub = _hHub; }
     State *GetState(int nPort);
+    const char *PortName(int nPort) const { return pPortName(hHub, nPort); }
+    const char *FilterName() const { return pFilterName(hHub, (HFILTER)this); }
 
     DWORD pin;
     BOOL negative;
 
   private:
+    HHUB hHub;
+
+    typedef map<int, State*> PortsMap;
+    typedef pair<int, State*> PortPair;
+
     PortsMap portsMap;
 };
 
@@ -96,7 +106,8 @@ static struct {
 
 Filter::Filter(int argc, const char *const argv[])
   : pin(GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR)),
-    negative(FALSE)
+    negative(FALSE),
+    hHub(NULL)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
@@ -179,13 +190,12 @@ static void CALLBACK Help(const char *pProgPath)
   << "                          default)." << endl
   << endl
   << "IN method input data stream description:" << endl
-  << "  HUB_MSG_TYPE_GET_OPTIONS(<pOptions>)" << endl
-  << "                        - the value pointed by <pOptions> will be or'ed with" << endl
+  << "  GET_IN_OPTS(<pOpts>)  - the value pointed by <pOpts> will be or'ed with" << endl
   << "                          the required mask to get line status and modem" << endl
   << "                          status." << endl
   << "  CONNECT(TRUE/FALSE)   - will be discarded from stream." << endl
-  << "  LINE_STATUS(<val>)    - current state of line" << endl
-  << "  MODEM_STATUS(<val>)   - current state of modem" << endl
+  << "  LINE_STATUS(<val>)    - current state of line." << endl
+  << "  MODEM_STATUS(<val>)   - current state of modem." << endl
   << endl
   << "IN method output data stream description:" << endl
   << "  CONNECT(TRUE/FALSE)   - will be added on appropriate state changing." << endl
@@ -205,6 +215,18 @@ static HFILTER CALLBACK Create(
   return (HFILTER)new Filter(argc, argv);
 }
 ///////////////////////////////////////////////////////////////
+static BOOL CALLBACK Init(
+    HFILTER hFilter,
+    HHUB hHub)
+{
+  _ASSERTE(hFilter != NULL);
+  _ASSERTE(hHub != NULL);
+
+  ((Filter *)hFilter)->SetHub(hHub);
+
+  return TRUE;
+}
+///////////////////////////////////////////////////////////////
 static BOOL CALLBACK InMethod(
     HFILTER hFilter,
     int nFromPort,
@@ -216,9 +238,21 @@ static BOOL CALLBACK InMethod(
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
 
-  if (pInMsg->type == HUB_MSG_TYPE_GET_OPTIONS) {
+  if (pInMsg->type == HUB_MSG_TYPE_GET_IN_OPTS) {
     _ASSERTE(pInMsg->u.pv.pVal != NULL);
+    // or'e with the required mask to get line status and modem status
     *pInMsg->u.pv.pVal |= (((Filter *)hFilter)->pin & pInMsg->u.pv.val);
+  }
+  else
+  if (pInMsg->type == HUB_MSG_TYPE_FAIL_IN_OPTS) {
+    DWORD fail_options = (pInMsg->u.val & ((Filter *)hFilter)->pin);
+
+    if (fail_options) {
+      cerr << ((Filter *)hFilter)->PortName(nFromPort)
+           << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
+           << " option(s) 0x" << hex << fail_options << dec
+           << " not accepted" << endl;
+    }
   }
   else
   if (pInMsg->type == HUB_MSG_TYPE_CONNECT) {
@@ -267,7 +301,7 @@ static const FILTER_ROUTINES_A routines = {
   NULL,           // Config
   NULL,           // ConfigStop
   Create,
-  NULL,           // Init
+  Init,
   InMethod,
   NULL,           // OutMethod
 };
@@ -282,13 +316,17 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
     const HUB_ROUTINES_A * pHubRoutines)
 {
   if (!ROUTINE_IS_VALID(pHubRoutines, pMsgInsertVal) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pMsgReplaceNone))
+      !ROUTINE_IS_VALID(pHubRoutines, pMsgReplaceNone) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pPortName) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pFilterName))
   {
     return NULL;
   }
 
   pMsgInsertVal = pHubRoutines->pMsgInsertVal;
   pMsgReplaceNone = pHubRoutines->pMsgReplaceNone;
+  pPortName = pHubRoutines->pPortName;
+  pFilterName = pHubRoutines->pFilterName;
 
   return plugins;
 }

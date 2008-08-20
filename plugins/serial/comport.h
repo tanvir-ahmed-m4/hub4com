@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/08/20 14:30:19  vfrolov
+ * Redesigned serial port options
+ *
  * Revision 1.6  2008/08/15 12:44:59  vfrolov
  * Added fake read filter method to ports
  *
@@ -102,7 +105,6 @@ class ComPort
     int countWaitCommEventOverlapped;
     int countXoff;
     BOOL filterX;
-    DWORD events;
     BYTE maskOutPins;
     DWORD options;
 

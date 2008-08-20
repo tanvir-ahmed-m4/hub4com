@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/08/20 14:30:19  vfrolov
+ * Redesigned serial port options
+ *
  * Revision 1.4  2008/08/14 15:19:07  vfrolov
  * Execute OnCommEvent() in main thread context
  *
@@ -61,6 +64,7 @@
 #include "comport.h"
 #include "comparams.h"
 #include "import.h"
+#include "..\cncext.h"
 
 ///////////////////////////////////////////////////////////////
 static void TraceError(DWORD err, const char *pFmt, ...)
@@ -268,6 +272,122 @@ BOOL SetManualDtrControl(HANDLE handle)
   return mySetCommState(handle, &dcb);
 }
 ///////////////////////////////////////////////////////////////
+static ULONG GetEscCaps(HANDLE handle)
+{
+  BYTE inBufIoctl[sizeof(UCHAR) + C0CE_SIGNATURE_SIZE + sizeof(ULONG)];
+  inBufIoctl[0] = 0;  // disable inserting
+  memcpy(inBufIoctl + sizeof(UCHAR), C0CE_SIGNATURE, C0CE_SIGNATURE_SIZE);
+  *(ULONG *)(inBufIoctl + sizeof(UCHAR) + C0CE_SIGNATURE_SIZE) = C0CE_INSERT_IOCTL_CAPS;
+
+  BYTE outBuf[C0CE_SIGNATURE_SIZE + sizeof(ULONG)];
+
+  DWORD returned;
+
+  if (!DeviceIoControl(handle,
+                       IOCTL_SERIAL_LSRMST_INSERT,
+                       inBufIoctl, sizeof(inBufIoctl),
+                       outBuf, sizeof(outBuf), &returned,
+                       NULL))
+  {
+    TraceError(GetLastError(), "IOCTL_SERIAL_LSRMST_INSERT");
+    return 0;
+  }
+
+  if (returned < (C0CE_SIGNATURE_SIZE + sizeof(ULONG)) ||
+      memcmp(outBuf, C0CE_SIGNATURE, C0CE_SIGNATURE_SIZE) != 0)
+  {
+    return C0CE_INSERT_ENABLE_LSR|C0CE_INSERT_ENABLE_MST;  // standard functionality
+  }
+
+  return *(ULONG *)(outBuf + C0CE_SIGNATURE_SIZE);
+}
+
+DWORD SetEscMode(HANDLE handle, DWORD options, BYTE escapeChar, BYTE **ppBuf, DWORD *pDone)
+{
+  _ASSERTE(ppBuf != NULL);
+  _ASSERTE(*ppBuf == NULL);
+  _ASSERTE(pDone != NULL);
+  _ASSERTE(*pDone == 0);
+
+  if (!escapeChar)
+    return options;
+
+  ULONG opts = (C0CE_INSERT_IOCTL_GET|C0CE_INSERT_IOCTL_RXCLEAR);
+
+  if (options & GO_V2O_MODEM_STATUS(-1))
+    opts |= C0CE_INSERT_ENABLE_MST;
+
+  if (options & GO_V2O_LINE_STATUS(LINE_STATUS_BI))
+    opts |= C0CE_INSERT_ENABLE_LSR_BI;
+
+  if (options & GO_RBR_STATUS)
+    opts |= C0CE_INSERT_ENABLE_RBR;
+
+  if (options & GO_RLC_STATUS)
+    opts |= C0CE_INSERT_ENABLE_RLC;
+
+  opts &= GetEscCaps(handle);
+
+  if (!opts)
+    return options;
+
+  BYTE inBufIoctl[sizeof(UCHAR) + C0CE_SIGNATURE_SIZE + sizeof(ULONG)];
+  inBufIoctl[0] = escapeChar;
+  memcpy(inBufIoctl + sizeof(UCHAR), C0CE_SIGNATURE, C0CE_SIGNATURE_SIZE);
+  *(ULONG *)(inBufIoctl + sizeof(UCHAR) + C0CE_SIGNATURE_SIZE) = opts;
+
+  DWORD lenOutBufIoctl = 0;
+
+  if (opts & C0CE_INSERT_IOCTL_GET) {
+    if (opts & (C0CE_INSERT_ENABLE_LSR|C0CE_INSERT_ENABLE_LSR_BI))
+      lenOutBufIoctl += sizeof(UCHAR)*2 + sizeof(UCHAR);
+
+    if (opts & C0CE_INSERT_ENABLE_MST)
+      lenOutBufIoctl += sizeof(UCHAR)*2 + sizeof(UCHAR);
+
+    if (opts & C0CE_INSERT_ENABLE_RBR)
+      lenOutBufIoctl += sizeof(UCHAR)*2 + sizeof(ULONG);
+
+    if (opts & C0CE_INSERT_ENABLE_RLC)
+      lenOutBufIoctl += sizeof(UCHAR)*2 + sizeof(UCHAR)*3;
+
+    if (lenOutBufIoctl) {
+      *ppBuf = pBufAlloc(lenOutBufIoctl);
+
+      if (!*ppBuf)
+        lenOutBufIoctl = 0;
+    }
+  }
+
+  if (!DeviceIoControl(handle,
+                       IOCTL_SERIAL_LSRMST_INSERT,
+                       inBufIoctl, sizeof(inBufIoctl),
+                       *ppBuf, lenOutBufIoctl, pDone,
+                       NULL))
+  {
+    TraceError(GetLastError(), "IOCTL_SERIAL_LSRMST_INSERT");
+
+    *pDone = 0;
+    return options;
+  }
+
+  options &= ~GO_ESCAPE_MODE;
+
+  if (opts & C0CE_INSERT_ENABLE_MST)
+    options &= ~GO_V2O_MODEM_STATUS(-1);
+
+  if (opts & C0CE_INSERT_ENABLE_LSR_BI)
+    options &= ~GO_V2O_LINE_STATUS(LINE_STATUS_BI);
+
+  if (opts & C0CE_INSERT_ENABLE_RBR)
+    options &= ~GO_RBR_STATUS;
+
+  if (opts & C0CE_INSERT_ENABLE_RLC)
+    options &= ~GO_RLC_STATUS;
+
+  return options;
+}
+///////////////////////////////////////////////////////////////
 WriteOverlapped::WriteOverlapped(ComPort &_port, BYTE *_pBuf, DWORD _len)
   : port(_port),
     pBuf(_pBuf),
@@ -359,6 +479,16 @@ WaitCommEventOverlapped::WaitCommEventOverlapped(ComPort &_port)
   : port(_port),
     hWait(INVALID_HANDLE_VALUE)
 {
+#ifdef _DEBUG
+  static DWORD idThread;
+
+  if (hThread == INVALID_HANDLE_VALUE) {
+    idThread = ::GetCurrentThreadId();
+  } else {
+    _ASSERTE(idThread == ::GetCurrentThreadId());
+  }
+#endif  /* _DEBUG */
+
   if (hThread == INVALID_HANDLE_VALUE) {
     if (!::DuplicateHandle(::GetCurrentProcess(),
                            ::GetCurrentThread(),

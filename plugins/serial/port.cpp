@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/08/20 14:30:19  vfrolov
+ * Redesigned serial port options
+ *
  * Revision 1.6  2008/08/15 12:44:59  vfrolov
  * Added fake read filter method to ports
  *
@@ -104,7 +107,7 @@ static void CALLBACK Help(const char *pProgPath)
   << "  The value c[urrent] above means to use current COM port settings." << endl
   << endl
   << "Output data stream description:" << endl
-  << "  SET_OPTIONS(<opts>)      - or'e <opts> with the output data stream options." << endl
+  << "  SET_OUT_OPTS(<opts>)     - or'e <opts> with the output data stream options." << endl
   << "  LINE_DATA(<data>)        - write <data> to serial port." << endl
   << "  SET_PIN_STATE(<state>)   - set serial port pins to required state." << endl
   << endl
@@ -115,14 +118,14 @@ static void CALLBACK Help(const char *pProgPath)
   << "  MODEM_STATUS(<val>)      - current state of modem." << endl
   << endl
   << "Fake read filter input data stream description:" << endl
-  << "  GET_OPTIONS(<pOpts>,<mask>)" << endl
+  << "  GET_IN_OPTS(<pOpts>,<mask>)" << endl
   << "                           - the port removes bits from <mask> in this message" << endl
   << "                             for locally supported input data stream options." << endl
   << endl
   << "Fake read filter output data stream description:" << endl
-  << "  GET_OPTIONS(<pOpts>,<mask>)" << endl
+  << "  GET_IN_OPTS(<pOpts>,<mask>)" << endl
   << "                           - the port adds this message at detecting the" << endl
-  << "                             GET_OPTIONS message in the stream to get the" << endl
+  << "                             GET_IN_OPTS message in the stream to get the" << endl
   << "                             required input data stream options." << endl
   << endl
   << "Examples:" << endl

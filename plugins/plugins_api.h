@@ -62,14 +62,21 @@ extern "C" {
 #define   PIN_STATE_OUT1           0x04
 #define   PIN_STATE_OUT2           0x08
 #define   PIN_STATE_BREAK          0x10
-#define HUB_MSG_TYPE_GET_OPTIONS   (6   | HUB_MSG_UNION_TYPE_PVAL)
+#define HUB_MSG_TYPE_GET_IN_OPTS   (6   | HUB_MSG_UNION_TYPE_PVAL)
 #define   GO_O2V_MODEM_STATUS(o)   ((BYTE)(o))
 #define   GO_V2O_MODEM_STATUS(v)   ((DWORD)(BYTE)(v))
 #define   GO_O2V_LINE_STATUS(o)    ((BYTE)((o) >> 8))
 #define   GO_V2O_LINE_STATUS(v)    ((DWORD)(BYTE)(v) << 8)
-#define HUB_MSG_TYPE_SET_OPTIONS   (7   | HUB_MSG_UNION_TYPE_VAL)
+#define   GO_ESCAPE_MODE           0x00010000
+#define   GO_RBR_STATUS            0x00020000
+#define   GO_RLC_STATUS            0x00040000
+#define HUB_MSG_TYPE_SET_OUT_OPTS  (7   | HUB_MSG_UNION_TYPE_VAL)
 #define   SO_O2V_PIN_STATE(o)      ((BYTE)(o))
 #define   SO_V2O_PIN_STATE(v)      ((DWORD)(BYTE)(v))
+#define HUB_MSG_TYPE_FAIL_IN_OPTS  (8   | HUB_MSG_UNION_TYPE_VAL)
+#define HUB_MSG_TYPE_RBR_STATUS    (9   | HUB_MSG_UNION_TYPE_VAL)
+#define HUB_MSG_TYPE_RLC_STATUS    (10  | HUB_MSG_UNION_TYPE_VAL)
+#define HUB_MSG_TYPE_COUNT_REPEATS (11  | HUB_MSG_UNION_TYPE_PVAL)
 /*******************************************************************/
 typedef struct _HUB_MSG {
   WORD type;
