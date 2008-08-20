@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2008/08/20 08:46:06  vfrolov
+ * Implemented ComHub::FilterName()
+ *
  * Revision 1.7  2008/08/15 12:44:59  vfrolov
  * Added fake read filter method to ports
  *
@@ -255,5 +258,10 @@ void ComHub::RouteReport() const
 {
   ::RouteReport(routeDataMap, "data");
   ::RouteReport(routeFlowControlMap, "flow control");
+}
+
+const char *ComHub::FilterName(HFILTER hFilter) const
+{
+  return pFilters ? pFilters->FilterName(hFilter) : NULL;
 }
 ///////////////////////////////////////////////////////////////

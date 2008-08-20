@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/08/20 08:46:06  vfrolov
+ * Implemented ComHub::FilterName()
+ *
  * Revision 1.6  2008/08/15 12:44:59  vfrolov
  * Added fake read filter method to ports
  *
@@ -100,6 +103,8 @@ class ComHub
 
       return ports.at(n);
     }
+
+    const char *FilterName(HFILTER hFilter) const;
 
   private:
     Ports ports;
