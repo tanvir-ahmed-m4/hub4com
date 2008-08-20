@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/08/20 09:26:40  vfrolov
+ * Fixed typo
+ *
  * Revision 1.4  2008/04/14 07:32:03  vfrolov
  * Renamed option --use-port-module to --use-driver
  *
@@ -45,7 +48,7 @@
 ///////////////////////////////////////////////////////////////
 static ROUTINE_MSG_INSERT_VAL *pMsgReplaceVal = NULL;
 static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone = NULL;
-static ROUTINE_MSG_REPLACE_NONE *pMsgInsertNone = NULL;
+static ROUTINE_MSG_INSERT_NONE *pMsgInsertNone = NULL;
 ///////////////////////////////////////////////////////////////
 const char *GetParam(const char *pArg, const char *pPattern)
 {
