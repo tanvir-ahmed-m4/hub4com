@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/08/20 09:38:52  vfrolov
+ * Fixed unknown types printing
+ *
  * Revision 1.2  2008/04/14 07:32:03  vfrolov
  * Renamed option --use-port-module to --use-driver
  *
@@ -113,7 +116,7 @@ static string type2str(PLUGIN_TYPE type)
   switch (type) {
     case PLUGIN_TYPE_FILTER: str << "filter"; break;
     case PLUGIN_TYPE_DRIVER: str << "driver"; break;
-    default:                 str << type;
+    default:                 str << "UNKNOWN(" << type << ")";
   }
 
   return str.str();
