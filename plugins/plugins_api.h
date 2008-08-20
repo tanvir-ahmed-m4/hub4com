@@ -1,5 +1,5 @@
 /*
- * $Id$
+ * plugins_api.h
  *
  * Copyright (c) 2008 Vyacheslav Frolov
  *
@@ -16,34 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
- *
- * $Log$
- * Revision 1.6  2008/08/15 12:44:59  vfrolov
- * Added fake read filter method to ports
- *
- * Revision 1.5  2008/08/11 07:15:33  vfrolov
- * Replaced
- *   HUB_MSG_TYPE_COM_FUNCTION
- *   HUB_MSG_TYPE_INIT_LSR_MASK
- *   HUB_MSG_TYPE_INIT_MST_MASK
- * by
- *   HUB_MSG_TYPE_SET_PIN_STATE
- *   HUB_MSG_TYPE_GET_OPTIONS
- *   HUB_MSG_TYPE_SET_OPTIONS
- *
- * Revision 1.4  2008/04/14 07:32:03  vfrolov
- * Renamed option --use-port-module to --use-driver
- *
- * Revision 1.3  2008/04/11 14:48:42  vfrolov
- * Replaced SET_RT_EVENTS by INIT_LSR_MASK and INIT_MST_MASK
- * Replaced COM_ERRORS by LINE_STATUS
- *
- * Revision 1.2  2008/04/07 12:20:51  vfrolov
- * Added HUB_MSG_TYPE_SET_RT_EVENTS
- *
- * Revision 1.1  2008/03/26 08:38:37  vfrolov
- * Initial revision
  *
  */
 
@@ -116,6 +88,7 @@ typedef struct _HUB_MSG {
 /*******************************************************************/
 DECLARE_HANDLE(HHUB);
 DECLARE_HANDLE(HMASTERPORT);
+DECLARE_HANDLE(HFILTER);
 /*******************************************************************/
 typedef BYTE *(CALLBACK ROUTINE_BUF_ALLOC)(
         DWORD size);
@@ -150,6 +123,9 @@ typedef int (CALLBACK ROUTINE_NUM_PORTS)(
 typedef const char *(CALLBACK ROUTINE_PORT_NAME_A)(
         HHUB hHub,
         int n);
+typedef const char *(CALLBACK ROUTINE_FILTER_NAME_A)(
+        HHUB hHub,
+        HFILTER hFilter);
 typedef void (CALLBACK ROUTINE_ON_XOFF)(
         HHUB hHub,
         HMASTERPORT hMasterPort);
@@ -173,6 +149,7 @@ typedef struct _HUB_ROUTINES_A {
   ROUTINE_MSG_INSERT_NONE *pMsgInsertNone;
   ROUTINE_NUM_PORTS *pNumPorts;
   ROUTINE_PORT_NAME_A *pPortName;
+  ROUTINE_FILTER_NAME_A *pFilterName;
   ROUTINE_ON_XOFF *pOnXoff;
   ROUTINE_ON_XON *pOnXon;
   ROUTINE_ON_READ *pOnRead;
@@ -223,8 +200,6 @@ typedef struct _PLUGIN_ROUTINES_A {
 /*******************************************************************/
 typedef const PLUGIN_ROUTINES_A *const *(CALLBACK PLUGIN_INIT_A)(
         const HUB_ROUTINES_A *pHubRoutines);
-/*******************************************************************/
-DECLARE_HANDLE(HFILTER);
 /*******************************************************************/
 typedef HFILTER (CALLBACK FILTER_CREATE_A)(
         HCONFIG hConfig,
