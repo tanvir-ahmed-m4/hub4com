@@ -19,6 +19,12 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/08/22 16:57:11  vfrolov
+ * Added
+ *   HUB_MSG_TYPE_GET_ESC_OPTS
+ *   HUB_MSG_TYPE_FAIL_ESC_OPTS
+ *   HUB_MSG_TYPE_BREAK_STATUS
+ *
  * Revision 1.5  2008/08/22 12:45:34  vfrolov
  * Added masking to HUB_MSG_TYPE_MODEM_STATUS and HUB_MSG_TYPE_LINE_STATUS
  *
@@ -74,11 +80,13 @@ static struct {
   {"break=",  PIN_STATE_BREAK},
 };
 ///////////////////////////////////////////////////////////////
+#define LSR_BREAK_STATUS 0x01
+
 #define MST2LSRMST(m) ((WORD)((BYTE)(m)))
 #define LSR2LSRMST(l) ((WORD)(((WORD)(BYTE)(l)) << 8))
 #define LSRMST2MST(lm) ((BYTE)(lm))
 #define LSRMST2LSR(lm) ((BYTE)((lm) >> 8))
-#define LSRMST2GO(lm) (GO_V2O_MODEM_STATUS(LSRMST2MST(lm)) | GO_V2O_LINE_STATUS(LSRMST2LSR(lm)))
+#define LSRMST2GO(lm) (GO_V2O_MODEM_STATUS(LSRMST2MST(lm)) | ((LSRMST2LSR(lm) & LSR_BREAK_STATUS) ? GO_BREAK_STATUS : 0))
 
 static struct {
   const char *pName;
@@ -88,7 +96,7 @@ static struct {
   {"dsr",   MST2LSRMST(MODEM_STATUS_DSR)},
   {"dcd",   MST2LSRMST(MODEM_STATUS_DCD)},
   {"ring",  MST2LSRMST(MODEM_STATUS_RI)},
-  {"break", LSR2LSRMST(LINE_STATUS_BI)},
+  {"break", LSR2LSRMST(LSR_BREAK_STATUS)},
 };
 ///////////////////////////////////////////////////////////////
 class State {
@@ -393,7 +401,7 @@ static BOOL CALLBACK OutMethod(
       // discard any pin settings controlled by this filter
       pOutMsg->u.val &= ~(VAL2MASK(((Filter *)hFilter)->outMask));
       break;
-    case HUB_MSG_TYPE_LINE_STATUS:
+    case HUB_MSG_TYPE_BREAK_STATUS:
     case HUB_MSG_TYPE_MODEM_STATUS: {
       State *pState = ((Filter *)hFilter)->GetState(nToPort);
 
@@ -407,8 +415,8 @@ static BOOL CALLBACK OutMethod(
         lmInVal = MST2LSRMST(pOutMsg->u.val);
         lmInMask = MST2LSRMST(MASK2VAL(pOutMsg->u.val));
       } else {
-        lmInVal = LSR2LSRMST(pOutMsg->u.val);
-        lmInMask = LSR2LSRMST(MASK2VAL(pOutMsg->u.val));
+        lmInVal = (pOutMsg->u.val ? LSR2LSRMST(LSR_BREAK_STATUS) : 0);
+        lmInMask = LSR2LSRMST(LSR_BREAK_STATUS);
       }
 
       lmInVal = ((lmInVal & lmInMask) | (pState->lmInVal & ~lmInMask));

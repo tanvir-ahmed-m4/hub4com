@@ -70,9 +70,10 @@ extern "C" {
 #define   GO_V2O_MODEM_STATUS(v)   ((DWORD)(BYTE)(v))
 #define   GO_O2V_LINE_STATUS(o)    ((BYTE)((o) >> 8))
 #define   GO_V2O_LINE_STATUS(v)    ((DWORD)(BYTE)(v) << 8)
-#define   GO_ESCAPE_MODE           0x00010000
-#define   GO_RBR_STATUS            0x00020000
-#define   GO_RLC_STATUS            0x00040000
+#define   GO_RBR_STATUS            ((DWORD)1 << 16)
+#define   GO_RLC_STATUS            ((DWORD)1 << 17)
+#define   GO_BREAK_STATUS          ((DWORD)1 << 18)
+#define   GO_ESCAPE_MODE           ((DWORD)1 << 24)
 #define HUB_MSG_TYPE_SET_OUT_OPTS  (7   | HUB_MSG_UNION_TYPE_VAL)
 #define   SO_O2V_PIN_STATE(o)      ((BYTE)(o))
 #define   SO_V2O_PIN_STATE(v)      ((DWORD)(BYTE)(v))
@@ -80,6 +81,18 @@ extern "C" {
 #define HUB_MSG_TYPE_RBR_STATUS    (9   | HUB_MSG_UNION_TYPE_VAL)
 #define HUB_MSG_TYPE_RLC_STATUS    (10  | HUB_MSG_UNION_TYPE_VAL)
 #define HUB_MSG_TYPE_COUNT_REPEATS (11  | HUB_MSG_UNION_TYPE_PVAL)
+#define HUB_MSG_TYPE_GET_ESC_OPTS  (12  | HUB_MSG_UNION_TYPE_PVAL)
+#define   ESC_OPTS_O2V_MST(o)      GO_O2V_MODEM_STATUS(o)
+#define   ESC_OPTS_V2O_MST(v)      GO_V2O_MODEM_STATUS(v)
+#define   ESC_OPTS_O2V_LSR(o)      GO_O2V_LINE_STATUS(o)
+#define   ESC_OPTS_V2O_LSR(v)      GO_V2O_LINE_STATUS(v)
+#define   ESC_OPTS_RBR_STATUS      GO_RBR_STATUS
+#define   ESC_OPTS_RLC_STATUS      GO_RLC_STATUS
+#define   ESC_OPTS_BREAK_STATUS    GO_BREAK_STATUS
+#define   ESC_OPTS_O2V_ESCCHAR(o)  ((BYTE)(o >> 24))
+#define   ESC_OPTS_V2O_ESCCHAR(v)  ((DWORD)(BYTE)(v) << 24)
+#define HUB_MSG_TYPE_FAIL_ESC_OPTS (13  | HUB_MSG_UNION_TYPE_VAL)
+#define HUB_MSG_TYPE_BREAK_STATUS  (14  | HUB_MSG_UNION_TYPE_VAL)
 /*******************************************************************/
 typedef struct _HUB_MSG {
   WORD type;

@@ -19,6 +19,12 @@
  *
  *
  * $Log$
+ * Revision 1.9  2008/08/22 16:57:12  vfrolov
+ * Added
+ *   HUB_MSG_TYPE_GET_ESC_OPTS
+ *   HUB_MSG_TYPE_FAIL_ESC_OPTS
+ *   HUB_MSG_TYPE_BREAK_STATUS
+ *
  * Revision 1.8  2008/08/22 12:45:34  vfrolov
  * Added masking to HUB_MSG_TYPE_MODEM_STATUS and HUB_MSG_TYPE_LINE_STATUS
  *
@@ -83,12 +89,14 @@ ComPort::ComPort(
     countXoff(0),
     filterX(FALSE),
     maskOutPins(0),
-    options(0),
+    maskMst(0),
+    intercepted_options(0),
     writeQueueLimit(256),
     writeQueued(0),
     writeLost(0),
     writeLostTotal(0),
-    errors(0)
+    errors(0),
+    _inOptions(0)
 {
   filterX = comParams.InX();
   string path(pPath);
@@ -170,6 +178,31 @@ static FIELD2NAME codeNameTableLineStatus[] = {
   {0, 0, NULL}
 };
 
+static void WarnIgnoredInOptions(
+    const char *pHead,
+    const char *pTail,
+    DWORD options,
+    BYTE optsMst,
+    BYTE optsLsr)
+{
+  if (optsMst) {
+    cerr << pHead << " WARNING: Changing of MODEM STATUS bit(s) 0x"
+         << hex << (unsigned)optsMst << dec << " ["
+         << FieldToName(codeNameTableModemStatus, optsMst)
+         << "] will be ignored by driver" << pTail << endl;
+  }
+
+  if (optsLsr) {
+    cerr << pHead << " WARNING: Changing of LINE STATUS bit(s) 0x"
+         << hex << (unsigned)optsLsr << dec << " ["
+         << FieldToName(codeNameTableLineStatus, optsLsr)
+         << "] will be ignored by driver" << pTail << endl;
+  }
+
+  cerr << pHead << " WARNING: Requested option(s) 0x"
+       << hex << options << dec << " will be ignored by driver" << pTail << endl;
+}
+
 static FIELD2NAME codeNameTableComEvents[] = {
   TOFIELD2NAME2(EV_, CTS),
   TOFIELD2NAME2(EV_, DSR),
@@ -189,54 +222,65 @@ BOOL ComPort::Start()
   DWORD events = 0;
   BYTE *pBuf = NULL;
   DWORD done = 0;
-
-  if (options & GO_ESCAPE_MODE) {
-    options = SetEscMode(handle, options, 'a'/*0xFF*/, &pBuf, &done);
-  } else {
-    if ((options & GO_V2O_MODEM_STATUS(MODEM_STATUS_CTS)) != 0)
-      events |= EV_CTS;
-
-    if ((options & GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR)) != 0)
-      events |= EV_DSR;
-
-    if ((options & GO_V2O_MODEM_STATUS(MODEM_STATUS_DCD)) != 0)
-      events |= EV_RLSD;
-
-    if ((options & GO_V2O_MODEM_STATUS(MODEM_STATUS_RI)) != 0)
-      events |= EV_RING;
-
-    options &= ~GO_V2O_MODEM_STATUS(
-        MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_DCD|MODEM_STATUS_RI);
-  }
-
-  BYTE optsMst = GO_O2V_MODEM_STATUS(options);
-
-  if (optsMst) {
-    cerr << name << " WARNING: Changing of MODEM STATUS bit(s) 0x"
-         << hex << (unsigned)optsMst << dec << " ["
-         << FieldToName(codeNameTableModemStatus, optsMst)
-         << "] will be ignored" << endl;
-  }
-
-  BYTE optsLsr = GO_O2V_LINE_STATUS(options);
-
-  if (optsLsr) {
-    cerr << name << " WARNING: Changing of LINE STATUS bit(s) 0x"
-         << hex << (unsigned)optsLsr << dec << " ["
-         << FieldToName(codeNameTableLineStatus, optsLsr)
-         << "] will be ignored" << endl;
-  }
-
   HUB_MSG msg;
 
-  if (options) {
-    cerr << name << " WARNING: Requested option(s) 0x"
-         << hex << options << dec << " will be ignored" << endl;
+  if (intercepted_options & GO_ESCAPE_MODE) {
+    DWORD escapeOptions = 0;
 
-    msg.type = HUB_MSG_TYPE_FAIL_IN_OPTS;
-    msg.u.val = options;
+    msg.type = HUB_MSG_TYPE_GET_ESC_OPTS;
+    msg.u.pv.pVal = &escapeOptions;
     pOnRead(hHub, hMasterPort, &msg);
+
+    escapeOptions = SetEscMode(handle, escapeOptions, &pBuf, &done);
+
+    if ((escapeOptions & ESC_OPTS_V2O_ESCCHAR(-1)) == 0) {
+      InOptionsAdd(GO_ESCAPE_MODE);
+
+      if (escapeOptions) {
+        WarnIgnoredInOptions(name.c_str(), " (escape mode)",
+                           escapeOptions,
+                           ESC_OPTS_O2V_MST(escapeOptions),
+                           ESC_OPTS_O2V_LSR(escapeOptions));
+
+        msg.type = HUB_MSG_TYPE_FAIL_ESC_OPTS;
+        msg.u.val = escapeOptions;
+        pOnRead(hHub, hMasterPort, &msg);
+      }
+    }
   }
+
+  if (intercepted_options & GO_V2O_MODEM_STATUS(MODEM_STATUS_CTS)) {
+    events |= EV_CTS;
+    InOptionsAdd(GO_V2O_MODEM_STATUS(MODEM_STATUS_CTS));
+  }
+
+  if (intercepted_options & GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR)) {
+    events |= EV_DSR;
+    InOptionsAdd(GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR));
+  }
+
+  if (intercepted_options & GO_V2O_MODEM_STATUS(MODEM_STATUS_DCD)) {
+    events |= EV_RLSD;
+    InOptionsAdd(GO_V2O_MODEM_STATUS(MODEM_STATUS_DCD));
+  }
+
+  if (intercepted_options & GO_V2O_MODEM_STATUS(MODEM_STATUS_RI)) {
+    events |= EV_RING;
+    InOptionsAdd(GO_V2O_MODEM_STATUS(MODEM_STATUS_RI));
+  }
+
+  DWORD fail_options = (intercepted_options & ~InOptions());
+
+  if (fail_options) {
+    WarnIgnoredInOptions(name.c_str(), "",
+                       fail_options,
+                       GO_O2V_MODEM_STATUS(fail_options),
+                       GO_O2V_LINE_STATUS(fail_options));
+  }
+
+  msg.type = HUB_MSG_TYPE_FAIL_IN_OPTS;
+  msg.u.val = fail_options;
+  pOnRead(hHub, hMasterPort, &msg);
 
   if (events) {
     if (!SetComEvents(handle, &events) || !StartWaitCommEvent()) {
@@ -248,8 +292,6 @@ BOOL ComPort::Start()
          << FieldToName(codeNameTableComEvents, events)
          << "] will be monitired" << endl;
   }
-
-  CheckComEvents(DWORD(-1));
 
   if (!StartRead()) {
     pBufFree(pBuf);
@@ -264,9 +306,10 @@ BOOL ComPort::Start()
     msg.type = HUB_MSG_TYPE_LINE_DATA;
     msg.u.buf.pBuf = pBuf;
     msg.u.buf.size = done;
-
     pOnRead(hHub, hMasterPort, &msg);
   }
+
+  CheckComEvents(DWORD(-1));
 
   return TRUE;
 }
@@ -303,23 +346,24 @@ BOOL ComPort::FakeReadFilter(HUB_MSG *pInMsg)
   _ASSERTE(pInMsg != NULL);
 
   if (pInMsg->type == HUB_MSG_TYPE_GET_IN_OPTS) {
-    // get supported options from subsequent filters separately
+    // get interceptable options from subsequent filters separately
 
-    DWORD supported_options = pInMsg->u.pv.val & (
+    DWORD interceptable_options = (pInMsg->u.pv.val &
         GO_ESCAPE_MODE |
         GO_RBR_STATUS |
         GO_RLC_STATUS |
+        GO_BREAK_STATUS |
         GO_V2O_MODEM_STATUS(-1) |
         GO_V2O_LINE_STATUS(-1));
 
-    pInMsg->u.pv.val &= ~supported_options;
+    pInMsg->u.pv.val &= ~interceptable_options;
 
     pInMsg = pMsgInsertNone(pInMsg, HUB_MSG_TYPE_EMPTY);
 
     if (pInMsg) {
       pInMsg->type = HUB_MSG_TYPE_GET_IN_OPTS;
-      pInMsg->u.pv.pVal = &options;
-      pInMsg->u.pv.val = supported_options;
+      pInMsg->u.pv.pVal = &intercepted_options;
+      pInMsg->u.pv.val = interceptable_options;
     }
   }
 
@@ -439,7 +483,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     if (handle == INVALID_HANDLE_VALUE)
       return FALSE;
 
-    BYTE addedPins = (~maskOutPins & SO_O2V_PIN_STATE(pMsg->u.val));
+    WORD addedPins = (~maskOutPins & SO_O2V_PIN_STATE(pMsg->u.val));
 
     if (addedPins & PIN_STATE_RTS) {
       if (!SetManualRtsControl(handle)) {
@@ -557,7 +601,7 @@ void ComPort::OnCommEvent(WaitCommEventOverlapped *pOverlapped, DWORD eMask)
 
 void ComPort::CheckComEvents(DWORD eMask)
 {
-  if ((eMask & (EV_CTS|EV_DSR|EV_RLSD|EV_RING)) != 0) {
+  if (maskMst && (eMask & (EV_CTS|EV_DSR|EV_RLSD|EV_RING)) != 0) {
     DWORD stat;
 
     if (::GetCommModemStatus(handle, &stat)) {
@@ -571,7 +615,7 @@ void ComPort::CheckComEvents(DWORD eMask)
       HUB_MSG msg;
 
       msg.type = HUB_MSG_TYPE_MODEM_STATUS;
-      msg.u.val = ((DWORD)(BYTE)stat | VAL2MASK(MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_DCD|MODEM_STATUS_RI));
+      msg.u.val = ((DWORD)(BYTE)stat | VAL2MASK(maskMst));
 
       pOnRead(hHub, hMasterPort, &msg);
     }

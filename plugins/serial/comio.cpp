@@ -19,6 +19,12 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/08/22 16:57:11  vfrolov
+ * Added
+ *   HUB_MSG_TYPE_GET_ESC_OPTS
+ *   HUB_MSG_TYPE_FAIL_ESC_OPTS
+ *   HUB_MSG_TYPE_BREAK_STATUS
+ *
  * Revision 1.5  2008/08/20 14:30:19  vfrolov
  * Redesigned serial port options
  *
@@ -302,34 +308,42 @@ static ULONG GetEscCaps(HANDLE handle)
   return *(ULONG *)(outBuf + C0CE_SIGNATURE_SIZE);
 }
 
-DWORD SetEscMode(HANDLE handle, DWORD options, BYTE escapeChar, BYTE **ppBuf, DWORD *pDone)
+DWORD SetEscMode(HANDLE handle, DWORD escOptions, BYTE **ppBuf, DWORD *pDone)
 {
   _ASSERTE(ppBuf != NULL);
   _ASSERTE(*ppBuf == NULL);
   _ASSERTE(pDone != NULL);
   _ASSERTE(*pDone == 0);
 
+  BYTE escapeChar = ESC_OPTS_O2V_ESCCHAR(escOptions);
+
   if (!escapeChar)
-    return options;
+    return escOptions | ESC_OPTS_V2O_ESCCHAR(-1);
 
   ULONG opts = (C0CE_INSERT_IOCTL_GET|C0CE_INSERT_IOCTL_RXCLEAR);
 
-  if (options & GO_V2O_MODEM_STATUS(-1))
+#define MODEM_STATUS_BITS (MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_RI|MODEM_STATUS_DCD)
+#define LINE_STATUS_BITS  (LINE_STATUS_OE|LINE_STATUS_PE|LINE_STATUS_FE|LINE_STATUS_BI|LINE_STATUS_FIFOERR)
+
+  if (escOptions & ESC_OPTS_V2O_MST(MODEM_STATUS_BITS))
     opts |= C0CE_INSERT_ENABLE_MST;
 
-  if (options & GO_V2O_LINE_STATUS(LINE_STATUS_BI))
+  if (escOptions & ESC_OPTS_BREAK_STATUS)
     opts |= C0CE_INSERT_ENABLE_LSR_BI;
 
-  if (options & GO_RBR_STATUS)
+  if (escOptions & ESC_OPTS_V2O_LSR(LINE_STATUS_BITS))
+    opts |= C0CE_INSERT_ENABLE_LSR;
+
+  if (escOptions & ESC_OPTS_RBR_STATUS)
     opts |= C0CE_INSERT_ENABLE_RBR;
 
-  if (options & GO_RLC_STATUS)
+  if (escOptions & ESC_OPTS_RLC_STATUS)
     opts |= C0CE_INSERT_ENABLE_RLC;
 
   opts &= GetEscCaps(handle);
 
   if (!opts)
-    return options;
+    return escOptions | ESC_OPTS_V2O_ESCCHAR(-1);
 
   BYTE inBufIoctl[sizeof(UCHAR) + C0CE_SIGNATURE_SIZE + sizeof(ULONG)];
   inBufIoctl[0] = escapeChar;
@@ -368,24 +382,25 @@ DWORD SetEscMode(HANDLE handle, DWORD options, BYTE escapeChar, BYTE **ppBuf, DW
     TraceError(GetLastError(), "IOCTL_SERIAL_LSRMST_INSERT");
 
     *pDone = 0;
-    return options;
+    return escOptions | ESC_OPTS_V2O_ESCCHAR(-1);
   }
 
-  options &= ~GO_ESCAPE_MODE;
-
   if (opts & C0CE_INSERT_ENABLE_MST)
-    options &= ~GO_V2O_MODEM_STATUS(-1);
+    escOptions &= ~ESC_OPTS_V2O_MST(MODEM_STATUS_BITS);
 
   if (opts & C0CE_INSERT_ENABLE_LSR_BI)
-    options &= ~GO_V2O_LINE_STATUS(LINE_STATUS_BI);
+    escOptions &= ~ESC_OPTS_BREAK_STATUS;
+
+  if (opts & C0CE_INSERT_ENABLE_LSR)
+    escOptions &= ~ESC_OPTS_V2O_LSR(LINE_STATUS_BITS & ~LINE_STATUS_BI);
 
   if (opts & C0CE_INSERT_ENABLE_RBR)
-    options &= ~GO_RBR_STATUS;
+    escOptions &= ~ESC_OPTS_RBR_STATUS;
 
   if (opts & C0CE_INSERT_ENABLE_RLC)
-    options &= ~GO_RLC_STATUS;
+    escOptions &= ~ESC_OPTS_RLC_STATUS;
 
-  return options;
+  return escOptions & ~ESC_OPTS_V2O_ESCCHAR(-1);
 }
 ///////////////////////////////////////////////////////////////
 WriteOverlapped::WriteOverlapped(ComPort &_port, BYTE *_pBuf, DWORD _len)

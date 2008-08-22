@@ -19,6 +19,12 @@
  *
  *
  * $Log$
+ * Revision 1.8  2008/08/22 16:57:11  vfrolov
+ * Added
+ *   HUB_MSG_TYPE_GET_ESC_OPTS
+ *   HUB_MSG_TYPE_FAIL_ESC_OPTS
+ *   HUB_MSG_TYPE_BREAK_STATUS
+ *
  * Revision 1.7  2008/08/22 12:45:34  vfrolov
  * Added masking to HUB_MSG_TYPE_MODEM_STATUS and HUB_MSG_TYPE_LINE_STATUS
  *
@@ -104,7 +110,7 @@ static struct {
   {"dsr",  GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR)},
   {"dcd",  GO_V2O_MODEM_STATUS(MODEM_STATUS_DCD)},
   {"ring", GO_V2O_MODEM_STATUS(MODEM_STATUS_RI)},
-  {"break", GO_V2O_LINE_STATUS(LINE_STATUS_BI)},
+  {"break", GO_BREAK_STATUS},
 };
 
 Filter::Filter(int argc, const char *const argv[])
@@ -230,6 +236,26 @@ static BOOL CALLBACK Init(
   return TRUE;
 }
 ///////////////////////////////////////////////////////////////
+static HUB_MSG *InsertConnectState(
+    Filter &filter,
+    int nFromPort,
+    HUB_MSG *pInMsg,
+    BOOL pinState)
+{
+  State *pState = filter.GetState(nFromPort);
+
+  if (!pState)
+    return FALSE;
+
+  if (filter.negative)
+    pinState = !pinState;
+
+  if (pState->connect != pinState)
+    pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_CONNECT, pState->connect = pinState);
+
+  return pInMsg;
+}
+
 static BOOL CALLBACK InMethod(
     HFILTER hFilter,
     int nFromPort,
@@ -263,7 +289,7 @@ static BOOL CALLBACK InMethod(
     pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
     break;
   case HUB_MSG_TYPE_LINE_STATUS:
-  case HUB_MSG_TYPE_MODEM_STATUS:
+  case HUB_MSG_TYPE_MODEM_STATUS: {
     WORD pin;
 
     if (pInMsg->type == HUB_MSG_TYPE_LINE_STATUS) {
@@ -275,25 +301,13 @@ static BOOL CALLBACK InMethod(
     if ((pin & MASK2VAL(pInMsg->u.val)) == 0)
       break;
 
-    BOOL connect = ((pInMsg->u.val & pin) != 0);
+    pInMsg = InsertConnectState(*((Filter *)hFilter), nFromPort, pInMsg, ((pInMsg->u.val & pin) != 0));
 
-    if (((Filter *)hFilter)->negative)
-      connect = !connect;
-
-    State *pState = ((Filter *)hFilter)->GetState(nFromPort);
-
-    if (!pState)
-      return FALSE;
-
-    if (pState->connect != connect) {
-      pState->connect = connect;
-
-      if (connect) {
-        pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_CONNECT, TRUE);
-      } else {
-        pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_CONNECT, FALSE);
-      }
-    }
+    break;
+  }
+  case HUB_MSG_TYPE_BREAK_STATUS:
+    if (((Filter *)hFilter)->pin & GO_BREAK_STATUS)
+      pInMsg = InsertConnectState(*((Filter *)hFilter), nFromPort, pInMsg, pInMsg->u.val != 0);
     break;
   }
 

@@ -19,6 +19,12 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/08/22 16:57:12  vfrolov
+ * Added
+ *   HUB_MSG_TYPE_GET_ESC_OPTS
+ *   HUB_MSG_TYPE_FAIL_ESC_OPTS
+ *   HUB_MSG_TYPE_BREAK_STATUS
+ *
  * Revision 1.5  2008/08/20 14:30:19  vfrolov
  * Redesigned serial port options
  *
@@ -65,7 +71,7 @@ extern BOOL SetManualRtsControl(HANDLE handle);
 extern BOOL SetManualDtrControl(HANDLE handle);
 extern BOOL SetComEvents(HANDLE handle, DWORD *events);
 extern BOOL CommFunction(HANDLE handle, DWORD func);
-extern DWORD SetEscMode(HANDLE handle, DWORD options, BYTE escapeChar, BYTE **ppBuf, DWORD *pDone);
+extern DWORD SetEscMode(HANDLE handle, DWORD escOptions, BYTE **ppBuf, DWORD *pDone);
 ///////////////////////////////////////////////////////////////
 class ReadOverlapped : private OVERLAPPED
 {
