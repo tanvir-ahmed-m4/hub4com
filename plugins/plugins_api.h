@@ -33,10 +33,15 @@ extern "C" {
 #define HUB_MSG_UNION_TYPE_VAL     0x2000
 #define HUB_MSG_UNION_TYPE_PVAL    0x3000
 /*******************************************************************/
+#define HUB_MSG_VAL_TYPES_MASK     0x0F00
+#define HUB_MSG_VAL_TYPE_MASK_VAL  0x0100
+#define   VAL2MASK(v)              ((DWORD)(WORD)(v) << 16)
+#define   MASK2VAL(m)              ((WORD)((m) >> 16))
+/*******************************************************************/
 #define HUB_MSG_TYPE_EMPTY         (0   | HUB_MSG_UNION_TYPE_NONE)
 #define HUB_MSG_TYPE_LINE_DATA     (1   | HUB_MSG_UNION_TYPE_BUF)
 #define HUB_MSG_TYPE_CONNECT       (2   | HUB_MSG_UNION_TYPE_VAL)
-#define HUB_MSG_TYPE_MODEM_STATUS  (3   | HUB_MSG_UNION_TYPE_VAL)
+#define HUB_MSG_TYPE_MODEM_STATUS  (3   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_MASK_VAL)
 #define   MODEM_STATUS_DCTS        0x01
 #define   MODEM_STATUS_DDSR        0x02
 #define   MODEM_STATUS_TERI        0x04
@@ -45,7 +50,7 @@ extern "C" {
 #define   MODEM_STATUS_DSR         0x20
 #define   MODEM_STATUS_RI          0x40
 #define   MODEM_STATUS_DCD         0x80
-#define HUB_MSG_TYPE_LINE_STATUS   (4   | HUB_MSG_UNION_TYPE_VAL)
+#define HUB_MSG_TYPE_LINE_STATUS   (4   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_MASK_VAL)
 #define   LINE_STATUS_DR           0x01
 #define   LINE_STATUS_OE           0x02
 #define   LINE_STATUS_PE           0x04
@@ -54,9 +59,7 @@ extern "C" {
 #define   LINE_STATUS_THRE         0x20
 #define   LINE_STATUS_TEMT         0x40
 #define   LINE_STATUS_FIFOERR      0x80
-#define HUB_MSG_TYPE_SET_PIN_STATE (5   | HUB_MSG_UNION_TYPE_VAL)
-#define   SPS_PIN2MASK(p)          ((DWORD)(BYTE)(p) << 16)
-#define   SPS_MASK2PIN(m)          ((BYTE)((m) >> 16))
+#define HUB_MSG_TYPE_SET_PIN_STATE (5   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_MASK_VAL)
 #define   PIN_STATE_RTS            0x01
 #define   PIN_STATE_DTR            0x02
 #define   PIN_STATE_OUT1           0x04

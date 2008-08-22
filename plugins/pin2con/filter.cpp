@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/08/22 12:45:34  vfrolov
+ * Added masking to HUB_MSG_TYPE_MODEM_STATUS and HUB_MSG_TYPE_LINE_STATUS
+ *
  * Revision 1.6  2008/08/20 14:30:19  vfrolov
  * Redesigned serial port options
  *
@@ -238,13 +241,13 @@ static BOOL CALLBACK InMethod(
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
 
-  if (pInMsg->type == HUB_MSG_TYPE_GET_IN_OPTS) {
+  switch (pInMsg->type) {
+  case HUB_MSG_TYPE_GET_IN_OPTS:
     _ASSERTE(pInMsg->u.pv.pVal != NULL);
     // or'e with the required mask to get line status and modem status
     *pInMsg->u.pv.pVal |= (((Filter *)hFilter)->pin & pInMsg->u.pv.val);
-  }
-  else
-  if (pInMsg->type == HUB_MSG_TYPE_FAIL_IN_OPTS) {
+    break;
+  case HUB_MSG_TYPE_FAIL_IN_OPTS: {
     DWORD fail_options = (pInMsg->u.val & ((Filter *)hFilter)->pin);
 
     if (fail_options) {
@@ -253,22 +256,26 @@ static BOOL CALLBACK InMethod(
            << " option(s) 0x" << hex << fail_options << dec
            << " not accepted" << endl;
     }
+    break;
   }
-  else
-  if (pInMsg->type == HUB_MSG_TYPE_CONNECT) {
+  case HUB_MSG_TYPE_CONNECT:
     // discard any CONNECT messages from the input stream
     pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
-  }
-  else
-  if (pInMsg->type == HUB_MSG_TYPE_LINE_STATUS ||
-      pInMsg->type == HUB_MSG_TYPE_MODEM_STATUS)
-  {
-    BOOL connect;
+    break;
+  case HUB_MSG_TYPE_LINE_STATUS:
+  case HUB_MSG_TYPE_MODEM_STATUS:
+    WORD pin;
 
-    if (pInMsg->type == HUB_MSG_TYPE_LINE_STATUS)
-      connect = ((pInMsg->u.val & GO_O2V_LINE_STATUS(((Filter *)hFilter)->pin)) != 0);
-    else
-      connect = ((pInMsg->u.val & GO_O2V_MODEM_STATUS(((Filter *)hFilter)->pin)) != 0);
+    if (pInMsg->type == HUB_MSG_TYPE_LINE_STATUS) {
+      pin = GO_O2V_LINE_STATUS(((Filter *)hFilter)->pin);
+    } else {
+      pin = GO_O2V_MODEM_STATUS(((Filter *)hFilter)->pin);
+    }
+
+    if ((pin & MASK2VAL(pInMsg->u.val)) == 0)
+      break;
+
+    BOOL connect = ((pInMsg->u.val & pin) != 0);
 
     if (((Filter *)hFilter)->negative)
       connect = !connect;
@@ -287,6 +294,7 @@ static BOOL CALLBACK InMethod(
         pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_CONNECT, FALSE);
       }
     }
+    break;
   }
 
   return pInMsg != NULL;

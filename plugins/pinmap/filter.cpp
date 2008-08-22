@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/08/22 12:45:34  vfrolov
+ * Added masking to HUB_MSG_TYPE_MODEM_STATUS and HUB_MSG_TYPE_LINE_STATUS
+ *
  * Revision 1.4  2008/08/20 14:30:19  vfrolov
  * Redesigned serial port options
  *
@@ -347,7 +350,7 @@ static void InsertPinState(
   }
 
   if (mask) {
-    DWORD dVal = (SPS_PIN2MASK(mask) | val);
+    DWORD dVal = (VAL2MASK(mask) | val);
     //cout << "SET_PIN_STATE 0x" << hex << dVal << dec << endl;
     *ppOutMsg = pMsgInsertVal(*ppOutMsg, HUB_MSG_TYPE_SET_PIN_STATE, dVal);
   }
@@ -388,7 +391,7 @@ static BOOL CALLBACK OutMethod(
     }
     case HUB_MSG_TYPE_SET_PIN_STATE:
       // discard any pin settings controlled by this filter
-      pOutMsg->u.val &= ~(SPS_PIN2MASK(((Filter *)hFilter)->outMask));
+      pOutMsg->u.val &= ~(VAL2MASK(((Filter *)hFilter)->outMask));
       break;
     case HUB_MSG_TYPE_LINE_STATUS:
     case HUB_MSG_TYPE_MODEM_STATUS: {
@@ -398,15 +401,21 @@ static BOOL CALLBACK OutMethod(
         return FALSE;
 
       WORD lmInVal;
+      WORD lmInMask;
 
-      if (pOutMsg->type == HUB_MSG_TYPE_MODEM_STATUS)
-        lmInVal = (MST2LSRMST(pOutMsg->u.val) | (pState->lmInVal & LSR2LSRMST(-1)));
-      else
-        lmInVal = (LSR2LSRMST(pOutMsg->u.val) | (pState->lmInVal & MST2LSRMST(-1)));
+      if (pOutMsg->type == HUB_MSG_TYPE_MODEM_STATUS) {
+        lmInVal = MST2LSRMST(pOutMsg->u.val);
+        lmInMask = MST2LSRMST(MASK2VAL(pOutMsg->u.val));
+      } else {
+        lmInVal = LSR2LSRMST(pOutMsg->u.val);
+        lmInMask = LSR2LSRMST(MASK2VAL(pOutMsg->u.val));
+      }
 
+      lmInVal = ((lmInVal & lmInMask) | (pState->lmInVal & ~lmInMask));
       lmInVal &= ((Filter *)hFilter)->lmInMask;
 
       InsertPinState(*(Filter *)hFilter, pState->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
+
       pState->lmInVal = lmInVal;
       break;
     }

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2008/08/22 12:45:34  vfrolov
+ * Added masking to HUB_MSG_TYPE_MODEM_STATUS and HUB_MSG_TYPE_LINE_STATUS
+ *
  * Revision 1.7  2008/08/20 14:30:19  vfrolov
  * Redesigned serial port options
  *
@@ -402,7 +405,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     if (handle == INVALID_HANDLE_VALUE)
       return FALSE;
 
-    WORD mask = SPS_MASK2PIN(pMsg->u.val);
+    WORD mask = MASK2VAL(pMsg->u.val);
 
     cout << name << " SET_PIN_STATE 0x" << hex << pMsg->u.val << dec << " SET["
          << FieldToName(codeNameTableSetPinState, pMsg->u.val & mask)
@@ -568,7 +571,7 @@ void ComPort::CheckComEvents(DWORD eMask)
       HUB_MSG msg;
 
       msg.type = HUB_MSG_TYPE_MODEM_STATUS;
-      msg.u.val = stat;
+      msg.u.val = ((DWORD)(BYTE)stat | VAL2MASK(MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_DCD|MODEM_STATUS_RI));
 
       pOnRead(hHub, hMasterPort, &msg);
     }
