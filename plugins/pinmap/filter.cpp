@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/08/25 08:08:22  vfrolov
+ * Added init pin state
+ *
  * Revision 1.6  2008/08/22 16:57:11  vfrolov
  * Added
  *   HUB_MSG_TYPE_GET_ESC_OPTS
@@ -377,6 +380,15 @@ static BOOL CALLBACK OutMethod(
     case HUB_MSG_TYPE_SET_OUT_OPTS: {
       // or'e with the required mask to set pin state
       pOutMsg->u.val |= SO_V2O_PIN_STATE(((Filter *)hFilter)->outMask);
+
+      State *pState = ((Filter *)hFilter)->GetState(nToPort);
+
+      if (!pState)
+        return FALSE;
+
+      // init pin state
+      InsertPinState(*(Filter *)hFilter, ((Filter *)hFilter)->lmInMask, pState->lmInVal, &pOutMsg);
+
       break;
     }
     case HUB_MSG_TYPE_GET_IN_OPTS: {
