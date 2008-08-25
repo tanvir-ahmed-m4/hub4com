@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.12  2008/08/25 08:15:02  vfrolov
+ * Itilized TimerAPCProc()
+ *
  * Revision 1.11  2008/04/16 14:13:59  vfrolov
  * Added ability to specify source posts for OUT method
  *
@@ -538,6 +541,14 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
     pFilters->Report();
 }
 ///////////////////////////////////////////////////////////////
+static VOID CALLBACK TimerAPCProc(
+  LPVOID pArg,
+  DWORD /*dwTimerLowValue*/,
+  DWORD /*dwTimerHighValue*/)
+{
+  ((ComHub *)pArg)->LostReport();
+}
+///////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
   ComHub hub;
@@ -545,18 +556,28 @@ int main(int argc, char* argv[])
   Init(hub, argc, argv);
 
   if (hub.StartAll()) {
-    DWORD nextReportTime = 0;
+    HANDLE hTimer = ::CreateWaitableTimer(NULL, FALSE, NULL);
 
-    for (;;) {
-      SleepEx(5000, TRUE);
+    if (hTimer) {
+      LARGE_INTEGER firstReportTime;
 
-      DWORD time = GetTickCount();
+      firstReportTime.QuadPart = -100000000;
 
-      if ((nextReportTime - time - 1) > 10000) {
-        hub.LostReport();
-        nextReportTime = time + 5000;
+      if (!::SetWaitableTimer(hTimer, &firstReportTime, 10000, TimerAPCProc, &hub, FALSE)) {
+        DWORD err = GetLastError();
+
+        cerr << "WARNING: SetWaitableTimer() - error=" << err << endl;
+
+        ::CloseHandle(hTimer);
       }
+    } else {
+      DWORD err = GetLastError();
+
+      cerr << "WARNING: CreateWaitableTimer() - error=" << err << endl;
     }
+
+    for (;;)
+      ::SleepEx(INFINITE, TRUE);
   }
 
   return 1;

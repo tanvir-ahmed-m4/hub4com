@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/08/25 08:15:02  vfrolov
+ * Itilized TimerAPCProc()
+ *
  * Revision 1.4  2008/04/16 14:09:41  vfrolov
  * Included <set>
  *
@@ -35,6 +38,8 @@
 
 #ifndef _PRECOMP_H_
 #define _PRECOMP_H_
+
+#define _WIN32_WINNT 0x0500
 
 #include <windows.h>
 #include <crtdbg.h>
