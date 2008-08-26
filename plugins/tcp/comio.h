@@ -19,9 +19,11 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/08/26 14:07:01  vfrolov
+ * Execute OnEvent() in main thread context
+ *
  * Revision 1.1  2008/03/27 17:17:27  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -87,6 +89,7 @@ class WaitEventOverlapped
     static VOID CALLBACK OnEvent(
       PVOID pParameter,
       BOOLEAN timerOrWaitFired);
+    static VOID CALLBACK OnEvent(ULONG_PTR pOverlapped);
 
     ComPort &port;
     SOCKET hSock;
@@ -107,6 +110,7 @@ class ListenOverlapped
     static VOID CALLBACK OnEvent(
       PVOID pParameter,
       BOOLEAN timerOrWaitFired);
+    static VOID CALLBACK OnEvent(ULONG_PTR pOverlapped);
 
     Listener &listener;
     SOCKET hSock;
