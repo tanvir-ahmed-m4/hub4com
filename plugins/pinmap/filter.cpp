@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2008/08/26 14:28:48  vfrolov
+ * Removed option --break=break from default
+ *
  * Revision 1.7  2008/08/25 08:08:22  vfrolov
  * Added init pin state
  *
@@ -83,13 +86,12 @@ static struct {
   {"break=",  PIN_STATE_BREAK},
 };
 ///////////////////////////////////////////////////////////////
-#define LSR_BREAK_STATUS 0x01
-
 #define MST2LSRMST(m) ((WORD)((BYTE)(m)))
 #define LSR2LSRMST(l) ((WORD)(((WORD)(BYTE)(l)) << 8))
 #define LSRMST2MST(lm) ((BYTE)(lm))
 #define LSRMST2LSR(lm) ((BYTE)((lm) >> 8))
-#define LSRMST2GO(lm) (GO_V2O_MODEM_STATUS(LSRMST2MST(lm)) | ((LSRMST2LSR(lm) & LSR_BREAK_STATUS) ? GO_BREAK_STATUS : 0))
+#define LSRMST2GO(lm) (GO_V2O_MODEM_STATUS(LSRMST2MST(lm)) | \
+        ((lm & LSR2LSRMST(LINE_STATUS_BI)) ? GO_BREAK_STATUS : 0))
 
 static struct {
   const char *pName;
@@ -99,7 +101,7 @@ static struct {
   {"dsr",   MST2LSRMST(MODEM_STATUS_DSR)},
   {"dcd",   MST2LSRMST(MODEM_STATUS_DCD)},
   {"ring",  MST2LSRMST(MODEM_STATUS_RI)},
-  {"break", LSR2LSRMST(LSR_BREAK_STATUS)},
+  {"break", LSR2LSRMST(LINE_STATUS_BI)},
 };
 ///////////////////////////////////////////////////////////////
 class State {
@@ -159,7 +161,6 @@ Filter::Filter(int argc, const char *const argv[])
   if (!lmInMask) {
     Parse("rts=cts");
     Parse("dtr=dsr");
-    Parse("break=break");
   }
 }
 
@@ -273,12 +274,11 @@ static void CALLBACK Help(const char *pProgPath)
   << "  --dtr=[!]<s>          - wire input state of <s> to output pin DTR." << endl
   << "  --out1=[!]<s>         - wire input state of <s> to output pin OUT1." << endl
   << "  --out2=[!]<s>         - wire input state of <s> to output pin OUT2." << endl
-  << "  --break=[!]<s>        - wire input state of <s> to output pin BREAK." << endl
+  << "  --break=[!]<s>        - wire input state of <s> to output state of BREAK." << endl
   << endl
   << "  The possible values of <s> above can be cts, dsr, dcd, ring or break. The" << endl
   << "  exclamation sign (!) can be used to invert the value. If no any wire option" << endl
-  << "  specified, then the options --rts=cts --dtr=dsr --break=break are used by" << endl
-  << "  default." << endl
+  << "  specified, then the options --rts=cts --dtr=dsr are used by default." << endl
   << endl
   << "OUT method input data stream description:" << endl
   << "  SET_OUT_OPTS(<opts>)  - the value <opts> will be or'ed with the required mask" << endl
@@ -427,12 +427,12 @@ static BOOL CALLBACK OutMethod(
         lmInVal = MST2LSRMST(pOutMsg->u.val);
         lmInMask = MST2LSRMST(MASK2VAL(pOutMsg->u.val));
       } else {
-        lmInVal = (pOutMsg->u.val ? LSR2LSRMST(LSR_BREAK_STATUS) : 0);
-        lmInMask = LSR2LSRMST(LSR_BREAK_STATUS);
+        lmInVal = (pOutMsg->u.val ? LSR2LSRMST(LINE_STATUS_BI) : 0);
+        lmInMask = LSR2LSRMST(LINE_STATUS_BI);
       }
 
+      lmInMask &= ((Filter *)hFilter)->lmInMask;
       lmInVal = ((lmInVal & lmInMask) | (pState->lmInVal & ~lmInMask));
-      lmInVal &= ((Filter *)hFilter)->lmInMask;
 
       InsertPinState(*(Filter *)hFilter, pState->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
 
