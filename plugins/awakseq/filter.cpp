@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/08/27 11:38:29  vfrolov
+ * Fixed CONNECT(FALSE) losing
+ *
  * Revision 1.5  2008/08/20 09:26:40  vfrolov
  * Fixed typo
  *
@@ -62,7 +65,8 @@ const char *GetParam(const char *pArg, const char *pPattern)
 ///////////////////////////////////////////////////////////////
 class State {
   public:
-    State(const BYTE *pAwakSeq) : connectionCounter(0) { StartAwakSeq(pAwakSeq); }
+    State(const BYTE *pAwakSeq)
+      : connectSent(FALSE), connectionCounter(0) { StartAwakSeq(pAwakSeq); }
 
     void StartAwakSeq(const BYTE *pAwakSeq) {
       waitAwakSeq = TRUE;
@@ -71,12 +75,10 @@ class State {
 
     BOOL waitAwakSeq;
     const BYTE *pAwakSeqNext;
+    BOOL connectSent;
     int connectionCounter;
 };
 ///////////////////////////////////////////////////////////////
-typedef map<int, State*> PortsMap;
-typedef pair<int, State*> PortPair;
-
 class Filter {
   public:
     Filter(int argc, const char *const argv[]);
@@ -85,6 +87,10 @@ class Filter {
     const BYTE *pAwakSeq;
 
   private:
+
+    typedef map<int, State*> PortsMap;
+    typedef pair<int, State*> PortPair;
+
     PortsMap portsMap;
 };
 
@@ -253,6 +259,8 @@ static BOOL CALLBACK InMethod(
 
         pInMsg = pMsgReplaceVal(pInMsg, HUB_MSG_TYPE_CONNECT, TRUE);
       }
+
+      pState->connectSent = TRUE;
     } else {
       pInMsg->u.buf.size = 0;
       pState->pAwakSeqNext = pAwakSeqNext;
@@ -271,7 +279,9 @@ static BOOL CALLBACK InMethod(
 
       // discard CONNECT(FALSE) from the input stream
       // if CONNECT(TRUE) was not added yet
-      if (pState->waitAwakSeq)
+      if (pState->connectSent)
+        pState->connectSent = FALSE;
+      else
         pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
 
       // start awakening sequence waiting
