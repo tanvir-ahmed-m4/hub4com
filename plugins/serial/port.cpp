@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2008/08/28 10:24:35  vfrolov
+ * Removed linking with ....utils.h and ....utils.cpp
+ *
  * Revision 1.7  2008/08/20 14:30:19  vfrolov
  * Redesigned serial port options
  *
@@ -46,8 +49,17 @@
 #include "comparams.h"
 #include "comport.h"
 #include "import.h"
-#include "../../utils.h"
 
+///////////////////////////////////////////////////////////////
+static const char *GetParam(const char *pArg, const char *pPattern)
+{
+  size_t lenPattern = strlen(pPattern);
+
+  if (_strnicmp(pArg, pPattern, lenPattern) != 0)
+    return NULL;
+
+  return pArg + lenPattern;
+}
 ///////////////////////////////////////////////////////////////
 static PLUGIN_TYPE CALLBACK GetPluginType()
 {

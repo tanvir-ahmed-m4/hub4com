@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/08/28 10:24:35  vfrolov
+ * Removed linking with ....utils.h and ....utils.cpp
+ *
  * Revision 1.2  2008/04/07 12:28:03  vfrolov
  * Replaced --rt-events option by SET_RT_EVENTS message
  *
@@ -38,12 +41,10 @@
  * Revision 1.1  2007/01/23 09:13:10  vfrolov
  * Initial revision
  *
- *
  */
 
 #include "precomp.h"
 #include "comparams.h"
-#include "../../utils.h"
 
 ///////////////////////////////////////////////////////////////
 static struct {
