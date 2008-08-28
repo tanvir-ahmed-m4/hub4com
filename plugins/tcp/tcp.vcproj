@@ -207,10 +207,6 @@
 				RelativePath=".\precomp.h"
 				>
 			</File>
-			<File
-				RelativePath="..\..\utils.h"
-				>
-			</File>
 		</Filter>
 		<Filter
 			Name="Source Files"
@@ -256,10 +252,6 @@
 						UsePrecompiledHeader="1"
 					/>
 				</FileConfiguration>
-			</File>
-			<File
-				RelativePath="..\..\utils.cpp"
-				>
 			</File>
 		</Filter>
 	</Files>
