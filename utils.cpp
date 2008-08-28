@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/08/28 15:53:13  vfrolov
+ * Added ability to load arguments from standard input and
+ * to select fragment for loading
+ *
  * Revision 1.3  2008/04/16 14:07:12  vfrolov
  * Extended STRQTOK_R()
  *
@@ -84,18 +88,38 @@ void Args::Add(const string &arg, const vector<string> &params)
   }
 
   char *pSave;
-  char *pFile = STRQTOK_R(pTmp, ":", &pSave);
+  char *pFileSpec = STRQTOK_R(pTmp, ":", &pSave);
 
-  if (!pFile || !*pFile) {
-    cerr << "No file name in " << arg << endl;
-    exit(1);
+  char *pFile;
+  char *pBegin;
+  char *pEnd;
+
+  if (pFileSpec) {
+    char *pSave2;
+
+    pFile = STRQTOK_R(pFileSpec, ",", &pSave2);
+    pBegin = STRQTOK_R(NULL, ",", &pSave2);
+    pEnd = STRQTOK_R(NULL, ",", &pSave2);
+  } else {
+    pFile = NULL;
+    pBegin = NULL;
+    pEnd = NULL;
   }
 
-  ifstream ifile(pFile);
+  ifstream ifile;
+  istream *pInStream;
 
-  if (ifile.fail()) {
-    cerr << "Can't open file " << pFile << endl;
-    exit(1);
+  if (pFile && *pFile) {
+    ifile.open(pFile);
+
+    if (ifile.fail()) {
+      cerr << "Can't open file " << pFile << endl;
+      exit(1);
+    }
+
+    pInStream = &ifile;
+  } else {
+    pInStream = &cin;
   }
 
   vector<string> paramsLoad;
@@ -103,26 +127,20 @@ void Args::Add(const string &arg, const vector<string> &params)
   for (char *p = STRQTOK_R(NULL, ",", &pSave) ; p ; p = STRQTOK_R(NULL, ",", &pSave))
     paramsLoad.push_back(p);
 
-  free(pTmp);
-
-  while (ifile.good()) {
+  while (pInStream->good()) {
     stringstream line;
 
-    ifile.get(*line.rdbuf());
+    pInStream->get(*line.rdbuf());
 
-    if (!ifile.fail()) {
+    if (!pInStream->fail()) {
       string str = line.str();
       string::size_type first_non_space = string::npos;
       string::size_type last_non_space = string::npos;
 
       for (string::size_type i = 0 ; i < str.length() ; i++) {
         if (!isspace(str[i])) {
-          if (first_non_space == string::npos) {
-            if (str[i] == '#')
-              break;
-
+          if (first_non_space == string::npos)
             first_non_space = i;
-          }
 
           last_non_space = i;
         }
@@ -130,6 +148,19 @@ void Args::Add(const string &arg, const vector<string> &params)
 
       if (first_non_space != string::npos) {
         str = str.substr(first_non_space, last_non_space + 1 - first_non_space);
+
+        if (pBegin && *pBegin) {
+          if (str == pBegin)
+            pBegin = NULL;
+
+          continue;
+        }
+
+        if (pEnd && *pEnd && str == pEnd)
+          break;
+
+        if (str[0] == '#')
+          continue;
 
         if (num_recursive > 256) {
           cerr << "Too many recursive options " << arg << endl;
@@ -141,13 +172,16 @@ void Args::Add(const string &arg, const vector<string> &params)
         num_recursive--;
       }
     } else {
-      ifile.clear();
+      if (!pInStream->eof())
+        pInStream->clear();
     }
 
     char ch;
 
-    ifile.get(ch);
+    pInStream->get(ch);
   }
+
+  free(pTmp);
 }
 ///////////////////////////////////////////////////////////////
 static BOOL IsDelim(char c, const char *pDelims)
@@ -160,13 +194,15 @@ static BOOL IsDelim(char c, const char *pDelims)
   return FALSE;
 }
 ///////////////////////////////////////////////////////////////
-char *STRTOK_R(char *pStr, const char *pDelims, char **ppSave)
+char *STRTOK_R(char *pStr, const char *pDelims, char **ppSave, BOOL skipLeadingDelims)
 {
   if (!pStr)
     pStr = *ppSave;
 
-  while (IsDelim(*pStr, pDelims))
-    pStr++;
+  if (skipLeadingDelims) {
+    while (IsDelim(*pStr, pDelims))
+      pStr++;
+  }
 
   if (!*pStr) {
     *ppSave = pStr;
@@ -191,13 +227,16 @@ char *STRQTOK_R(
     const char *pDelims,
     char **ppSave,
     const char *pQuotes,
-    BOOL discard)
+    BOOL discardQuotes,
+    BOOL skipLeadingDelims)
 {
   if (!pStr)
     pStr = *ppSave;
 
-  while (IsDelim(*pStr, pDelims))
-    pStr++;
+  if (skipLeadingDelims) {
+    while (IsDelim(*pStr, pDelims))
+      pStr++;
+  }
 
   if (!*pStr) {
     *ppSave = pStr;
@@ -211,7 +250,7 @@ char *STRQTOK_R(
   while (*pStr && (quoted || !IsDelim(*pStr, pDelims))) {
     if (quoted ? (*pStr == pQuotes[1]) : (*pStr == pQuotes[0])) {
       if (cntMask%2 == 0) {
-        if (discard)
+        if (discardQuotes)
           memmove(pStr, pStr + 1, strlen(pStr + 1) + 1);
         quoted = !quoted;
       } else {
@@ -320,9 +359,9 @@ void CreateArgsVector(
 
     char *pSave;
 
-    for (argv[argc] = STRQTOK_R(pTmp, " ", &pSave) ;
+    for (argv[argc] = STRQTOK_R(pTmp, " ", &pSave, "\"\"", TRUE, TRUE) ;
          argv[argc] ;
-         argv[argc] = STRQTOK_R(NULL, " ", &pSave))
+         argv[argc] = STRQTOK_R(NULL, " ", &pSave, "\"\"", TRUE, TRUE))
     {
       argc++;
       argv = (const char **)realloc(argv, (argc + 1) * sizeof(argv[0]));

@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/08/28 15:53:13  vfrolov
+ * Added ability to load arguments from standard input and
+ * to select fragment for loading
+ *
  * Revision 1.3  2008/04/16 14:07:12  vfrolov
  * Extended STRQTOK_R()
  *
@@ -48,13 +52,14 @@ class Args : public vector<string>
     int num_recursive;
 };
 ///////////////////////////////////////////////////////////////
-char *STRTOK_R(char *pStr, const char *pDelims, char **ppSave);
+char *STRTOK_R(char *pStr, const char *pDelims, char **ppSave, BOOL skipLeadingDelims = FALSE);
 char *STRQTOK_R(
     char *pStr,
     const char *pDelims,
     char **ppSave,
     const char *pQuotes = "\"\"",
-    BOOL discard = TRUE);
+    BOOL discardQuotes = TRUE,
+    BOOL skipLeadingDelims = FALSE);
 BOOL StrToInt(const char *pStr, int *pNum);
 const char *GetParam(const char *pArg, const char *pPattern);
 void CreateArgsVector(

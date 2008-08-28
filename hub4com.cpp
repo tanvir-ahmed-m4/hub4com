@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.13  2008/08/28 15:53:13  vfrolov
+ * Added ability to load arguments from standard input and
+ * to select fragment for loading
+ *
  * Revision 1.12  2008/08/25 08:15:02  vfrolov
  * Itilized TimerAPCProc()
  *
@@ -73,10 +77,16 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "  " << pProgPath << " [options] <port0> [options] [<port1> ...]" << endl
   << endl
   << "Common options:" << endl
-  << "  --load=<file>[:<prms>]   - load arguments from a file (one argument per line)" << endl
-  << "                             and insert them to the command line. The syntax of" << endl
-  << "                             <prms> is <PRM1>[,<PRM2>...], where <PRMn> will" << endl
-  << "                             replace %%n%%." << endl
+  << "  --load=[<file>][,<begin>[,<end>]][:<prms>]" << endl
+  << "                           - load arguments (one argument per line) between" << endl
+  << "                             <begin> and <end> lines from a file <file> (use" << endl
+  << "                             standard input if empty) and insert them into the" << endl
+  << "                             command line. The syntax of <prms> is" << endl
+  << "                             <PRM1>[,<PRM2>...], where <PRMn> will replace" << endl
+  << "                             %%n%% in the arguments. Do loading since begining" << endl
+  << "                             if <begin> is empty. Do loading till end-of-file" << endl
+  << "                             if <end> is empty. Ignore arguments begining with" << endl
+  << "                             '#'." << endl
   << "  --help                   - show this help." << endl
   << "  --help=*                 - show help for all modules." << endl
   << "  --help=<LstM>            - show help for modules listed in <LstM>." << endl
@@ -135,6 +145,18 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "      receive data from CNCB2 and send it to CNCB0 and CNCB1." << endl
   << "  " << pProgPath << " --echo-route=0 COM2" << endl
   << "    - receive data from COM2 and send it back to COM2." << endl
+  << "  " << pProgPath << " --load=" << endl
+  << "      --echo-route=0" << endl
+  << "      COM2" << endl
+  << "      ^Z" << endl
+  << "    - the same as above." << endl
+  << "  " << pProgPath << " --load=,_BEGIN_,_END_" << endl
+  << "      blah blah blah" << endl
+  << "      _BEGIN_" << endl
+  << "      --echo-route=0" << endl
+  << "      COM2" << endl
+  << "      _END_" << endl
+  << "    - the same as above." << endl
   ;
 }
 ///////////////////////////////////////////////////////////////
@@ -512,16 +534,14 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
     }
   }
 
+  if (plugged < 1) {
+    Usage(argv[0], *pPlugins);
+    exit(1);
+  }
+
   delete pPlugins;
 
-  if (plugged < 2) {
-    if (plugged < 1) {
-      Usage(argv[0], *pPlugins);
-      exit(1);
-    }
-  }
-  else
-  if (defaultRouteData) {
+  if (plugged > 1 && defaultRouteData) {
     Route(hub, "0:All", FALSE, FALSE, routeDataMap);
     Route(hub, "1:0", FALSE, FALSE, routeDataMap);
   }
