@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/08/29 15:17:07  vfrolov
+ * Added printing command line and config
+ *
  * Revision 1.1  2008/08/29 13:13:04  vfrolov
  * Initial revision
  *
@@ -34,6 +37,7 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
+#include <set>
 
 using namespace std;
 
