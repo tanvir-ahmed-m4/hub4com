@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.11  2008/08/29 13:02:37  vfrolov
+ * Added ESC_OPTS_MAP_EO2GO() and ESC_OPTS_MAP_GO2EO()
+ *
  * Revision 1.10  2008/08/28 16:07:09  vfrolov
  * Tracing of HUB_MSG_TYPE_SET_PIN_STATE moved to the trace filter
  *
@@ -181,29 +184,45 @@ static FIELD2NAME codeNameTableLineStatus[] = {
   {0, 0, NULL}
 };
 
+static FIELD2NAME codeNameTableGoOptions[] = {
+  TOFIELD2NAME2(GO_, RBR_STATUS),
+  TOFIELD2NAME2(GO_, RLC_STATUS),
+  TOFIELD2NAME2(GO_, BREAK_STATUS),
+  TOFIELD2NAME2(GO_, ESCAPE_MODE),
+  {0, 0, NULL}
+};
+
 static void WarnIgnoredInOptions(
     const char *pHead,
     const char *pTail,
-    DWORD options,
-    BYTE optsMst,
-    BYTE optsLsr)
+    DWORD goOptions,
+    DWORD otherOptions)
 {
-  if (optsMst) {
-    cerr << pHead << " WARNING: Changing of MODEM STATUS bit(s) 0x"
-         << hex << (unsigned)optsMst << dec << " ["
-         << FieldToName(codeNameTableModemStatus, optsMst)
+  if (GO_O2V_MODEM_STATUS(goOptions)) {
+    cerr << pHead << " WARNING: Changing of MODEM STATUS bit(s) ["
+         << FieldToName(codeNameTableModemStatus, GO_O2V_MODEM_STATUS(goOptions))
          << "] will be ignored by driver" << pTail << endl;
   }
 
-  if (optsLsr) {
-    cerr << pHead << " WARNING: Changing of LINE STATUS bit(s) 0x"
-         << hex << (unsigned)optsLsr << dec << " ["
-         << FieldToName(codeNameTableLineStatus, optsLsr)
+  if (GO_O2V_LINE_STATUS(goOptions)) {
+    cerr << pHead << " WARNING: Changing of LINE STATUS bit(s) ["
+         << FieldToName(codeNameTableLineStatus, GO_O2V_LINE_STATUS(goOptions))
          << "] will be ignored by driver" << pTail << endl;
   }
 
-  cerr << pHead << " WARNING: Requested option(s) 0x"
-       << hex << options << dec << " will be ignored by driver" << pTail << endl;
+  goOptions &= ~(GO_V2O_MODEM_STATUS(-1) | GO_V2O_LINE_STATUS(-1));
+
+  if (goOptions) {
+    cerr << pHead << " WARNING: Requested option(s) ["
+         << FieldToName(codeNameTableGoOptions, goOptions)
+         << "] will be ignored by driver" << pTail << endl;
+  }
+
+  if (otherOptions) {
+    cerr << pHead << " WARNING: Requested option(s) [0x"
+         << hex << otherOptions << dec
+         << "] will be ignored by driver" << pTail << endl;
+  }
 }
 
 static FIELD2NAME codeNameTableComEvents[] = {
@@ -232,23 +251,23 @@ BOOL ComPort::Start()
 
     msg.type = HUB_MSG_TYPE_GET_ESC_OPTS;
     msg.u.pv.pVal = &escapeOptions;
+    msg.u.pv.val = 0;
     pOnRead(hHub, hMasterPort, &msg);
 
     escapeOptions = SetEscMode(handle, escapeOptions, &pBuf, &done);
 
+    if (escapeOptions & ~ESC_OPTS_V2O_ESCCHAR(-1)) {
+      WarnIgnoredInOptions(name.c_str(), " (requested for escape mode)",
+                           ESC_OPTS_MAP_EO2GO(escapeOptions),
+                           escapeOptions & ~(ESC_OPTS_MAP_GO2EO(-1) | ESC_OPTS_V2O_ESCCHAR(-1)));
+    }
+
     if ((escapeOptions & ESC_OPTS_V2O_ESCCHAR(-1)) == 0) {
       InOptionsAdd(GO_ESCAPE_MODE);
 
-      if (escapeOptions) {
-        WarnIgnoredInOptions(name.c_str(), " (escape mode)",
-                           escapeOptions,
-                           ESC_OPTS_O2V_MST(escapeOptions),
-                           ESC_OPTS_O2V_LSR(escapeOptions));
-
-        msg.type = HUB_MSG_TYPE_FAIL_ESC_OPTS;
-        msg.u.val = escapeOptions;
-        pOnRead(hHub, hMasterPort, &msg);
-      }
+      msg.type = HUB_MSG_TYPE_FAIL_ESC_OPTS;
+      msg.u.val = escapeOptions;
+      pOnRead(hHub, hMasterPort, &msg);
     }
   }
 
@@ -274,12 +293,8 @@ BOOL ComPort::Start()
 
   DWORD fail_options = (intercepted_options & ~InOptions());
 
-  if (fail_options) {
-    WarnIgnoredInOptions(name.c_str(), "",
-                       fail_options,
-                       GO_O2V_MODEM_STATUS(fail_options),
-                       GO_O2V_LINE_STATUS(fail_options));
-  }
+  if (fail_options)
+    WarnIgnoredInOptions(name.c_str(), "", fail_options, 0);
 
   msg.type = HUB_MSG_TYPE_FAIL_IN_OPTS;
   msg.u.val = fail_options;
@@ -591,13 +606,6 @@ void ComPort::CheckComEvents(DWORD eMask)
     DWORD stat;
 
     if (::GetCommModemStatus(handle, &stat)) {
-      /*
-      cout << name << " MODEM STATUS bit(s): 0x"
-           << hex << stat << dec << " ["
-           << FieldToName(codeNameTableModemStatus, stat)
-           << "]" << endl;
-      */
-
       HUB_MSG msg;
 
       msg.type = HUB_MSG_TYPE_MODEM_STATUS;

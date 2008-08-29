@@ -37,10 +37,13 @@ extern "C" {
 #define HUB_MSG_VAL_TYPE_MASK_VAL  0x0100
 #define   VAL2MASK(v)              ((DWORD)(WORD)(v) << 16)
 #define   MASK2VAL(m)              ((WORD)((m) >> 16))
+#define HUB_MSG_VAL_TYPE_BOOL      0x0200
+#define HUB_MSG_VAL_TYPE_MSG_TYPE  0x0300
+#define HUB_MSG_VAL_TYPE_UINT      0x0400
 /*******************************************************************/
 #define HUB_MSG_TYPE_EMPTY         (0   | HUB_MSG_UNION_TYPE_NONE)
 #define HUB_MSG_TYPE_LINE_DATA     (1   | HUB_MSG_UNION_TYPE_BUF)
-#define HUB_MSG_TYPE_CONNECT       (2   | HUB_MSG_UNION_TYPE_VAL)
+#define HUB_MSG_TYPE_CONNECT       (2   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_BOOL)
 #define HUB_MSG_TYPE_MODEM_STATUS  (3   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_MASK_VAL)
 #define   MODEM_STATUS_DCTS        0x01
 #define   MODEM_STATUS_DDSR        0x02
@@ -78,21 +81,16 @@ extern "C" {
 #define   SO_O2V_PIN_STATE(o)      ((BYTE)(o))
 #define   SO_V2O_PIN_STATE(v)      ((DWORD)(BYTE)(v))
 #define HUB_MSG_TYPE_FAIL_IN_OPTS  (8   | HUB_MSG_UNION_TYPE_VAL)
-#define HUB_MSG_TYPE_RBR_STATUS    (9   | HUB_MSG_UNION_TYPE_VAL)
+#define HUB_MSG_TYPE_RBR_STATUS    (9   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_UINT)
 #define HUB_MSG_TYPE_RLC_STATUS    (10  | HUB_MSG_UNION_TYPE_VAL)
-#define HUB_MSG_TYPE_COUNT_REPEATS (11  | HUB_MSG_UNION_TYPE_PVAL)
+#define HUB_MSG_TYPE_COUNT_REPEATS (11  | HUB_MSG_UNION_TYPE_PVAL | HUB_MSG_VAL_TYPE_MSG_TYPE)
 #define HUB_MSG_TYPE_GET_ESC_OPTS  (12  | HUB_MSG_UNION_TYPE_PVAL)
-#define   ESC_OPTS_O2V_MST(o)      GO_O2V_MODEM_STATUS(o)
-#define   ESC_OPTS_V2O_MST(v)      GO_V2O_MODEM_STATUS(v)
-#define   ESC_OPTS_O2V_LSR(o)      GO_O2V_LINE_STATUS(o)
-#define   ESC_OPTS_V2O_LSR(v)      GO_V2O_LINE_STATUS(v)
-#define   ESC_OPTS_RBR_STATUS      GO_RBR_STATUS
-#define   ESC_OPTS_RLC_STATUS      GO_RLC_STATUS
-#define   ESC_OPTS_BREAK_STATUS    GO_BREAK_STATUS
+#define   ESC_OPTS_MAP_EO2GO(eo)   ((DWORD)(eo) & 0x00FFFFFF)
+#define   ESC_OPTS_MAP_GO2EO(go)   ((DWORD)(go) & 0x00FFFFFF)
 #define   ESC_OPTS_O2V_ESCCHAR(o)  ((BYTE)(o >> 24))
 #define   ESC_OPTS_V2O_ESCCHAR(v)  ((DWORD)(BYTE)(v) << 24)
 #define HUB_MSG_TYPE_FAIL_ESC_OPTS (13  | HUB_MSG_UNION_TYPE_VAL)
-#define HUB_MSG_TYPE_BREAK_STATUS  (14  | HUB_MSG_UNION_TYPE_VAL)
+#define HUB_MSG_TYPE_BREAK_STATUS  (14  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_BOOL)
 /*******************************************************************/
 typedef struct _HUB_MSG {
   WORD type;

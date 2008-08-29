@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2008/08/29 13:02:37  vfrolov
+ * Added ESC_OPTS_MAP_EO2GO() and ESC_OPTS_MAP_GO2EO()
+ *
  * Revision 1.7  2008/08/26 14:23:31  vfrolov
  * Added ability to SetEscMode() return LSR and MST for non com0com ports
  *
@@ -328,19 +331,19 @@ DWORD SetEscMode(HANDLE handle, DWORD escOptions, BYTE **ppBuf, DWORD *pDone)
 #define MODEM_STATUS_BITS (MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_RI|MODEM_STATUS_DCD)
 #define LINE_STATUS_BITS  (LINE_STATUS_OE|LINE_STATUS_PE|LINE_STATUS_FE|LINE_STATUS_BI|LINE_STATUS_FIFOERR)
 
-  if (escOptions & ESC_OPTS_V2O_MST(MODEM_STATUS_BITS))
+  if (escOptions & ESC_OPTS_MAP_GO2EO(GO_V2O_MODEM_STATUS(MODEM_STATUS_BITS)))
     opts |= C0CE_INSERT_ENABLE_MST;
 
-  if (escOptions & ESC_OPTS_BREAK_STATUS)
+  if (escOptions & ESC_OPTS_MAP_GO2EO(GO_BREAK_STATUS))
     opts |= C0CE_INSERT_ENABLE_LSR_BI;
 
-  if (escOptions & ESC_OPTS_V2O_LSR(LINE_STATUS_BITS))
+  if (escOptions & ESC_OPTS_MAP_GO2EO(GO_V2O_LINE_STATUS(LINE_STATUS_BITS)))
     opts |= C0CE_INSERT_ENABLE_LSR;
 
-  if (escOptions & ESC_OPTS_RBR_STATUS)
+  if (escOptions & ESC_OPTS_MAP_GO2EO(GO_RBR_STATUS))
     opts |= C0CE_INSERT_ENABLE_RBR;
 
-  if (escOptions & ESC_OPTS_RLC_STATUS)
+  if (escOptions & ESC_OPTS_MAP_GO2EO(GO_RLC_STATUS))
     opts |= C0CE_INSERT_ENABLE_RLC;
 
   opts &= GetEscCaps(handle);
@@ -409,19 +412,19 @@ DWORD SetEscMode(HANDLE handle, DWORD escOptions, BYTE **ppBuf, DWORD *pDone)
   }
 
   if (opts & C0CE_INSERT_ENABLE_MST)
-    escOptions &= ~ESC_OPTS_V2O_MST(MODEM_STATUS_BITS);
+    escOptions &= ~ESC_OPTS_MAP_GO2EO(GO_V2O_MODEM_STATUS(MODEM_STATUS_BITS));
 
   if (opts & C0CE_INSERT_ENABLE_LSR_BI)
-    escOptions &= ~ESC_OPTS_BREAK_STATUS;
+    escOptions &= ~ESC_OPTS_MAP_GO2EO(GO_BREAK_STATUS);
 
   if (opts & C0CE_INSERT_ENABLE_LSR)
-    escOptions &= ~ESC_OPTS_V2O_LSR(LINE_STATUS_BITS & ~LINE_STATUS_BI);
+    escOptions &= ~ESC_OPTS_MAP_GO2EO(GO_V2O_LINE_STATUS(LINE_STATUS_BITS & ~LINE_STATUS_BI));
 
   if (opts & C0CE_INSERT_ENABLE_RBR)
-    escOptions &= ~ESC_OPTS_RBR_STATUS;
+    escOptions &= ~ESC_OPTS_MAP_GO2EO(GO_RBR_STATUS);
 
   if (opts & C0CE_INSERT_ENABLE_RLC)
-    escOptions &= ~ESC_OPTS_RLC_STATUS;
+    escOptions &= ~ESC_OPTS_MAP_GO2EO(GO_RLC_STATUS);
 
   return escOptions & ~ESC_OPTS_V2O_ESCCHAR(-1);
 }

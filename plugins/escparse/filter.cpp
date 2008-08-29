@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/08/29 13:02:37  vfrolov
+ * Added ESC_OPTS_MAP_EO2GO() and ESC_OPTS_MAP_GO2EO()
+ *
  * Revision 1.1  2008/08/22 17:02:59  vfrolov
  * Initial revision
  *
@@ -404,26 +407,6 @@ static BOOL CALLBACK Init(
   return TRUE;
 }
 ///////////////////////////////////////////////////////////////
-inline DWORD go2esc(DWORD goOpts)
-{
-  return
-      ESC_OPTS_V2O_MST(GO_O2V_MODEM_STATUS(goOpts)) |
-      ESC_OPTS_V2O_LSR(GO_O2V_LINE_STATUS(goOpts)) |
-      ((goOpts & GO_RBR_STATUS) ? ESC_OPTS_RBR_STATUS : 0) |
-      ((goOpts & GO_RLC_STATUS) ? ESC_OPTS_RLC_STATUS : 0) |
-      ((goOpts & GO_BREAK_STATUS) ? ESC_OPTS_BREAK_STATUS : 0);
-}
-
-inline DWORD esc2go(DWORD escOpts)
-{
-  return
-      GO_V2O_MODEM_STATUS(ESC_OPTS_O2V_MST(escOpts)) |
-      GO_V2O_LINE_STATUS(ESC_OPTS_O2V_LSR(escOpts)) |
-      ((escOpts & ESC_OPTS_RBR_STATUS) ? GO_RBR_STATUS : 0) |
-      ((escOpts & ESC_OPTS_RLC_STATUS) ? GO_RLC_STATUS : 0) |
-      ((escOpts & ESC_OPTS_BREAK_STATUS) ? GO_BREAK_STATUS : 0);
-}
-
 static BOOL CALLBACK InMethod(
     HFILTER hFilter,
     int nFromPort,
@@ -487,7 +470,7 @@ static BOOL CALLBACK InMethod(
       if (!pEscParse)
         return FALSE;
 
-      *pInMsg->u.pv.pVal = go2esc(pEscParse->Options()) |
+      *pInMsg->u.pv.pVal = ESC_OPTS_MAP_GO2EO(pEscParse->Options()) |
                            ESC_OPTS_V2O_ESCCHAR(((Filter *)hFilter)->escapeChar);
 
       // hide this message from subsequent filters
@@ -501,7 +484,7 @@ static BOOL CALLBACK InMethod(
       if (!pEscParse)
         return FALSE;
 
-      DWORD fail_options = (pInMsg->u.val & go2esc(pEscParse->Options()));
+      DWORD fail_options = (pInMsg->u.val & ESC_OPTS_MAP_GO2EO(pEscParse->Options()));
 
       if (fail_options) {
         cerr << ((Filter *)hFilter)->PortName(nFromPort)
@@ -509,7 +492,7 @@ static BOOL CALLBACK InMethod(
              << " escape mode option(s) 0x" << hex << fail_options << dec
              << " not accepted" << endl;
 
-        pEscParse->OptionsDel(esc2go(fail_options));
+        pEscParse->OptionsDel(ESC_OPTS_MAP_EO2GO(fail_options));
       }
 
       // hide this message from subsequent filters
