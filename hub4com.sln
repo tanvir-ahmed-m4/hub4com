@@ -19,6 +19,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-pinmap", "plugins\pi
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-escparse", "plugins\escparse\escparse.vcproj", "{B56122ED-F2E6-4FA1-8E85-B8C606ED9400}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-trace", "plugins\trace\trace.vcproj", "{EDA524BD-8193-49E5-995E-9EE533E2641E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -61,6 +63,10 @@ Global
 		{B56122ED-F2E6-4FA1-8E85-B8C606ED9400}.Debug|Win32.Build.0 = Debug|Win32
 		{B56122ED-F2E6-4FA1-8E85-B8C606ED9400}.Release|Win32.ActiveCfg = Release|Win32
 		{B56122ED-F2E6-4FA1-8E85-B8C606ED9400}.Release|Win32.Build.0 = Release|Win32
+		{EDA524BD-8193-49E5-995E-9EE533E2641E}.Debug|Win32.ActiveCfg = Debug|Win32
+		{EDA524BD-8193-49E5-995E-9EE533E2641E}.Debug|Win32.Build.0 = Debug|Win32
+		{EDA524BD-8193-49E5-995E-9EE533E2641E}.Release|Win32.ActiveCfg = Release|Win32
+		{EDA524BD-8193-49E5-995E-9EE533E2641E}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
