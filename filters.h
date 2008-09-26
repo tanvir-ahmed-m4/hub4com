@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/09/26 15:34:50  vfrolov
+ * Fixed adding order for filters with the same FID
+ *
  * Revision 1.3  2008/08/20 08:32:35  vfrolov
  * Implemented Filters::FilterName()
  *
@@ -58,8 +61,9 @@ class Filters
     BOOL AddFilter(
         int iPort,
         const char *pName,
-        BOOL isInMethod,
-        const set<int> *pSrcPorts);
+        BOOL addInMethod,
+        BOOL addOutMethod,
+        const set<int> *pOutMethodSrcPorts);
     void Report() const;
     BOOL Init() const;
     const char *FilterName(HFILTER hFilter) const;

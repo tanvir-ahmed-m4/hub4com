@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.15  2008/09/26 15:34:50  vfrolov
+ * Fixed adding order for filters with the same FID
+ *
  * Revision 1.14  2008/09/26 14:29:13  vfrolov
  * Added substitution <PRM0> by <file> for --load=<file>
  *
@@ -127,9 +130,9 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "  The syntax of <LstF> above is <F1>[,<F2>...], where the syntax of <Fn> is" << endl
   << "  <FID>[.<Method>][(<Lst>)], where <FID> is a filter name, <Method> is IN or" << endl
   << "  OUT and <Lst> lists the source ports (the data only from them will be handled" << endl
-  << "  by OUT method). The <FID> w/o <Method> is equivalent to <FID>.IN,<FID>.OUT." << endl
-  << "  If the list of the source ports is not specified then the data routed from" << endl
-  << "  any port will be handled by OUT method." << endl
+  << "  by OUT method). The <FID> w/o <Method> is equivalent to adding IN and OUT for" << endl
+  << "  each filter with name <FID>. If the list of the source ports is not specified" << endl
+  << "  then the data routed from any port will be handled by OUT method." << endl
   << endl
   << "Port options:" << endl
   << "  --use-driver=<MID>       - use driver module with name <MID> to create the" << endl
@@ -373,18 +376,16 @@ static BOOL AddFilters(ComHub &hub, int iPort, PVOID pFilters, PVOID pListFlt, P
     string method(dot != filter.npos ? filter.substr(dot) : "");
 
     if (method == ".IN") {
-      if (!((Filters *)pFilters)->AddFilter(iPort, filter.substr(0, dot).c_str(), TRUE, NULL))
+      if (!((Filters *)pFilters)->AddFilter(iPort, filter.substr(0, dot).c_str(), TRUE, FALSE, NULL))
         exit(1);
     }
     else
     if (method == ".OUT") {
-      if (!((Filters *)pFilters)->AddFilter(iPort, filter.substr(0, dot).c_str(), FALSE, pSrcPorts))
+      if (!((Filters *)pFilters)->AddFilter(iPort, filter.substr(0, dot).c_str(), FALSE, TRUE, pSrcPorts))
         exit(1);
     }
     else {
-      if (!((Filters *)pFilters)->AddFilter(iPort, filter.c_str(), TRUE, NULL))
-        exit(1);
-      if (!((Filters *)pFilters)->AddFilter(iPort, filter.c_str(), FALSE, pSrcPorts))
+      if (!((Filters *)pFilters)->AddFilter(iPort, filter.c_str(), TRUE, TRUE, pSrcPorts))
         exit(1);
     }
 

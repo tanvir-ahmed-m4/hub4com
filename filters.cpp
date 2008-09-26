@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/09/26 15:34:50  vfrolov
+ * Fixed adding order for filters with the same FID
+ *
  * Revision 1.3  2008/08/20 08:32:35  vfrolov
  * Implemented Filters::FilterName()
  *
@@ -143,8 +146,9 @@ BOOL Filters::CreateFilter(
 BOOL Filters::AddFilter(
     int iPort,
     const char *pName,
-    BOOL isInMethod,
-    const set<int> *pSrcPorts)
+    BOOL addInMethod,
+    BOOL addOutMethod,
+    const set<int> *pOutMethodSrcPorts)
 {
   PortFiltersMap::iterator iPair = portFilters.find(iPort);
 
@@ -172,17 +176,32 @@ BOOL Filters::AddFilter(
 
   for (FilterArray::const_iterator i = allFilters.begin() ; i != allFilters.end() ; i++) {
     if (*i && (*i)->name == pName) {
-      if ((isInMethod && (*i)->pInMethod) || (!isInMethod && (*i)->pOutMethod)) {
-        if (pSrcPorts) {
-          pSrcPorts = new set<int>(*pSrcPorts);
+      if (addInMethod && (*i)->pInMethod) {
+        FilterMethod *pFilterMethod = new FilterMethod(*(*i), TRUE, NULL);
+
+        if (!pFilterMethod) {
+          cerr << "No enough memory." << endl;
+          return FALSE;
+        }
+
+        iPair->second->push_back(pFilterMethod);
+      }
+
+      if (addOutMethod && (*i)->pOutMethod) {
+        const set<int> *pSrcPorts;
+
+        if (pOutMethodSrcPorts) {
+          pSrcPorts = new set<int>(*pOutMethodSrcPorts);
 
           if (!pSrcPorts) {
             cerr << "No enough memory." << endl;
             return FALSE;
           }
+        } else {
+          pSrcPorts = NULL;
         }
 
-        FilterMethod *pFilterMethod = new FilterMethod(*(*i), isInMethod, pSrcPorts);
+        FilterMethod *pFilterMethod = new FilterMethod(*(*i), FALSE, pSrcPorts);
 
         if (!pFilterMethod) {
           cerr << "No enough memory." << endl;
