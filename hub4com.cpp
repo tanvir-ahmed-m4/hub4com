@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.14  2008/09/26 14:29:13  vfrolov
+ * Added substitution <PRM0> by <file> for --load=<file>
+ *
  * Revision 1.13  2008/08/28 15:53:13  vfrolov
  * Added ability to load arguments from standard input and
  * to select fragment for loading
@@ -86,7 +89,7 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "                             %%n%% in the arguments. Do loading since begining" << endl
   << "                             if <begin> is empty. Do loading till end-of-file" << endl
   << "                             if <end> is empty. Ignore arguments begining with" << endl
-  << "                             '#'." << endl
+  << "                             '#'. <file> will replace %%0%% in the arguments." << endl
   << "  --help                   - show this help." << endl
   << "  --help=*                 - show help for all modules." << endl
   << "  --help=<LstM>            - show help for modules listed in <LstM>." << endl
