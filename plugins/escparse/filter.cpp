@@ -19,6 +19,12 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/09/30 08:28:32  vfrolov
+ * Added ability to control OUT1 and OUT2 pins
+ * Added ability to get remote baud rate and line control settings
+ * Added ability to set baud rate and line control
+ * Added fallback to non escape mode
+ *
  * Revision 1.2  2008/08/29 13:02:37  vfrolov
  * Added ESC_OPTS_MAP_EO2GO() and ESC_OPTS_MAP_GO2EO()
  *
@@ -104,8 +110,8 @@ class EscParse {
     HUB_MSG *Flush(HUB_MSG *pMsg);
 
     BYTE escapeChar;
-    WORD maskMst;
-    WORD maskLsr;
+    BYTE maskMst;
+    BYTE maskLsr;
     int state;
     BYTE code;
     int subState;
@@ -157,47 +163,37 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
             Reset();
             break;
           case SERIAL_LSRMST_LSR_DATA:
-            _ASSERTE(subState >= 0 && subState <= 2);
-
-            if (subState == 0) {
-              subState++;
-            } else if (subState == 1) {
-              data[0] = ch;  // LSR
-              subState++;
-            } else if (subState == 2) {
-              line_data.append(&ch, 1);
-              if (Options() & GO_BREAK_STATUS) {
-                pMsg = Flush(pMsg);
-                pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_BREAK_STATUS, (data[0] & LINE_STATUS_BI) != 0);
-              }
-              if (maskLsr) {
-                pMsg = Flush(pMsg);
-                pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_LINE_STATUS, data[0] | VAL2MASK(maskLsr));
-              }
-              Reset();
-            } else {
-              cerr << "ERROR: SERIAL_LSRMST_LSR_DATA subState=" << subState << endl;
-              Reset();
-            }
-            break;
           case SERIAL_LSRMST_LSR_NODATA:
-            _ASSERTE(subState >= 0 && subState <= 1);
+            _ASSERTE(subState >= 0 && (subState <= 1 || (code == SERIAL_LSRMST_LSR_DATA && subState <= 2)));
 
-            if (subState == 0) {
-              subState++;
-            } else if (subState == 1) {
-              if (Options() & GO_BREAK_STATUS) {
-                pMsg = Flush(pMsg);
-                pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_BREAK_STATUS, (ch & LINE_STATUS_BI) != 0);
-              }
-              if (maskLsr) {
-                pMsg = Flush(pMsg);
-                pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_LINE_STATUS, ch | VAL2MASK(maskLsr));
-              }
-              Reset();
-            } else {
-              cerr << "ERROR: SERIAL_LSRMST_LSR_NODATA subState=" << subState << endl;
-              Reset();
+            switch (subState) {
+              case 0:
+                subState++;
+                break;
+              case 1:
+                data[0] = ch;
+                if (code == SERIAL_LSRMST_LSR_DATA) {
+                  subState++;
+                  break;
+                }
+              case 2:
+                if (Options() & GO_BREAK_STATUS) {
+                  pMsg = Flush(pMsg);
+                  pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_BREAK_STATUS, (data[0] & LINE_STATUS_BI) != 0);
+                }
+                if (data[0] & maskLsr) {
+                  pMsg = Flush(pMsg);
+                  pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_LINE_STATUS, data[0] | VAL2MASK(maskLsr));
+                }
+                if (subState == 2 && ((data[0] & LINE_STATUS_BI) == 0 || ch != 0)) {
+                  // insert error character if it is not part of break
+                  line_data.append(&ch, 1);
+                }
+                Reset();
+                break;
+              default:
+                cerr << "ERROR: SERIAL_LSRMST_LSR_*DATA subState=" << subState << endl;
+                Reset();
             }
             break;
           case SERIAL_LSRMST_MST:
@@ -249,7 +245,10 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
               } else {
                 if (Options() & GO_RLC_STATUS) {
                   pMsg = Flush(pMsg);
-                  pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_RLC_STATUS, *(ULONG *)data);
+                  pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_RLC_STATUS,
+                      (VAL2LC_BYTESIZE(data[0])
+                      |VAL2LC_PARITY(data[1])
+                      |VAL2LC_STOPBITS(data[2])));
                 }
                 Reset();
               }
@@ -323,6 +322,25 @@ Filter::Filter(int argc, const char *const argv[])
       Invalidate();
       continue;
     }
+
+    const char *pParam;
+
+    if ((pParam = GetParam(pArg, "request-esc-mode=")) != NULL) {
+      if (_stricmp(pParam, "yes") == 0) {
+        requestEscMode = TRUE;
+      }
+      else
+      if (_stricmp(pParam, "no") == 0) {
+        requestEscMode = FALSE;
+      }
+      else {
+        cerr << "Unknown value --" << pArg << endl;
+        Invalidate();
+      }
+    } else {
+      cerr << "Unknown option --" << pArg << endl;
+      Invalidate();
+    }
   }
 }
 
@@ -370,9 +388,17 @@ static void CALLBACK Help(const char *pProgPath)
   << "  " << pProgPath << " ... --create-filter=" << GetPluginAbout()->pName << "[,<FID>][:<options>] ... --add-filters=<ports>:[...,]<FID>[,...] ..." << endl
   << endl
   << "Options:" << endl
+  << "  --request-esc-mode={yes|no}  - send request to driver to produce escaped data" << endl
+  << "                                 (yes by default)." << endl
   << endl
   << "Examples:" << endl
-  << "  " << pProgPath << " --create-filter=pinmap --create-filter=" << GetPluginAbout()->pName << " --add-filters=0,1:pinmap," << GetPluginAbout()->pName << " COM1 COM2" << endl
+  << "  " << pProgPath << " --load=,,_END_" << endl
+  << "      --create-filter=pinmap" << endl
+  << "      --create-filter=escparse" << endl
+  << "      --add-filters=0,1:pinmap,escparse" << endl
+  << "      COM1" << endl
+  << "      COM2" << endl
+  << "      _END_" << endl
   << "    - transfer data and signals between COM1 and COM2." << endl
   ;
 }
@@ -484,15 +510,16 @@ static BOOL CALLBACK InMethod(
       if (!pEscParse)
         return FALSE;
 
-      DWORD fail_options = (pInMsg->u.val & ESC_OPTS_MAP_GO2EO(pEscParse->Options()));
+      DWORD fail_options = (pInMsg->u.pv.val & ESC_OPTS_MAP_GO2EO(pEscParse->Options()));
 
       if (fail_options) {
         cerr << ((Filter *)hFilter)->PortName(nFromPort)
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
              << " escape mode option(s) 0x" << hex << fail_options << dec
-             << " not accepted" << endl;
+             << " not accepted (will try non escape mode option(s))" << endl;
 
         pEscParse->OptionsDel(ESC_OPTS_MAP_EO2GO(fail_options));
+        *pInMsg->u.pv.pVal |= ESC_OPTS_MAP_EO2GO(fail_options);
       }
 
       // hide this message from subsequent filters
@@ -517,20 +544,6 @@ static BOOL CALLBACK InMethod(
 
       pInMsg->u.val &= ~GO_ESCAPE_MODE; // hide from subsequent filters
 
-      DWORD fail_options = (pEscParse->intercepted_options & ~pEscParse->Options());
-
-      if (fail_options) {
-        cerr << ((Filter *)hFilter)->PortName(nFromPort)
-             << " WARNING: Intercepted option(s) 0x"
-             << hex << fail_options << dec << " by filter "
-             << ((Filter *)hFilter)->FilterName()
-             << " will be ignored" << endl;
-
-        // report not supported intercepted options to subsequent filters
-
-        pInMsg->u.val |= fail_options;
-      }
-
       break;
     }
     case HUB_MSG_TYPE_LINE_DATA: {
@@ -548,32 +561,62 @@ static BOOL CALLBACK InMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_MODEM_STATUS:
+    case HUB_MSG_TYPE_MODEM_STATUS: {
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+
+      if (!pEscParse)
+        return FALSE;
+
       // discard any status settings controlled by this filter
-      pInMsg->u.val &= ~VAL2MASK(GO_O2V_MODEM_STATUS(((Filter *)hFilter)->acceptableOptions));
+      pInMsg->u.val &= ~VAL2MASK(GO_O2V_MODEM_STATUS(pEscParse->Options()));
       break;
-    case HUB_MSG_TYPE_LINE_STATUS:
+    }
+    case HUB_MSG_TYPE_LINE_STATUS: {
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+
+      if (!pEscParse)
+        return FALSE;
+
       // discard any status settings controlled by this filter
-      pInMsg->u.val &= ~VAL2MASK(GO_O2V_LINE_STATUS(((Filter *)hFilter)->acceptableOptions));
+      pInMsg->u.val &= ~VAL2MASK(GO_O2V_LINE_STATUS(pEscParse->Options()));
       break;
-    case HUB_MSG_TYPE_RBR_STATUS:
-      if (((Filter *)hFilter)->acceptableOptions & GO_RBR_STATUS) {
+    }
+    case HUB_MSG_TYPE_RBR_STATUS: {
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+
+      if (!pEscParse)
+        return FALSE;
+
+      if (pEscParse->Options() & GO_RBR_STATUS) {
         // discard any status settings controlled by this filter
         pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
       }
       break;
-    case HUB_MSG_TYPE_RLC_STATUS:
-      if (((Filter *)hFilter)->acceptableOptions & GO_RLC_STATUS) {
+    }
+    case HUB_MSG_TYPE_RLC_STATUS: {
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+
+      if (!pEscParse)
+        return FALSE;
+
+      if (pEscParse->Options() & GO_RLC_STATUS) {
         // discard any status settings controlled by this filter
         pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
       }
       break;
-    case HUB_MSG_TYPE_BREAK_STATUS:
-      if (((Filter *)hFilter)->acceptableOptions & GO_BREAK_STATUS) {
+    }
+    case HUB_MSG_TYPE_BREAK_STATUS: {
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+
+      if (!pEscParse)
+        return FALSE;
+
+      if (pEscParse->Options() & GO_BREAK_STATUS) {
         // discard any status settings controlled by this filter
         pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
       }
       break;
+    }
   }
 
   return pInMsg != NULL;

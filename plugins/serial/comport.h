@@ -19,6 +19,12 @@
  *
  *
  * $Log$
+ * Revision 1.9  2008/09/30 08:28:32  vfrolov
+ * Added ability to control OUT1 and OUT2 pins
+ * Added ability to get remote baud rate and line control settings
+ * Added ability to set baud rate and line control
+ * Added fallback to non escape mode
+ *
  * Revision 1.8  2008/08/22 16:57:12  vfrolov
  * Added
  *   HUB_MSG_TYPE_GET_ESC_OPTS
@@ -76,6 +82,7 @@ class ComParams;
 class WriteOverlapped;
 class ReadOverlapped;
 class WaitCommEventOverlapped;
+class ComIo;
 ///////////////////////////////////////////////////////////////
 class ComPort
 {
@@ -96,47 +103,30 @@ class ComPort
 
     const string &Name() const { return name; }
     void Name(const char *pName) { name = pName; }
-    HANDLE Handle() const { return handle; }
 
   private:
     BOOL StartRead();
     BOOL StartWaitCommEvent();
     void CheckComEvents(DWORD eMask);
 
+    ComIo *pComIo;
     string name;
-    HANDLE handle;
     HMASTERPORT hMasterPort;
     HHUB hHub;
     int countReadOverlapped;
     int countWaitCommEventOverlapped;
     int countXoff;
     BOOL filterX;
-    WORD maskOutPins;
-    WORD maskMst;
+
     DWORD intercepted_options;
+    DWORD inOptions;
+    DWORD outOptions;
 
     DWORD writeQueueLimit;
     DWORD writeQueued;
     DWORD writeLost;
     DWORD writeLostTotal;
     DWORD errors;
-
-  private:
-    DWORD _inOptions;
-
-    DWORD InOptions() const {
-      return _inOptions;
-    }
-
-    void InOptionsDel(DWORD opts) {
-      _inOptions &= ~opts;
-      maskMst = GO_O2V_MODEM_STATUS(_inOptions);
-    }
-
-    void InOptionsAdd(DWORD opts) {
-      _inOptions |= opts;
-      maskMst = GO_O2V_MODEM_STATUS(_inOptions);
-    }
 };
 ///////////////////////////////////////////////////////////////
 

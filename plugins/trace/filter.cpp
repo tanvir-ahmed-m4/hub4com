@@ -19,6 +19,12 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/09/30 08:28:32  vfrolov
+ * Added ability to control OUT1 and OUT2 pins
+ * Added ability to get remote baud rate and line control settings
+ * Added ability to set baud rate and line control
+ * Added fallback to non escape mode
+ *
  * Revision 1.2  2008/08/29 15:17:07  vfrolov
  * Added printing command line and config
  *
@@ -295,7 +301,7 @@ static void PrintCode(ostream &tout, const CODE2NAME *pTable, DWORD code)
   if (pTable) {
     while (pTable->name) {
       if (pTable->code == code) {
-        tout << pTable->name; 
+        tout << pTable->name;
         return;
       }
       pTable++;
@@ -365,10 +371,29 @@ static const CODE2NAME codeNameTableHubMsg[] = {
   TOCODE2NAME(HUB_MSG_TYPE_, GET_ESC_OPTS),
   TOCODE2NAME(HUB_MSG_TYPE_, FAIL_ESC_OPTS),
   TOCODE2NAME(HUB_MSG_TYPE_, BREAK_STATUS),
+  TOCODE2NAME(HUB_MSG_TYPE_, SET_BR),
+  TOCODE2NAME(HUB_MSG_TYPE_, SET_LC),
   {0, NULL}
 };
 ///////////////////////////////////////////////////////////////
-static FIELD2NAME fieldNameTableModemStatus[] = {
+static const CODE2NAME codeNameTableParity[] = {
+  NOPARITY,    "N",
+  ODDPARITY,   "O",
+  EVENPARITY,  "E",
+  MARKPARITY,  "M",
+  SPACEPARITY, "S",
+  {0, NULL}
+};
+///////////////////////////////////////////////////////////////
+static const CODE2NAME codeNameTableStopBits
+[] = {
+  ONESTOPBIT,   "1",
+  ONE5STOPBITS, "1.5",
+  TWOSTOPBITS,  "2",
+  {0, NULL}
+};
+///////////////////////////////////////////////////////////////
+static const FIELD2NAME fieldNameTableModemStatus[] = {
   TOFIELD2NAME2(MODEM_STATUS_, DCTS),
   TOFIELD2NAME2(MODEM_STATUS_, DDSR),
   TOFIELD2NAME2(MODEM_STATUS_, TERI),
@@ -380,7 +405,7 @@ static FIELD2NAME fieldNameTableModemStatus[] = {
   {0, 0, NULL}
 };
 ///////////////////////////////////////////////////////////////
-static FIELD2NAME fieldNameTableLineStatus[] = {
+static const FIELD2NAME fieldNameTableLineStatus[] = {
   TOFIELD2NAME2(LINE_STATUS_, DR),
   TOFIELD2NAME2(LINE_STATUS_, OE),
   TOFIELD2NAME2(LINE_STATUS_, PE),
@@ -392,7 +417,7 @@ static FIELD2NAME fieldNameTableLineStatus[] = {
   {0, 0, NULL}
 };
 ///////////////////////////////////////////////////////////////
-static FIELD2NAME fieldNameTableGoOptions[] = {
+static const FIELD2NAME fieldNameTableGoOptions[] = {
   TOFIELD2NAME2(GO_, RBR_STATUS),
   TOFIELD2NAME2(GO_, RLC_STATUS),
   TOFIELD2NAME2(GO_, BREAK_STATUS),
@@ -400,12 +425,18 @@ static FIELD2NAME fieldNameTableGoOptions[] = {
   {0, 0, NULL}
 };
 ///////////////////////////////////////////////////////////////
-static FIELD2NAME codeNameTableSetPinState[] = {
+static const FIELD2NAME codeNameTableSetPinState[] = {
   TOFIELD2NAME2(PIN_STATE_, RTS),
   TOFIELD2NAME2(PIN_STATE_, DTR),
   TOFIELD2NAME2(PIN_STATE_, OUT1),
   TOFIELD2NAME2(PIN_STATE_, OUT2),
   TOFIELD2NAME2(PIN_STATE_, BREAK),
+  {0, 0, NULL}
+};
+///////////////////////////////////////////////////////////////
+static const FIELD2NAME fieldNameTableSoOptions[] = {
+  TOFIELD2NAME2(SO_, SET_BR),
+  TOFIELD2NAME2(SO_, SET_LC),
   {0, 0, NULL}
 };
 ///////////////////////////////////////////////////////////////
@@ -495,6 +526,12 @@ static void PrintVal(ostream &tout, DWORD msgType, DWORD val)
     case HUB_MSG_VAL_TYPE_UINT:
       tout << val;
       break;
+    case HUB_MSG_VAL_TYPE_LC:
+      tout << (unsigned)LC2VAL_BYTESIZE(val) << '-';
+      PrintCode(tout, codeNameTableParity, LC2VAL_PARITY(val));
+      tout << '-';
+      PrintCode(tout, codeNameTableStopBits, LC2VAL_STOPBITS(val));
+      break;
     default:
       tout << "0x" << hex << val << dec;
   }
@@ -512,7 +549,7 @@ static void PrintMsgBody(ostream &tout, HUB_MSG *pMsg)
       PrintVal(tout, pMsg->type, pMsg->u.val);
       break;
     case HUB_MSG_UNION_TYPE_PVAL:
-      tout << "&0x" << hex << *pMsg->u.pv.pVal << dec << " ";
+      tout << hex << "&" << pMsg->u.pv.pVal << "[0x" << *pMsg->u.pv.pVal << dec << "] ";
       PrintVal(tout, pMsg->type, pMsg->u.pv.val);
       break;
     default:
@@ -539,13 +576,13 @@ static void PrintMsg(ostream &tout, HUB_MSG *pMsg)
     case HUB_MSG_TYPE_SET_OUT_OPTS: {
       tout << "[";
       BOOL delimitNext = FALSE;
-      delimitNext = PrintFields(tout, codeNameTableSetPinState, SO_O2V_PIN_STATE(pMsg->u.val), delimitNext, "PIN_");
-      PrintFields(tout, NULL, pMsg->u.val & ~SO_V2O_PIN_STATE(-1), delimitNext);
+      delimitNext = PrintFields(tout, codeNameTableSetPinState, SO_O2V_PIN_STATE(pMsg->u.val), delimitNext, "SET_");
+      PrintFields(tout, fieldNameTableSoOptions, pMsg->u.val & ~SO_V2O_PIN_STATE(-1), delimitNext);
       tout << "]";
       break;
     }
     case HUB_MSG_TYPE_GET_IN_OPTS: {
-      tout << "&[";
+      tout << hex << "&" << pMsg->u.pv.pVal << "[" << dec;
       PrintGoOptions(tout, *pMsg->u.pv.pVal);
       tout << "] [";
       PrintGoOptions(tout, pMsg->u.pv.val);
@@ -559,15 +596,17 @@ static void PrintMsg(ostream &tout, HUB_MSG *pMsg)
       break;
     }
     case HUB_MSG_TYPE_GET_ESC_OPTS: {
-      tout << "&[";
+      tout << hex << "&" << pMsg->u.pv.pVal << "[" << dec;
       tout << "CHAR_0x" << hex << (unsigned)ESC_OPTS_O2V_ESCCHAR(*pMsg->u.pv.pVal) << dec;
       PrintEscOptions(tout, *pMsg->u.pv.pVal & ~ESC_OPTS_V2O_ESCCHAR(-1), TRUE);
       tout << "]";
       break;
     }
     case HUB_MSG_TYPE_FAIL_ESC_OPTS: {
-      tout << "[";
-      PrintEscOptions(tout, pMsg->u.val & ~ESC_OPTS_V2O_ESCCHAR(-1));
+      tout << hex << "&" << pMsg->u.pv.pVal << "[" << dec;
+      PrintGoOptions(tout, *pMsg->u.pv.pVal);
+      tout << "] [";
+      PrintEscOptions(tout, pMsg->u.pv.val & ~ESC_OPTS_V2O_ESCCHAR(-1));
       tout << "]";
       break;
     }

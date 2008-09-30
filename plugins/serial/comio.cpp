@@ -19,6 +19,12 @@
  *
  *
  * $Log$
+ * Revision 1.9  2008/09/30 08:28:32  vfrolov
+ * Added ability to control OUT1 and OUT2 pins
+ * Added ability to get remote baud rate and line control settings
+ * Added ability to set baud rate and line control
+ * Added fallback to non escape mode
+ *
  * Revision 1.8  2008/08/29 13:02:37  vfrolov
  * Added ESC_OPTS_MAP_EO2GO() and ESC_OPTS_MAP_GO2EO()
  *
@@ -89,25 +95,33 @@ static void TraceError(DWORD err, const char *pFmt, ...)
   fprintf(stderr, " ERROR %s (%lu)\n", strerror(err), (unsigned long)err);
 }
 ///////////////////////////////////////////////////////////////
-static BOOL myGetCommState(HANDLE handle, DCB *dcb)
+static BOOL myGetCommState(HANDLE handle, DCB *pDcb)
 {
-  dcb->DCBlength = sizeof(*dcb);
+  DCB dcb;
 
-  if (!::GetCommState(handle, dcb)) {
+  dcb.DCBlength = sizeof(dcb);
+
+  if (!::GetCommState(handle, &dcb)) {
     TraceError(GetLastError(), "GetCommState()");
     return FALSE;
   }
+
+  *pDcb = dcb;
+
   return TRUE;
 }
 
-static BOOL mySetCommState(HANDLE handle, DCB *dcb)
+static BOOL mySetCommState(HANDLE handle, DCB *pDcb)
 {
-  if (!::SetCommState(handle, dcb)) {
+  if (!::SetCommState(handle, pDcb)) {
     TraceError(GetLastError(), "SetCommState()");
-    myGetCommState(handle, dcb);
+    myGetCommState(handle, pDcb);
     return FALSE;
   }
-  return myGetCommState(handle, dcb);
+
+  myGetCommState(handle, pDcb);
+
+  return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 static BOOL myGetCommTimeouts(HANDLE handle, COMMTIMEOUTS *timeouts)
@@ -137,18 +151,8 @@ static BOOL myGetCommMask(HANDLE handle, DWORD *events)
   }
   return TRUE;
 }
-
-BOOL SetComEvents(HANDLE handle, DWORD *events)
-{
-  if (!::SetCommMask(handle, *events)) {
-    TraceError(GetLastError(), "SetCommMask()");
-    myGetCommMask(handle, events);
-    return FALSE;
-  }
-  return myGetCommMask(handle, events);
-}
 ///////////////////////////////////////////////////////////////
-BOOL CommFunction(HANDLE handle, DWORD func)
+static BOOL CommFunction(HANDLE handle, DWORD func)
 {
   if (!::EscapeCommFunction(handle, func)) {
     TraceError(GetLastError(), "EscapeCommFunction(%lu)", (long)func);
@@ -157,9 +161,63 @@ BOOL CommFunction(HANDLE handle, DWORD func)
   return TRUE;
 }
 ///////////////////////////////////////////////////////////////
-HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
+#define IOCTL_SERIAL_GET_MODEM_CONTROL  CTL_CODE(FILE_DEVICE_SERIAL_PORT,37,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERIAL_SET_MODEM_CONTROL  CTL_CODE(FILE_DEVICE_SERIAL_PORT,38,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+static BOOL HasExtendedModemControl(HANDLE handle)
 {
-  HANDLE handle = CreateFile(pPath,
+  BYTE inBufIoctl[C0CE_SIGNATURE_SIZE];
+  memcpy(inBufIoctl, C0CE_SIGNATURE, C0CE_SIGNATURE_SIZE);
+
+  BYTE outBuf[sizeof(ULONG) + C0CE_SIGNATURE_SIZE];
+
+  DWORD returned;
+
+  if (!DeviceIoControl(handle,
+                       IOCTL_SERIAL_GET_MODEM_CONTROL,
+                       inBufIoctl, sizeof(inBufIoctl),
+                       outBuf, sizeof(outBuf), &returned,
+                       NULL))
+  {
+    TraceError(GetLastError(), "IOCTL_SERIAL_GET_MODEM_CONTROL");
+    return FALSE;
+  }
+
+  if (returned < (sizeof(ULONG) + C0CE_SIGNATURE_SIZE) ||
+      memcmp(outBuf + sizeof(ULONG), C0CE_SIGNATURE, C0CE_SIGNATURE_SIZE) != 0)
+  {
+    return FALSE;  // standard functionality
+  }
+
+  return TRUE;
+}
+
+static BOOL SetModemControl(HANDLE handle, BYTE control, BYTE mask)
+{
+  BYTE inBufIoctl[sizeof(ULONG) + sizeof(ULONG) + C0CE_SIGNATURE_SIZE];
+  ((ULONG *)inBufIoctl)[0] = control;
+  ((ULONG *)inBufIoctl)[1] = mask;
+  memcpy(inBufIoctl + sizeof(ULONG) + sizeof(ULONG), C0CE_SIGNATURE, C0CE_SIGNATURE_SIZE);
+
+  DWORD returned;
+
+  if (!DeviceIoControl(handle,
+                       IOCTL_SERIAL_SET_MODEM_CONTROL,
+                       inBufIoctl, sizeof(inBufIoctl),
+                       NULL, 0, &returned,
+                       NULL))
+  {
+    TraceError(GetLastError(), "IOCTL_SERIAL_SET_MODEM_CONTROL");
+    return FALSE;
+  }
+
+  return TRUE;
+}
+///////////////////////////////////////////////////////////////
+BOOL ComIo::Open(const char *pPath, const ComParams &comParams)
+{
+  handle = CreateFile(
+                    pPath,
                     GENERIC_READ|GENERIC_WRITE,
                     0,
                     NULL,
@@ -168,15 +226,13 @@ HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
                     NULL);
 
   if (handle == INVALID_HANDLE_VALUE) {
-    TraceError(GetLastError(), "OpenComPort(): CreateFile(\"%s\")", pPath);
-    return INVALID_HANDLE_VALUE;
+    TraceError(GetLastError(), "ComIo::Open(): CreateFile(\"%s\")", pPath);
+    return FALSE;
   }
 
-  DCB dcb;
-
   if (!myGetCommState(handle, &dcb)) {
-    CloseHandle(handle);
-    return INVALID_HANDLE_VALUE;
+    Close();
+    return FALSE;
   }
 
   if (comParams.BaudRate() >= 0)
@@ -215,15 +271,15 @@ HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
   dcb.fErrorChar = FALSE;
 
   if (!mySetCommState(handle, &dcb)) {
-    CloseHandle(handle);
-    return INVALID_HANDLE_VALUE;
+    Close();
+    return FALSE;
   }
 
   COMMTIMEOUTS timeouts;
 
   if (!myGetCommTimeouts(handle, &timeouts)) {
-    CloseHandle(handle);
-    return INVALID_HANDLE_VALUE;
+    Close();
+    return FALSE;
   }
 
   if (comParams.IntervalTimeout() > 0) {
@@ -240,8 +296,8 @@ HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
   timeouts.WriteTotalTimeoutConstant = 0;
 
   if (!mySetCommTimeouts(handle, &timeouts)) {
-    CloseHandle(handle);
-    return INVALID_HANDLE_VALUE;
+    Close();
+    return FALSE;
   }
 
   cout
@@ -257,31 +313,105 @@ HANDLE OpenComPort(const char *pPath, const ComParams &comParams)
       << ", idsr=" << ComParams::InDsrStr(dcb.fDsrSensitivity)
       << ", ito=" << ComParams::IntervalTimeoutStr(timeouts.ReadIntervalTimeout)
       << ") - OK" << endl;
-  return handle;
+
+  hasExtendedModemControl = HasExtendedModemControl(handle);
+
+  return TRUE;
 }
 ///////////////////////////////////////////////////////////////
-BOOL SetManualRtsControl(HANDLE handle)
+void ComIo::Close()
 {
-  DCB dcb;
-
-  if (!myGetCommState(handle, &dcb))
-    return FALSE;
+  if (handle != INVALID_HANDLE_VALUE) {
+    CloseHandle(handle);
+    handle = INVALID_HANDLE_VALUE;
+  }
+}
+///////////////////////////////////////////////////////////////
+BOOL ComIo::SetManualRtsControl()
+{
+  if (dcb.fRtsControl == RTS_CONTROL_DISABLE)
+    return TRUE;
 
   dcb.fRtsControl = RTS_CONTROL_DISABLE;
+  mySetCommState(handle, &dcb);
 
-  return mySetCommState(handle, &dcb);
+  return (dcb.fRtsControl == RTS_CONTROL_DISABLE);
 }
-
-BOOL SetManualDtrControl(HANDLE handle)
+///////////////////////////////////////////////////////////////
+BOOL ComIo::SetManualDtrControl()
 {
-  DCB dcb;
-
-  if (!myGetCommState(handle, &dcb))
-    return FALSE;
+  if (dcb.fDtrControl == DTR_CONTROL_DISABLE)
+    return TRUE;
 
   dcb.fDtrControl = DTR_CONTROL_DISABLE;
+  mySetCommState(handle, &dcb);
 
-  return mySetCommState(handle, &dcb);
+  return (dcb.fDtrControl == DTR_CONTROL_DISABLE);
+}
+///////////////////////////////////////////////////////////////
+BOOL ComIo::SetComEvents(DWORD *pEvents)
+{
+  if (!::SetCommMask(handle, *pEvents)) {
+    TraceError(GetLastError(), "SetCommMask() %s", port.Name().c_str());
+    myGetCommMask(handle, pEvents);
+    return FALSE;
+  }
+
+  return myGetCommMask(handle, pEvents);
+}
+///////////////////////////////////////////////////////////////
+void ComIo::SetPinState(WORD value, WORD mask)
+{
+  if (mask & SPS_V2P_MCR(-1)) {
+    if (hasExtendedModemControl) {
+      if (!::SetModemControl(handle, SPS_P2V_MCR(value), SPS_P2V_MCR(mask)))
+        cerr << port.Name() << " WARNING: can't change MCR state" << endl;
+    } else {
+      _ASSERTE((mask & SPS_V2P_MCR(-1) & ~(PIN_STATE_RTS|PIN_STATE_DTR)) == 0);
+
+      if (mask & PIN_STATE_RTS) {
+        if (!::CommFunction(handle, (value & PIN_STATE_RTS) ? SETRTS : CLRRTS))
+          cerr << port.Name() << " WARNING: can't change RTS state" << endl;
+      }
+      if (mask & PIN_STATE_DTR) {
+        if (!::CommFunction(handle, (value & PIN_STATE_DTR) ? SETDTR : CLRDTR))
+          cerr << port.Name() << " WARNING: can't change DTR state" << endl;
+      }
+    }
+  }
+
+  _ASSERTE((mask & ~SPS_V2P_MCR(-1) & ~(PIN_STATE_BREAK)) == 0);
+
+  if (mask & PIN_STATE_BREAK) {
+    if (!::CommFunction(handle, (value & PIN_STATE_BREAK) ? SETBREAK : CLRBREAK))
+      cerr << port.Name() << " WARNING: can't change BREAK state" << endl;
+  }
+}
+///////////////////////////////////////////////////////////////
+DWORD ComIo::SetBaudRate(DWORD baudRate)
+{
+  if (GetBaudRate() == baudRate)
+    return baudRate;
+
+  dcb.BaudRate = baudRate;
+  mySetCommState(handle, &dcb);
+
+  return GetBaudRate();
+}
+///////////////////////////////////////////////////////////////
+DWORD ComIo::SetLineControl(DWORD lineControl)
+{
+  _ASSERTE((lineControl & ~(VAL2LC_BYTESIZE(-1)|VAL2LC_PARITY(-1)|VAL2LC_STOPBITS(-1))) == 0);
+
+  if (GetLineControl() == lineControl)
+    return lineControl;
+
+  dcb.ByteSize = LC2VAL_BYTESIZE(lineControl);
+  dcb.Parity = LC2VAL_PARITY(lineControl);
+  dcb.StopBits = LC2VAL_STOPBITS(lineControl);
+  mySetCommState(handle, &dcb);
+
+  return GetLineControl();
 }
 ///////////////////////////////////////////////////////////////
 static ULONG GetEscCaps(HANDLE handle)
@@ -314,7 +444,7 @@ static ULONG GetEscCaps(HANDLE handle)
   return *(ULONG *)(outBuf + C0CE_SIGNATURE_SIZE);
 }
 
-DWORD SetEscMode(HANDLE handle, DWORD escOptions, BYTE **ppBuf, DWORD *pDone)
+DWORD ComIo::SetEscMode(DWORD escOptions, BYTE **ppBuf, DWORD *pDone)
 {
   _ASSERTE(ppBuf != NULL);
   _ASSERTE(*ppBuf == NULL);
@@ -418,7 +548,7 @@ DWORD SetEscMode(HANDLE handle, DWORD escOptions, BYTE **ppBuf, DWORD *pDone)
     escOptions &= ~ESC_OPTS_MAP_GO2EO(GO_BREAK_STATUS);
 
   if (opts & C0CE_INSERT_ENABLE_LSR)
-    escOptions &= ~ESC_OPTS_MAP_GO2EO(GO_V2O_LINE_STATUS(LINE_STATUS_BITS & ~LINE_STATUS_BI));
+    escOptions &= ~ESC_OPTS_MAP_GO2EO(GO_V2O_LINE_STATUS(LINE_STATUS_BITS));
 
   if (opts & C0CE_INSERT_ENABLE_RBR)
     escOptions &= ~ESC_OPTS_MAP_GO2EO(GO_RBR_STATUS);
@@ -429,8 +559,8 @@ DWORD SetEscMode(HANDLE handle, DWORD escOptions, BYTE **ppBuf, DWORD *pDone)
   return escOptions & ~ESC_OPTS_V2O_ESCCHAR(-1);
 }
 ///////////////////////////////////////////////////////////////
-WriteOverlapped::WriteOverlapped(ComPort &_port, BYTE *_pBuf, DWORD _len)
-  : port(_port),
+WriteOverlapped::WriteOverlapped(ComIo &_comIo, BYTE *_pBuf, DWORD _len)
+  : comIo(_comIo),
     pBuf(_pBuf),
     len(_len)
 {
@@ -449,9 +579,9 @@ VOID CALLBACK WriteOverlapped::OnWrite(
   WriteOverlapped *pOver = (WriteOverlapped *)pOverlapped;
 
   if (err != ERROR_SUCCESS && err != ERROR_OPERATION_ABORTED)
-    TraceError(err, "WriteOverlapped::OnWrite: %s", pOver->port.Name().c_str());
+    TraceError(err, "WriteOverlapped::OnWrite: %s", pOver->comIo.port.Name().c_str());
 
-  pOver->port.OnWrite(pOver, pOver->len, done);
+  pOver->comIo.port.OnWrite(pOver, pOver->len, done);
 }
 
 BOOL WriteOverlapped::StartWrite()
@@ -461,14 +591,14 @@ BOOL WriteOverlapped::StartWrite()
   if (!pBuf)
     return FALSE;
 
-  if (!::WriteFileEx(port.Handle(), pBuf, len, this, OnWrite))
+  if (!::WriteFileEx(comIo.Handle(), pBuf, len, this, OnWrite))
     return FALSE;
 
   return TRUE;
 }
 ///////////////////////////////////////////////////////////////
-ReadOverlapped::ReadOverlapped(ComPort &_port)
-  : port(_port),
+ReadOverlapped::ReadOverlapped(ComIo &_comIo)
+  : comIo(_comIo),
     pBuf(NULL)
 {
 }
@@ -486,14 +616,14 @@ VOID CALLBACK ReadOverlapped::OnRead(
   ReadOverlapped *pOver = (ReadOverlapped *)pOverlapped;
 
   if (err != ERROR_SUCCESS) {
-    TraceError(err, "ReadOverlapped::OnRead(): %s", pOver->port.Name().c_str());
+    TraceError(err, "ReadOverlapped::OnRead(): %s", pOver->comIo.port.Name().c_str());
     done = 0;
   }
 
   BYTE *pInBuf = pOver->pBuf;
   pOver->pBuf = NULL;
 
-  pOver->port.OnRead(pOver, pInBuf, done);
+  pOver->comIo.port.OnRead(pOver, pInBuf, done);
 }
 
 BOOL ReadOverlapped::StartRead()
@@ -507,17 +637,17 @@ BOOL ReadOverlapped::StartRead()
   if (!pBuf)
     return FALSE;
 
-  if (::ReadFileEx(port.Handle(), pBuf, readBufSize, this, OnRead))
+  if (::ReadFileEx(comIo.Handle(), pBuf, readBufSize, this, OnRead))
     return TRUE;
 
-  TraceError(GetLastError(), "ReadOverlapped::StartRead(): ReadFileEx() %s", port.Name().c_str());
+  TraceError(GetLastError(), "ReadOverlapped::StartRead(): ReadFileEx() %s", comIo.port.Name().c_str());
   return FALSE;
 }
 ///////////////////////////////////////////////////////////////
 static HANDLE hThread = INVALID_HANDLE_VALUE;
 
-WaitCommEventOverlapped::WaitCommEventOverlapped(ComPort &_port)
-  : port(_port),
+WaitCommEventOverlapped::WaitCommEventOverlapped(ComIo &_comIo)
+  : comIo(_comIo),
     hWait(INVALID_HANDLE_VALUE)
 {
 #ifdef _DEBUG
@@ -544,7 +674,7 @@ WaitCommEventOverlapped::WaitCommEventOverlapped(ComPort &_port)
       TraceError(
           GetLastError(),
           "WaitCommEventOverlapped::WaitCommEventOverlapped(): DuplicateHandle() %s",
-          port.Name().c_str());
+          comIo.port.Name().c_str());
 
       return;
     }
@@ -558,7 +688,7 @@ WaitCommEventOverlapped::WaitCommEventOverlapped(ComPort &_port)
     TraceError(
         GetLastError(),
         "WaitCommEventOverlapped::WaitCommEventOverlapped(): CreateEvent() %s",
-        port.Name().c_str());
+        comIo.port.Name().c_str());
 
     return;
   }
@@ -567,7 +697,7 @@ WaitCommEventOverlapped::WaitCommEventOverlapped(ComPort &_port)
     TraceError(
         GetLastError(),
         "WaitCommEventOverlapped::StartWaitCommEvent(): RegisterWaitForSingleObject() %s",
-        port.Name().c_str());
+        comIo.port.Name().c_str());
 
     hWait = INVALID_HANDLE_VALUE;
 
@@ -582,7 +712,7 @@ WaitCommEventOverlapped::~WaitCommEventOverlapped()
       TraceError(
           GetLastError(),
           "WaitCommEventOverlapped::~WaitCommEventOverlapped(): UnregisterWait() %s",
-          port.Name().c_str());
+          comIo.port.Name().c_str());
     }
   }
 
@@ -591,7 +721,7 @@ WaitCommEventOverlapped::~WaitCommEventOverlapped()
       TraceError(
           GetLastError(),
           "WaitCommEventOverlapped::~WaitCommEventOverlapped(): CloseHandle(hEvent) %s",
-          port.Name().c_str());
+          comIo.port.Name().c_str());
     }
   }
 }
@@ -609,16 +739,16 @@ VOID CALLBACK WaitCommEventOverlapped::OnCommEvent(ULONG_PTR pOverlapped)
 
   DWORD done;
 
-  if (!::GetOverlappedResult(pOver->port.Handle(), pOver, &done, FALSE)) {
+  if (!::GetOverlappedResult(pOver->comIo.Handle(), pOver, &done, FALSE)) {
     TraceError(
         GetLastError(),
         "WaitCommEventOverlapped::OnCommEvent(): GetOverlappedResult() %s",
-        pOver->port.Name().c_str());
+        pOver->comIo.port.Name().c_str());
 
     pOver->eMask = 0;
   }
 
-  pOver->port.OnCommEvent(pOver, pOver->eMask);
+  pOver->comIo.port.OnCommEvent(pOver, pOver->eMask);
 }
 
 BOOL WaitCommEventOverlapped::StartWaitCommEvent()
@@ -626,14 +756,14 @@ BOOL WaitCommEventOverlapped::StartWaitCommEvent()
   if (!hEvent)
     return FALSE;
 
-  if (!::WaitCommEvent(port.Handle(), &eMask, this)) {
+  if (!::WaitCommEvent(comIo.Handle(), &eMask, this)) {
     DWORD err = ::GetLastError();
 
     if (err != ERROR_IO_PENDING) {
       TraceError(
           err,
           "WaitCommEventOverlapped::StartWaitCommEvent(): WaitCommEvent() %s",
-          port.Name().c_str());
+          comIo.port.Name().c_str());
       return FALSE;
     }
   }

@@ -19,6 +19,12 @@
  *
  *
  * $Log$
+ * Revision 1.12  2008/09/30 08:28:32  vfrolov
+ * Added ability to control OUT1 and OUT2 pins
+ * Added ability to get remote baud rate and line control settings
+ * Added ability to set baud rate and line control
+ * Added fallback to non escape mode
+ *
  * Revision 1.11  2008/08/29 13:02:37  vfrolov
  * Added ESC_OPTS_MAP_EO2GO() and ESC_OPTS_MAP_GO2EO()
  *
@@ -94,25 +100,34 @@ ComPort::ComPort(
     countWaitCommEventOverlapped(0),
     countXoff(0),
     filterX(FALSE),
-    maskOutPins(0),
-    maskMst(0),
     intercepted_options(0),
+    inOptions(0),
+    outOptions(0),
     writeQueueLimit(256),
     writeQueued(0),
     writeLost(0),
     writeLostTotal(0),
-    errors(0),
-    _inOptions(0)
+    errors(0)
 {
   filterX = comParams.InX();
   string path(pPath);
   name = path.substr(path.rfind('\\') + 1);
-  handle = ::OpenComPort(pPath, comParams);
+  pComIo = new ComIo(*this);
+
+  if (!pComIo) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
+
+  if (!pComIo->Open(pPath, comParams)) {
+    delete pComIo;
+    pComIo = NULL;
+  }
 }
 
 BOOL ComPort::Init(HMASTERPORT _hMasterPort, HHUB _hHub)
 {
-  if (handle == INVALID_HANDLE_VALUE) {
+  if (!pComIo) {
     cerr << "ComPort::Init(): Invalid handle" << endl;
     return FALSE;
   }
@@ -213,13 +228,13 @@ static void WarnIgnoredInOptions(
   goOptions &= ~(GO_V2O_MODEM_STATUS(-1) | GO_V2O_LINE_STATUS(-1));
 
   if (goOptions) {
-    cerr << pHead << " WARNING: Requested option(s) ["
+    cerr << pHead << " WARNING: Requested input option(s) ["
          << FieldToName(codeNameTableGoOptions, goOptions)
          << "] will be ignored by driver" << pTail << endl;
   }
 
   if (otherOptions) {
-    cerr << pHead << " WARNING: Requested option(s) [0x"
+    cerr << pHead << " WARNING: Requested input option(s) [0x"
          << hex << otherOptions << dec
          << "] will be ignored by driver" << pTail << endl;
   }
@@ -239,9 +254,8 @@ BOOL ComPort::Start()
 
   _ASSERTE(hMasterPort != NULL);
   _ASSERTE(hHub != NULL);
-  _ASSERTE(handle != INVALID_HANDLE_VALUE);
+  _ASSERTE(pComIo != NULL);
 
-  DWORD events = 0;
   BYTE *pBuf = NULL;
   DWORD done = 0;
   HUB_MSG msg;
@@ -254,7 +268,7 @@ BOOL ComPort::Start()
     msg.u.pv.val = 0;
     pOnRead(hHub, hMasterPort, &msg);
 
-    escapeOptions = SetEscMode(handle, escapeOptions, &pBuf, &done);
+    escapeOptions = pComIo->SetEscMode(escapeOptions, &pBuf, &done);
 
     if (escapeOptions & ~ESC_OPTS_V2O_ESCCHAR(-1)) {
       WarnIgnoredInOptions(name.c_str(), " (requested for escape mode)",
@@ -263,35 +277,24 @@ BOOL ComPort::Start()
     }
 
     if ((escapeOptions & ESC_OPTS_V2O_ESCCHAR(-1)) == 0) {
-      InOptionsAdd(GO_ESCAPE_MODE);
+      inOptions |= GO_ESCAPE_MODE;
 
       msg.type = HUB_MSG_TYPE_FAIL_ESC_OPTS;
-      msg.u.val = escapeOptions;
+      msg.u.pv.pVal = &intercepted_options;
+      msg.u.pv.val = escapeOptions;
       pOnRead(hHub, hMasterPort, &msg);
     }
   }
 
-  if (intercepted_options & GO_V2O_MODEM_STATUS(MODEM_STATUS_CTS)) {
-    events |= EV_CTS;
-    InOptionsAdd(GO_V2O_MODEM_STATUS(MODEM_STATUS_CTS));
-  }
+  inOptions |= (intercepted_options & (
+        GO_RBR_STATUS    |
+        GO_RLC_STATUS    |
+        MODEM_STATUS_CTS |
+        MODEM_STATUS_DSR |
+        MODEM_STATUS_DCD |
+        MODEM_STATUS_RI));
 
-  if (intercepted_options & GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR)) {
-    events |= EV_DSR;
-    InOptionsAdd(GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR));
-  }
-
-  if (intercepted_options & GO_V2O_MODEM_STATUS(MODEM_STATUS_DCD)) {
-    events |= EV_RLSD;
-    InOptionsAdd(GO_V2O_MODEM_STATUS(MODEM_STATUS_DCD));
-  }
-
-  if (intercepted_options & GO_V2O_MODEM_STATUS(MODEM_STATUS_RI)) {
-    events |= EV_RING;
-    InOptionsAdd(GO_V2O_MODEM_STATUS(MODEM_STATUS_RI));
-  }
-
-  DWORD fail_options = (intercepted_options & ~InOptions());
+  DWORD fail_options = (intercepted_options & ~inOptions);
 
   if (fail_options)
     WarnIgnoredInOptions(name.c_str(), "", fail_options, 0);
@@ -300,8 +303,27 @@ BOOL ComPort::Start()
   msg.u.val = fail_options;
   pOnRead(hHub, hMasterPort, &msg);
 
-  if (events) {
-    if (!SetComEvents(handle, &events) || !StartWaitCommEvent()) {
+  if (inOptions & GO_V2O_MODEM_STATUS(
+        MODEM_STATUS_CTS |
+        MODEM_STATUS_DSR |
+        MODEM_STATUS_DCD |
+        MODEM_STATUS_RI))
+  {
+    DWORD events = 0;
+
+    if (inOptions & GO_V2O_MODEM_STATUS(MODEM_STATUS_CTS))
+      events |= EV_CTS;
+
+    if (inOptions & GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR))
+      events |= EV_DSR;
+
+    if (inOptions & GO_V2O_MODEM_STATUS(MODEM_STATUS_DCD))
+      events |= EV_RLSD;
+
+    if (inOptions & GO_V2O_MODEM_STATUS(MODEM_STATUS_RI))
+      events |= EV_RING;
+
+    if (!pComIo->SetComEvents(&events) || !StartWaitCommEvent()) {
       pBufFree(pBuf);
       return FALSE;
     }
@@ -320,6 +342,22 @@ BOOL ComPort::Start()
   msg.u.val = TRUE;
   pOnRead(hHub, hMasterPort, &msg);
 
+  if (inOptions & GO_RBR_STATUS) {
+    cerr << name << " WARNING: Suppose remote baud rate is equal local settings" << endl;
+
+    msg.type = HUB_MSG_TYPE_RBR_STATUS;
+    msg.u.val = pComIo->GetBaudRate();
+    pOnRead(hHub, hMasterPort, &msg);
+  }
+
+  if (inOptions & GO_RLC_STATUS) {
+    cerr << name << " WARNING: Suppose remote byte size, parity and stop bits are equal local settings" << endl;
+
+    msg.type = HUB_MSG_TYPE_RLC_STATUS;
+    msg.u.val = pComIo->GetLineControl();
+    pOnRead(hHub, hMasterPort, &msg);
+  }
+
   if (pBuf) {
     msg.type = HUB_MSG_TYPE_LINE_DATA;
     msg.u.buf.pBuf = pBuf;
@@ -337,12 +375,12 @@ BOOL ComPort::StartRead()
   if (countReadOverlapped)
     return TRUE;
 
-  if (handle == INVALID_HANDLE_VALUE)
+  if (!pComIo)
     return FALSE;
 
   ReadOverlapped *pOverlapped;
 
-  pOverlapped = new ReadOverlapped(*this);
+  pOverlapped = new ReadOverlapped(*pComIo);
 
   if (!pOverlapped)
     return FALSE;
@@ -421,14 +459,14 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     if (!len)
       return TRUE;
 
-    if (handle == INVALID_HANDLE_VALUE) {
+    if (!pComIo) {
       writeLost += len;
       return FALSE;
     }
 
     WriteOverlapped *pOverlapped;
 
-    pOverlapped = new WriteOverlapped(*this, pBuf, len);
+    pOverlapped = new WriteOverlapped(*pComIo, pBuf, len);
 
     if (!pOverlapped) {
       writeLost += len;
@@ -438,7 +476,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     pMsg->type = HUB_MSG_TYPE_EMPTY;
 
     if (writeQueued > writeQueueLimit)
-      ::PurgeComm(handle, PURGE_TXABORT|PURGE_TXCLEAR);
+      pComIo->PurgeWrite();
 
     if (!pOverlapped->StartWrite()) {
       writeLost += len;
@@ -455,59 +493,105 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
   }
   else
   if (pMsg->type == HUB_MSG_TYPE_SET_PIN_STATE) {
-    if (handle == INVALID_HANDLE_VALUE)
+    if (!pComIo)
       return FALSE;
 
-    WORD mask = MASK2VAL(pMsg->u.val) & maskOutPins;
+    pComIo->SetPinState((WORD)pMsg->u.val, MASK2VAL(pMsg->u.val) & SO_O2V_PIN_STATE(outOptions));
+  }
+  else
+  if (pMsg->type == HUB_MSG_TYPE_SET_BR) {
+    if (!pComIo)
+      return FALSE;
 
-    if (mask & PIN_STATE_RTS) {
-      if (!CommFunction(handle, (pMsg->u.val & PIN_STATE_RTS) ? SETRTS : CLRRTS))
-        cerr << name << " WARNING! can't change RTS state" << endl;
+    DWORD oldVal = pComIo->GetBaudRate();
+    DWORD curVal = pComIo->SetBaudRate(pMsg->u.val);
+
+    if (curVal != pMsg->u.val) {
+      cerr << name << " WARNING: can't change"
+           << " baud rate " << oldVal
+           << " to " << pMsg->u.val
+           << " (current=" << curVal << ")"
+           << endl;
     }
-    if (mask & PIN_STATE_DTR) {
-      if (!CommFunction(handle, (pMsg->u.val & PIN_STATE_DTR) ? SETDTR : CLRDTR))
-        cerr << name << " WARNING! can't change DTR state" << endl;
+
+    if ((inOptions & GO_RBR_STATUS) && oldVal != curVal) {
+      HUB_MSG msg;
+
+      msg.type = HUB_MSG_TYPE_RBR_STATUS;
+      msg.u.val = curVal;                 // suppose remote equal local
+      pOnRead(hHub, hMasterPort, &msg);
     }
-    if (mask & PIN_STATE_OUT1) {
-      cerr << name << " WARNING! can't change OUT1 state" << endl;
+  }
+  else
+  if (pMsg->type == HUB_MSG_TYPE_SET_LC) {
+    if (!pComIo)
+      return FALSE;
+
+    DWORD oldVal = pComIo->GetLineControl();;
+    DWORD curVal = pComIo->SetLineControl(pMsg->u.val);
+
+    if (curVal != pMsg->u.val) {
+      cerr << name << " WARNING: can't change"
+           << hex
+           << " line control 0x" << oldVal
+           << " to 0x" << pMsg->u.val
+           << " (current=0x" << curVal << ")"
+           << dec
+           << endl;
     }
-    if (mask & PIN_STATE_OUT2) {
-      cerr << name << " WARNING! can't change OUT2 state" << endl;
-    }
-    if (mask & PIN_STATE_BREAK) {
-      if (!CommFunction(handle, (pMsg->u.val & PIN_STATE_BREAK) ? SETBREAK : CLRBREAK))
-        cerr << name << " WARNING! can't change BREAK state" << endl;
+
+    if ((inOptions & GO_RLC_STATUS) && oldVal != curVal) {
+      HUB_MSG msg;
+
+      msg.type = HUB_MSG_TYPE_RLC_STATUS;
+      msg.u.val = curVal;                 // suppose remote equal local
+      pOnRead(hHub, hMasterPort, &msg);
     }
   }
   else
   if (pMsg->type == HUB_MSG_TYPE_SET_OUT_OPTS) {
-    if (handle == INVALID_HANDLE_VALUE)
+    if (!pComIo)
       return FALSE;
 
-    WORD addedPins = (~maskOutPins & SO_O2V_PIN_STATE(pMsg->u.val));
+    pMsg->u.val &= ~outOptions;
 
-    if (addedPins & PIN_STATE_RTS) {
-      if (!SetManualRtsControl(handle)) {
-        addedPins &= ~PIN_STATE_RTS;
-        cerr << name << " WARNING! can't set manual RTS state mode" << endl;
-      }
+    if (pMsg->u.val & SO_V2O_PIN_STATE(PIN_STATE_RTS)) {
+      if (pComIo->SetManualRtsControl())
+        outOptions |= SO_V2O_PIN_STATE(PIN_STATE_RTS);
+      else
+        cerr << name << " WARNING: can't set manual RTS state mode" << endl;
     }
-    if (addedPins & PIN_STATE_DTR) {
-      if (!SetManualDtrControl(handle)) {
-        addedPins &= ~PIN_STATE_DTR;
-        cerr << name << " WARNING! can't set manual DTR state mode" << endl;
-      }
+    if (pMsg->u.val & SO_V2O_PIN_STATE(PIN_STATE_DTR)) {
+      if (pComIo->SetManualDtrControl())
+        outOptions |= SO_V2O_PIN_STATE(PIN_STATE_DTR);
+      else
+        cerr << name << " WARNING: can't set manual DTR state mode" << endl;
     }
-    if (addedPins & PIN_STATE_OUT1) {
-      addedPins &= ~PIN_STATE_OUT1;
-      cerr << name << " WARNING! can't set manual OUT1 state mode" << endl;
+    if (pMsg->u.val & SO_V2O_PIN_STATE(PIN_STATE_OUT1)) {
+      if (pComIo->SetManualOut1Control())
+        outOptions |= SO_V2O_PIN_STATE(PIN_STATE_OUT1);
+      else
+        cerr << name << " WARNING: can't set manual OUT1 state mode" << endl;
     }
-    if (addedPins & PIN_STATE_OUT2) {
-      addedPins &= ~PIN_STATE_OUT2;
-      cerr << name << " WARNING! can't set manual OUT2 state mode" << endl;
+    if (pMsg->u.val & SO_V2O_PIN_STATE(PIN_STATE_OUT2)) {
+      if (pComIo->SetManualOut2Control())
+        outOptions |= SO_V2O_PIN_STATE(PIN_STATE_OUT2);
+      else
+        cerr << name << " WARNING: can't set manual OUT2 state mode" << endl;
     }
 
-    maskOutPins |= addedPins;
+    outOptions |= (
+        SO_V2O_PIN_STATE(PIN_STATE_BREAK) |
+        SO_SET_BR |
+        SO_SET_LC);
+
+    pMsg->u.val &= ~outOptions;
+
+    if (pMsg->u.val) {
+      cerr << name << " WARNING: Requested output option(s) [0x"
+           << hex << pMsg->u.val << dec
+           << "] will be ignored by driver" << endl;
+    }
   }
 
   return TRUE;
@@ -518,12 +602,12 @@ BOOL ComPort::StartWaitCommEvent()
   if (countWaitCommEventOverlapped)
     return TRUE;
 
-  if (handle == INVALID_HANDLE_VALUE)
+  if (!pComIo)
     return FALSE;
 
   WaitCommEventOverlapped *pOverlapped;
 
-  pOverlapped = new WaitCommEventOverlapped(*this);
+  pOverlapped = new WaitCommEventOverlapped(*pComIo);
 
   if (!pOverlapped)
     return FALSE;
@@ -576,7 +660,8 @@ void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)
     delete pOverlapped;
     countReadOverlapped--;
 
-    cout << name << " Stopped Read " << countReadOverlapped << endl;
+    if (countXoff <= 0)
+      cout << name << " Stopped Read " << countReadOverlapped << endl;
   }
 }
 
@@ -602,14 +687,14 @@ void ComPort::OnCommEvent(WaitCommEventOverlapped *pOverlapped, DWORD eMask)
 
 void ComPort::CheckComEvents(DWORD eMask)
 {
-  if (maskMst && (eMask & (EV_CTS|EV_DSR|EV_RLSD|EV_RING)) != 0) {
+  if (GO_O2V_MODEM_STATUS(inOptions) && (eMask & (EV_CTS|EV_DSR|EV_RLSD|EV_RING)) != 0) {
     DWORD stat;
 
-    if (::GetCommModemStatus(handle, &stat)) {
+    if (::GetCommModemStatus(pComIo->Handle(), &stat)) {
       HUB_MSG msg;
 
       msg.type = HUB_MSG_TYPE_MODEM_STATUS;
-      msg.u.val = ((DWORD)(BYTE)stat | VAL2MASK(maskMst));
+      msg.u.val = ((DWORD)(BYTE)stat | VAL2MASK(GO_O2V_MODEM_STATUS(inOptions)));
 
       pOnRead(hHub, hMasterPort, &msg);
     }
@@ -618,14 +703,14 @@ void ComPort::CheckComEvents(DWORD eMask)
   if ((eMask & (EV_BREAK|EV_ERR)) != 0) {
     DWORD errs;
 
-    if (::ClearCommError(handle, &errs, NULL))
+    if (::ClearCommError(pComIo->Handle(), &errs, NULL))
       errors |= errs;
   }
 }
 
 void ComPort::AddXoff(int count)
 {
-  _ASSERTE(handle != INVALID_HANDLE_VALUE);
+  _ASSERTE(pComIo != NULL);
 
   countXoff += count;
 
@@ -645,7 +730,7 @@ static FIELD2NAME codeNameTableCommErrors[] = {
 
 void ComPort::LostReport()
 {
-  _ASSERTE(handle != INVALID_HANDLE_VALUE);
+  _ASSERTE(pComIo != NULL);
 
   if (writeLost) {
     writeLostTotal += writeLost;
@@ -673,7 +758,7 @@ void ComPort::LostReport()
     SERIALPERF_STATS stats;
     DWORD size;
 
-    if (DeviceIoControl(handle, IOCTL_SERIAL_GET_STATS, NULL, 0, &stats, sizeof(stats), &size, NULL)) {
+    if (DeviceIoControl(pComIo->Handle(), IOCTL_SERIAL_GET_STATS, NULL, 0, &stats, sizeof(stats), &size, NULL)) {
       cout << ", total"
         << " RXOVER=" << stats.BufferOverrunErrorCount
         << " OVERRUN=" << stats.SerialOverrunErrorCount
