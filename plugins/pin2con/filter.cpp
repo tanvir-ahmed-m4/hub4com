@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.9  2008/09/30 07:52:09  vfrolov
+ * Removed HUB_MSG_TYPE_LINE_STATUS filtering
+ *
  * Revision 1.8  2008/08/22 16:57:11  vfrolov
  * Added
  *   HUB_MSG_TYPE_GET_ESC_OPTS
@@ -199,18 +202,21 @@ static void CALLBACK Help(const char *pProgPath)
   << "                          default)." << endl
   << endl
   << "IN method input data stream description:" << endl
-  << "  GET_IN_OPTS(<pOpts>)  - the value pointed by <pOpts> will be or'ed with" << endl
-  << "                          the required mask to get line status and modem" << endl
-  << "                          status." << endl
   << "  CONNECT(TRUE/FALSE)   - will be discarded from stream." << endl
-  << "  LINE_STATUS(<val>)    - current state of line." << endl
+  << "  BREAK_STATUS(<val>)   - current state of break." << endl
   << "  MODEM_STATUS(<val>)   - current state of modem." << endl
   << endl
   << "IN method output data stream description:" << endl
   << "  CONNECT(TRUE/FALSE)   - will be added on appropriate state changing." << endl
   << endl
   << "Examples:" << endl
-  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0:" << GetPluginAbout()->pName << " COM1 --use-driver=tcp 111.11.11.11:1111" << endl
+  << "  " << pProgPath << " --load=,,_END_" << endl
+  << "      --create-filter=pin2con" << endl
+  << "      --add-filters=0:pin2con" << endl
+  << "      COM1" << endl
+  << "      --use-driver=tcp" << endl
+  << "      111.11.11.11:1111" << endl
+  << "      _END_" << endl
   << "    - wait DSR ON from COM1 and then establish connection to 111.11.11.11:1111" << endl
   << "      and disconnect on DSR OFF." << endl
   ;
@@ -288,15 +294,10 @@ static BOOL CALLBACK InMethod(
     // discard any CONNECT messages from the input stream
     pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
     break;
-  case HUB_MSG_TYPE_LINE_STATUS:
   case HUB_MSG_TYPE_MODEM_STATUS: {
     WORD pin;
 
-    if (pInMsg->type == HUB_MSG_TYPE_LINE_STATUS) {
-      pin = GO_O2V_LINE_STATUS(((Filter *)hFilter)->pin);
-    } else {
-      pin = GO_O2V_MODEM_STATUS(((Filter *)hFilter)->pin);
-    }
+    pin = GO_O2V_MODEM_STATUS(((Filter *)hFilter)->pin);
 
     if ((pin & MASK2VAL(pInMsg->u.val)) == 0)
       break;
