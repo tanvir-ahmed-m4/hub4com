@@ -21,6 +21,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-escparse", "plugins\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-trace", "plugins\trace\trace.vcproj", "{EDA524BD-8193-49E5-995E-9EE533E2641E}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-escinsert", "plugins\escinsert\escinsert.vcproj", "{4BFE1E9D-47D4-4172-A749-9AC2626C88F3}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-linectl", "plugins\linectl\linectl.vcproj", "{8060E11C-18B2-4F9D-BDC0-A37726A3B8B9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -67,6 +71,14 @@ Global
 		{EDA524BD-8193-49E5-995E-9EE533E2641E}.Debug|Win32.Build.0 = Debug|Win32
 		{EDA524BD-8193-49E5-995E-9EE533E2641E}.Release|Win32.ActiveCfg = Release|Win32
 		{EDA524BD-8193-49E5-995E-9EE533E2641E}.Release|Win32.Build.0 = Release|Win32
+		{4BFE1E9D-47D4-4172-A749-9AC2626C88F3}.Debug|Win32.ActiveCfg = Debug|Win32
+		{4BFE1E9D-47D4-4172-A749-9AC2626C88F3}.Debug|Win32.Build.0 = Debug|Win32
+		{4BFE1E9D-47D4-4172-A749-9AC2626C88F3}.Release|Win32.ActiveCfg = Release|Win32
+		{4BFE1E9D-47D4-4172-A749-9AC2626C88F3}.Release|Win32.Build.0 = Release|Win32
+		{8060E11C-18B2-4F9D-BDC0-A37726A3B8B9}.Debug|Win32.ActiveCfg = Debug|Win32
+		{8060E11C-18B2-4F9D-BDC0-A37726A3B8B9}.Debug|Win32.Build.0 = Debug|Win32
+		{8060E11C-18B2-4F9D-BDC0-A37726A3B8B9}.Release|Win32.ActiveCfg = Release|Win32
+		{8060E11C-18B2-4F9D-BDC0-A37726A3B8B9}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
