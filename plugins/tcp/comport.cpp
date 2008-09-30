@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/09/30 06:44:50  vfrolov
+ * Added warning about ignored output options
+ *
  * Revision 1.2  2008/03/28 16:00:19  vfrolov
  * Added connectionCounter
  *
@@ -328,6 +331,14 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
 
         pOnRead(hHub, hMasterPort, &msg);
       }
+    }
+  }
+  else
+  if (pMsg->type == HUB_MSG_TYPE_SET_OUT_OPTS) {
+    if (pMsg->u.val) {
+      cerr << name << " WARNING: Requested output option(s) [0x"
+           << hex << pMsg->u.val << dec
+           << "] will be ignored by driver" << endl;
     }
   }
 
