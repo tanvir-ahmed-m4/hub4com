@@ -298,6 +298,18 @@
 				>
 			</File>
 		</Filter>
+		<Filter
+			Name="Other Files"
+			>
+			<File
+				RelativePath=".\examples\com2tcp.bat"
+				>
+			</File>
+			<File
+				RelativePath=".\ReadMe.txt"
+				>
+			</File>
+		</Filter>
 	</Files>
 	<Globals>
 	</Globals>
