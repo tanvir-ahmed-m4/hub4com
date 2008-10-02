@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/10/02 07:52:38  vfrolov
+ * Added removing macroses for undefined parameters of --load option
+ *
  * Revision 1.4  2008/08/28 15:53:13  vfrolov
  * Added ability to load arguments from standard input and
  * to select fragment for loading
@@ -47,7 +50,7 @@ class Args : public vector<string>
     Args(int argc, const char *const argv[]);
 
   private:
-    void Add(const string &arg, const vector<string> &params);
+    void Add(const string &arg);
 
     int num_recursive;
 };

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/10/02 07:52:38  vfrolov
+ * Added removing macroses for undefined parameters of --load option
+ *
  * Revision 1.5  2008/09/26 14:29:13  vfrolov
  * Added substitution <PRM0> by <file> for --load=<file>
  *
@@ -48,38 +51,57 @@ Args::Args(int argc, const char *const argv[])
   : num_recursive(0)
 {
   for (int i = 0 ; i < argc ; i++)
-    Add(argv[i], vector<string>());
+    Add(argv[i]);
 }
 
-void Args::Add(const string &arg, const vector<string> &params)
+static void SubstParams(string &argBuf, const vector<string> &params)
 {
-  string argBuf = arg;
+  for (string::size_type off = argBuf.find("%%"); off != argBuf.npos ; off = argBuf.find("%%", off)) {
+    string::size_type off_beg = off + 2;
+    string::size_type off_end = argBuf.find("%%", off_beg);
 
-  for (size_type off = argBuf.find("%%"); off != argBuf.npos ; off = argBuf.find("%%", off)) {
-    BOOL replaced = FALSE;
+    if (off_end != argBuf.npos && off_end != off_beg) {
+      string var = argBuf.substr(off_beg, off_end - off_beg);
+      BOOL isToken = TRUE;
 
-    for (size_type i = 0 ; i < params.size() ; i++) {
-      stringstream par;
+      for (string::size_type i = 0 ; i < var.length() ; i++) {
+        if (!isdigit(var[i])) {
+          isToken = FALSE;
+          break;
+        }
+      }
 
-      par << i << "%%";
+      string val;
 
-      if (argBuf.compare(off + 2, par.str().length(), par.str()) == 0) {
-        argBuf.replace(off, par.str().length() + 2, params[i]);
-        replaced = TRUE;
-        off += params[i].length();
-        break;
+      if (isToken) {
+        for (vector<string>::size_type i = 0 ; i < params.size() ; i++) {
+          stringstream par;
+
+          par << i;
+
+          if (var == par.str()) {
+            val = params[i];
+            break;
+          }
+        }
+
+        argBuf.replace(off, var.length() + 4, val);
+        off += val.length();
+        continue;
       }
     }
 
-    if (!replaced)
-      off += 2;
+    off++;
   }
+}
 
-  const char *pLoad = GetParam(argBuf.c_str(), "--load=");
+void Args::Add(const string &arg)
+{
+  const char *pLoad = GetParam(arg.c_str(), "--load=");
 
   if (!pLoad) {
-    //cout << "<" << argBuf << ">" << endl;
-    push_back(argBuf);
+    //cout << "<" << arg << ">" << endl;
+    push_back(arg);
     return;
   }
 
@@ -139,6 +161,9 @@ void Args::Add(const string &arg, const vector<string> &params)
 
     if (!pInStream->fail()) {
       string str = line.str();
+
+      SubstParams(str, paramsLoad);
+
       string::size_type first_non_space = string::npos;
       string::size_type last_non_space = string::npos;
 
@@ -173,7 +198,7 @@ void Args::Add(const string &arg, const vector<string> &params)
         }
 
         num_recursive++;
-        Add(str, paramsLoad);
+        Add(str);
         num_recursive--;
       }
     } else {
@@ -257,6 +282,9 @@ char *STRQTOK_R(
       if (cntMask%2 == 0) {
         if (discardQuotes)
           memmove(pStr, pStr + 1, strlen(pStr + 1) + 1);
+        else
+          pStr++;
+
         quoted = !quoted;
       } else {
         memmove(pStr - (cntMask/2 + 1), pStr, strlen(pStr) + 1);
