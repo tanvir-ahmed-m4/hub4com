@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/10/02 08:07:02  vfrolov
+ * Fixed sending not paired CONNECT(FALSE)
+ *
  * Revision 1.3  2008/09/30 06:44:50  vfrolov
  * Added warning about ignored output options
  *
@@ -404,15 +407,18 @@ BOOL ComPort::OnEvent(WaitEventOverlapped *pOverlapped, long e, int err)
 
   if (e == FD_CLOSE || (e == FD_CONNECT && err != ERROR_SUCCESS)) {
     if (hSock == pOverlapped->Sock()) {
-      isConnected = FALSE;
       hSock = INVALID_SOCKET;
 
-      HUB_MSG msg;
+      if (isConnected) {
+        isConnected = FALSE;
 
-      msg.type = HUB_MSG_TYPE_CONNECT;
-      msg.u.val = FALSE;
+        HUB_MSG msg;
 
-      pOnRead(hHub, hMasterPort, &msg);
+        msg.type = HUB_MSG_TYPE_CONNECT;
+        msg.u.val = FALSE;
+
+        pOnRead(hHub, hMasterPort, &msg);
+      }
 
       if (pListener)
         Accept();
