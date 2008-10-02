@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.9  2008/10/02 08:20:17  vfrolov
+ * Added connect mapping
+ *
  * Revision 1.8  2008/08/26 14:28:48  vfrolov
  * Removed option --break=break from default
  *
@@ -86,22 +89,22 @@ static struct {
   {"break=",  PIN_STATE_BREAK},
 };
 ///////////////////////////////////////////////////////////////
-#define MST2LSRMST(m) ((WORD)((BYTE)(m)))
-#define LSR2LSRMST(l) ((WORD)(((WORD)(BYTE)(l)) << 8))
-#define LSRMST2MST(lm) ((BYTE)(lm))
-#define LSRMST2LSR(lm) ((BYTE)((lm) >> 8))
-#define LSRMST2GO(lm) (GO_V2O_MODEM_STATUS(LSRMST2MST(lm)) | \
-        ((lm & LSR2LSRMST(LINE_STATUS_BI)) ? GO_BREAK_STATUS : 0))
+#define LM_BREAK    ((WORD)1 << 8)
+#define LM_CONNECT  ((WORD)1 << 9)
+#define MST2LM(m)   ((WORD)((BYTE)(m)))
+#define LM2MST(lm)  ((BYTE)(lm))
+#define LM2GO(lm)   (GO_V2O_MODEM_STATUS(LM2MST(lm)) | ((lm & LM_BREAK) ? GO_BREAK_STATUS : 0))
 
 static struct {
   const char *pName;
   WORD lmVal;
 } pinIn_names[] = {
-  {"cts",   MST2LSRMST(MODEM_STATUS_CTS)},
-  {"dsr",   MST2LSRMST(MODEM_STATUS_DSR)},
-  {"dcd",   MST2LSRMST(MODEM_STATUS_DCD)},
-  {"ring",  MST2LSRMST(MODEM_STATUS_RI)},
-  {"break", LSR2LSRMST(LINE_STATUS_BI)},
+  {"cts",     MST2LM(MODEM_STATUS_CTS)},
+  {"dsr",     MST2LM(MODEM_STATUS_DSR)},
+  {"dcd",     MST2LM(MODEM_STATUS_DCD)},
+  {"ring",    MST2LM(MODEM_STATUS_RI)},
+  {"break",   LM_BREAK},
+  {"connect", LM_CONNECT},
 };
 ///////////////////////////////////////////////////////////////
 class State {
@@ -276,30 +279,43 @@ static void CALLBACK Help(const char *pProgPath)
   << "  --out2=[!]<s>         - wire input state of <s> to output pin OUT2." << endl
   << "  --break=[!]<s>        - wire input state of <s> to output state of BREAK." << endl
   << endl
-  << "  The possible values of <s> above can be cts, dsr, dcd, ring or break. The" << endl
-  << "  exclamation sign (!) can be used to invert the value. If no any wire option" << endl
-  << "  specified, then the options --rts=cts --dtr=dsr are used by default." << endl
+  << "  The possible values of <s> above can be cts, dsr, dcd, ring, break or" << endl
+  << "  connect. The exclamation sign (!) can be used to invert the value. If no any" << endl
+  << "  wire option specified, then the options --rts=cts --dtr=dsr are used by" << endl
+  << "  default." << endl
   << endl
   << "OUT method input data stream description:" << endl
-  << "  SET_OUT_OPTS(<opts>)  - the value <opts> will be or'ed with the required mask" << endl
-  << "                          to to set pin state." << endl
-  << "  GET_IN_OPTS(<pOpts>)  - the value pointed by <pOpts> will be or'ed with" << endl
-  << "                          the required mask to get line status and modem" << endl
-  << "                          status." << endl
   << "  SET_PIN_STATE(<set>)  - pin settings controlled by this filter will be" << endl
   << "                          discarded from <set>." << endl
-  << "  LINE_STATUS(<val>)    - current state of line." << endl
+  << "  CONNECT(<val>)        - current state of connect." << endl
+  << "  BREAK_STATUS(<val>)   - current state of break." << endl
   << "  MODEM_STATUS(<val>)   - current state of modem." << endl
   << endl
   << "OUT method output data stream description:" << endl
   << "  SET_PIN_STATE(<set>)  - will be added on appropriate state changing." << endl
   << endl
   << "Examples:" << endl
-  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0,1:" << GetPluginAbout()->pName << " COM1 COM2" << endl
+  << "  " << pProgPath << " --load=,,_END_" << endl
+  << "      --create-filter=pinmap" << endl
+  << "      --add-filters=0,1:pinmap" << endl
+  << "      COM1" << endl
+  << "      COM2" << endl
+  << "      _END_" << endl
   << "    - transfer data and signals between COM1 and COM2." << endl
-  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << ":\"--rts=cts\" --add-filters=0,1:" << GetPluginAbout()->pName << " --octs=off COM1 COM2" << endl
+  << "  " << pProgPath << " --load=,,_END_" << endl
+  << "      --create-filter=pinmap:\"--rts=cts\"" << endl
+  << "      --add-filters=0,1:pinmap" << endl
+  << "      --octs=off" << endl
+  << "      COM1" << endl
+  << "      COM2" << endl
+  << "      _END_" << endl
   << "    - allow end-to-end RTS/CTS handshaking between COM1 and COM2." << endl
-  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --add-filters=0:" << GetPluginAbout()->pName << " --echo-route=0 COM2" << endl
+  << "  " << pProgPath << " --load=,,_END_" << endl
+  << "      --create-filter=pinmap" << endl
+  << "      --add-filters=0:pinmap" << endl
+  << "      --echo-route=0" << endl
+  << "      COM2" << endl
+  << "      _END_" << endl
   << "    - receive data and signals from COM2 and send it back to COM2." << endl
   ;
 }
@@ -394,12 +410,12 @@ static BOOL CALLBACK OutMethod(
     case HUB_MSG_TYPE_GET_IN_OPTS: {
       _ASSERTE(pOutMsg->u.pv.pVal != NULL);
 
-      // or'e with the required mask to get line status and modem status
-      *pOutMsg->u.pv.pVal |= (LSRMST2GO(((Filter *)hFilter)->lmInMask) & pOutMsg->u.pv.val);
+      // or'e with the required mask to get break status and modem status
+      *pOutMsg->u.pv.pVal |= (LM2GO(((Filter *)hFilter)->lmInMask) & pOutMsg->u.pv.val);
       break;
     }
     case HUB_MSG_TYPE_FAIL_IN_OPTS: {
-      DWORD fail_options = (pOutMsg->u.val & LSRMST2GO(((Filter *)hFilter)->lmInMask));
+      DWORD fail_options = (pOutMsg->u.val & LM2GO(((Filter *)hFilter)->lmInMask));
 
       if (fail_options) {
         cerr << ((Filter *)hFilter)->PortName(nFromPort)
@@ -413,30 +429,48 @@ static BOOL CALLBACK OutMethod(
       // discard any pin settings controlled by this filter
       pOutMsg->u.val &= ~(VAL2MASK(((Filter *)hFilter)->outMask));
       break;
-    case HUB_MSG_TYPE_BREAK_STATUS:
     case HUB_MSG_TYPE_MODEM_STATUS: {
       State *pState = ((Filter *)hFilter)->GetState(nToPort);
 
       if (!pState)
         return FALSE;
 
-      WORD lmInVal;
-      WORD lmInMask;
-
-      if (pOutMsg->type == HUB_MSG_TYPE_MODEM_STATUS) {
-        lmInVal = MST2LSRMST(pOutMsg->u.val);
-        lmInMask = MST2LSRMST(MASK2VAL(pOutMsg->u.val));
-      } else {
-        lmInVal = (pOutMsg->u.val ? LSR2LSRMST(LINE_STATUS_BI) : 0);
-        lmInMask = LSR2LSRMST(LINE_STATUS_BI);
-      }
-
-      lmInMask &= ((Filter *)hFilter)->lmInMask;
-      lmInVal = ((lmInVal & lmInMask) | (pState->lmInVal & ~lmInMask));
+      WORD lmInMask = MST2LM(MASK2VAL(pOutMsg->u.val)) & ((Filter *)hFilter)->lmInMask;
+      WORD lmInVal = ((MST2LM(pOutMsg->u.val) & lmInMask) | (pState->lmInVal & ~lmInMask));
 
       InsertPinState(*(Filter *)hFilter, pState->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
 
       pState->lmInVal = lmInVal;
+      break;
+    }
+    case HUB_MSG_TYPE_BREAK_STATUS: {
+      if (((Filter *)hFilter)->lmInMask & LM_BREAK) {
+        State *pState = ((Filter *)hFilter)->GetState(nToPort);
+
+        if (!pState)
+          return FALSE;
+
+        WORD lmInVal = ((pOutMsg->u.val ? LM_BREAK : 0) | (pState->lmInVal & ~LM_BREAK));
+
+        InsertPinState(*(Filter *)hFilter, pState->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
+
+        pState->lmInVal = lmInVal;
+      }
+      break;
+    }
+    case HUB_MSG_TYPE_CONNECT: {
+      if (((Filter *)hFilter)->lmInMask & LM_CONNECT) {
+        State *pState = ((Filter *)hFilter)->GetState(nToPort);
+
+        if (!pState)
+          return FALSE;
+
+        WORD lmInVal = ((pOutMsg->u.val ? LM_CONNECT : 0) | (pState->lmInVal & ~LM_CONNECT));
+
+        InsertPinState(*(Filter *)hFilter, pState->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
+
+        pState->lmInVal = lmInVal;
+      }
       break;
     }
   }
