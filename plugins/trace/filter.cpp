@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/10/02 14:01:43  vfrolov
+ * Added help
+ *
  * Revision 1.3  2008/09/30 08:28:32  vfrolov
  * Added ability to control OUT1 and OUT2 pins
  * Added ability to get remote baud rate and line control settings
@@ -182,11 +185,49 @@ static void CALLBACK Help(const char *pProgPath)
 {
   cerr
   << "Usage:" << endl
-  << "  " << pProgPath << " ... --create-filter=" << GetPluginAbout()->pName << "[,<FID>][:<options>] ... --add-filters=<ports>:[...,]<FID>[,...] ..." << endl
+  << "  " << pProgPath << " ... [<global options>] --create-filter=" << GetPluginAbout()->pName << "[,<FID>][:<options>] ... --add-filters=<ports>:[...,]<FID>[,...] ..." << endl
+  << endl
+  << "Global options:" << endl
+  << "  --trace-file=<path>   - redirect trace to <path>. Cancel redirection if" << endl
+  << "                          <path> is empty." << endl
   << endl
   << "Options:" << endl
   << endl
   << "Examples:" << endl
+  << "  " << pProgPath << " --load=,,_END_" << endl
+  << "      COM4" << endl
+  << "      --trace-file=com.log" << endl
+  << "      --create-filter=trace,com" << endl
+  << "      --add-filters=0:com" << endl
+  << endl
+  << "      --create-filter=pin2con" << endl
+  << "      --add-filters=0:pin2con" << endl
+  << "      --trace-file=p2c.log" << endl
+  << "      --create-filter=trace,p2c" << endl
+  << "      --add-filters=0:p2c" << endl
+  << endl
+  << "      --create-filter=awakseq:--awak-seq=aaa" << endl
+  << "      --add-filters=0:awakseq" << endl
+  << "      --trace-file=awk.log" << endl
+  << "      --create-filter=trace,awk" << endl
+  << "      --add-filters=0:awk" << endl
+  << endl
+  << "      --use-driver=tcp" << endl
+  << "      1.1.1.1:23" << endl
+  << "      --trace-file=tcp.log" << endl
+  << "      --create-filter=trace,tcp" << endl
+  << "      --add-filters=1:tcp" << endl
+  << endl
+  << "      --create-filter=telnet" << endl
+  << "      --add-filters=1:telnet" << endl
+  << "      --trace-file=tel.log" << endl
+  << "      --create-filter=trace,tel" << endl
+  << "      --add-filters=1:tel" << endl
+  << "      _END_" << endl
+  << "    - Trace data to different files by this way:" << endl
+  << "      COM4 <---> pin2con <---> awakseq <--->   <---> telnet <---> 1.1.1.1:23" << endl
+  << "             |             |             |       |            |" << endl
+  << "          com.log       p2c.log       awk.log tel.log      tcp.log" << endl
   ;
 }
 ///////////////////////////////////////////////////////////////
