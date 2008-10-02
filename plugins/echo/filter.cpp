@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/10/02 07:59:37  vfrolov
+ * Changed example
+ *
  * Revision 1.1  2008/04/03 14:53:06  vfrolov
  * Initial revision
  *
@@ -46,7 +49,7 @@ static const PLUGIN_ABOUT_A about = {
   "echo",
   "Copyright (c) 2008 Vyacheslav Frolov",
   "GNU General Public License",
-  "Echo filter (more flexible alternative to --echo-route option).",
+  "Echo filter (alternative to --echo-route option)",
 };
 
 static const PLUGIN_ABOUT_A * CALLBACK GetPluginAbout()
@@ -70,8 +73,14 @@ static void CALLBACK Help(const char *pProgPath)
   << "  LINE_DATA(<data>)     - <data> is the input data stream bytes." << endl
   << endl
   << "Examples:" << endl
-  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << " --create-filter=flt --add-filters=0:" << GetPluginAbout()->pName << ",flt COM1 COM2" << endl
-  << "    - receive data from COM1 and send it as is back to COM1 and send it to COM2" << endl
+  << "  " << pProgPath << " --load=,,_END_" << endl
+  << "      --create-filter=echo" << endl
+  << "      --create-filter=flt" << endl
+  << "      --add-filters=0:echo,flt" << endl
+  << "      COM1" << endl
+  << "      COM2" << endl
+  << "      _END_" << endl
+  << "    - receive data from COM1 and send it ASIS back to COM1 and send it to COM2" << endl
   << "      via filter flt." << endl
   ;
 }
