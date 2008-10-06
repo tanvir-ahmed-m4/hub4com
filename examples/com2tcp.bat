@@ -11,6 +11,7 @@ SETLOCAL
 
   SET CF_PIN2CON=--create-filter=pin2con
   SET AF_PIN2CON=--add-filters=0:pin2con
+  SET RECONNECT=1000
 
   :BEGIN_PARSE_OPTIONS
     SET OPTION=%1
@@ -34,6 +35,7 @@ SETLOCAL
     IF /I "%OPTION%" NEQ "--awak-seq" GOTO END_OPTION_AWAK_SEQ
       SET CF_AWAK_SEQ=--create-filter=awakseq:--awak-seq=\"%1\"
       SET AF_AWAK_SEQ=--add-filters=0:awakseq
+      SET RECONNECT=d
       SHIFT /1
       GOTO BEGIN_PARSE_OPTIONS
     :END_OPTION_AWAK_SEQ
@@ -42,6 +44,7 @@ SETLOCAL
       SET CF_PIN2CON=
       SET AF_PIN2CON=
       SET PERMANENT=*
+      SET RECONNECT=d
       GOTO BEGIN_PARSE_OPTIONS
     :END_OPTION_IGNORE_DSR
 
@@ -100,7 +103,7 @@ SETLOCAL
   SET PARAMS=%PARAMS% %CF_TELNET% %AF_TELNET%
 
   @ECHO ON
-    "%HUB4COM%" %OPTIONS% %PARAMS% "%COMPORT%" --use-driver=tcp "%TCP%"
+    "%HUB4COM%" %OPTIONS% %PARAMS% "%COMPORT%" --use-driver=tcp --reconnect=%RECONNECT% "%TCP%"
   @ECHO OFF
 ENDLOCAL
 
