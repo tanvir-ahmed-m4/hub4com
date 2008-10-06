@@ -19,9 +19,11 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/10/06 12:15:14  vfrolov
+ * Added --reconnect option
+ *
  * Revision 1.1  2008/03/27 17:17:56  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -30,7 +32,8 @@
 
 ///////////////////////////////////////////////////////////////
 ComParams::ComParams()
-  : pIF(NULL)
+  : pIF(NULL),
+    reconnectTime(rtDefault)
 {
 }
 ///////////////////////////////////////////////////////////////

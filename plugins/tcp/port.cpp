@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/10/06 12:15:14  vfrolov
+ * Added --reconnect option
+ *
  * Revision 1.5  2008/08/28 10:31:25  vfrolov
  * Removed linking with ../../utils.h and ../../utils.cpp
  *
@@ -79,11 +82,15 @@ static void CALLBACK Help(const char *pProgPath)
   << "  " << pProgPath << " ... [--use-driver=" << GetPluginAbout()->pName << "] [*]<listen port> ..." << endl
   << endl
   << "  The sign * above means that connection shold be permanent as it's possible." << endl
-  << "  In client mode it will force connection to remote host on start or on" << endl
-  << "  disconnect." << endl
+  << "  In client mode it will force connection to remote host on start." << endl
   << endl
   << "Options:" << endl
   << "  --interface=<if>         - use interface <if>." << endl
+  << "  --reconnect=<t>          - enable/disable forcing connection to remote host" << endl
+  << "                             on disconnecting and set reconnect time. Where <t>" << endl
+  << "                             is a positive number of milliseconds or d[efault]" << endl
+  << "                             or n[o]. If sign * is not used then d[efault]" << endl
+  << "                             means n[o] else d[efault] means 0." << endl
   << endl
   << "Output data stream description:" << endl
   << "  LINE_DATA(<data>) - send <data> to remote host." << endl
@@ -93,7 +100,9 @@ static void CALLBACK Help(const char *pProgPath)
   << "In client mode if there is not connection to remote host the incrementing of" << endl
   << "the connection counter will force connection to remote host." << endl
   << "If sign * is not used and there is connection to remote host the decrementing" << endl
-  << "of the connection counter to 0 will force disconnection from remote host." << endl
+  << "of the connection counter to 0 will force disconnection from remote host and" << endl
+  << "will disable forcing connection to remote host till incrementing connection" << endl
+  << "counter." << endl
   << endl
   << "Input data stream description:" << endl
   << "  LINE_DATA(<data>) - received <data> from remote host." << endl
@@ -140,6 +149,28 @@ static BOOL CALLBACK Config(
 
   if ((pParam = GetParam(pArg, "--interface=")) != NULL) {
     comParams.SetIF(pParam);
+  }
+  else
+  if ((pParam = GetParam(pArg, "--reconnect=")) != NULL) {
+    int reconnectTime;
+
+    if (*pParam == 'd') {
+      reconnectTime = comParams.rtDefault;
+    }
+    else
+    if (*pParam == 'n') {
+      reconnectTime = comParams.rtDisable;
+    }
+    else
+    if (isdigit(*pParam)) {
+      reconnectTime = atoi(pParam);
+    }
+    else {
+      cerr << "Unknown reconnect value in " << pArg << endl;
+      exit(1);
+    }
+
+    comParams.SetReconnectTime(reconnectTime);
   } else {
     return FALSE;
   }
