@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.10  2008/10/07 09:26:00  vfrolov
+ * Fixed reseting MCR by setting BR or LC
+ *
  * Revision 1.9  2008/09/30 08:28:32  vfrolov
  * Added ability to control OUT1 and OUT2 pins
  * Added ability to get remote baud rate and line control settings
@@ -388,17 +391,55 @@ void ComIo::SetPinState(WORD value, WORD mask)
   }
 }
 ///////////////////////////////////////////////////////////////
+#define IOCTL_SERIAL_SET_BAUD_RATE      CTL_CODE(FILE_DEVICE_SERIAL_PORT, 1,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERIAL_GET_BAUD_RATE      CTL_CODE(FILE_DEVICE_SERIAL_PORT,20,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+struct SERIAL_BAUD_RATE {
+  ULONG BaudRate;
+};
+
 DWORD ComIo::SetBaudRate(DWORD baudRate)
 {
   if (GetBaudRate() == baudRate)
     return baudRate;
 
-  dcb.BaudRate = baudRate;
-  mySetCommState(handle, &dcb);
+  DWORD returned;
+  SERIAL_BAUD_RATE serialBaudRate;
+
+  serialBaudRate.BaudRate = baudRate;
+
+  if (!DeviceIoControl(handle,
+                       IOCTL_SERIAL_SET_BAUD_RATE,
+                       &serialBaudRate, sizeof(serialBaudRate),
+                       NULL, 0, &returned,
+                       NULL))
+  {
+    TraceError(GetLastError(), "IOCTL_SERIAL_SET_BAUD_RATE");
+  }
+
+  if (!DeviceIoControl(handle,
+                       IOCTL_SERIAL_GET_BAUD_RATE,
+                       NULL, 0,
+                       &serialBaudRate, sizeof(serialBaudRate), &returned,
+                       NULL))
+  {
+    TraceError(GetLastError(), "IOCTL_SERIAL_GET_BAUD_RATE");
+  } else {
+    dcb.BaudRate = serialBaudRate.BaudRate;
+  }
 
   return GetBaudRate();
 }
 ///////////////////////////////////////////////////////////////
+#define IOCTL_SERIAL_SET_LINE_CONTROL   CTL_CODE(FILE_DEVICE_SERIAL_PORT, 3,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERIAL_GET_LINE_CONTROL   CTL_CODE(FILE_DEVICE_SERIAL_PORT,21,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+struct SERIAL_LINE_CONTROL {
+  UCHAR StopBits;
+  UCHAR Parity;
+  UCHAR WordLength;
+};
+
 DWORD ComIo::SetLineControl(DWORD lineControl)
 {
   _ASSERTE((lineControl & ~(VAL2LC_BYTESIZE(-1)|VAL2LC_PARITY(-1)|VAL2LC_STOPBITS(-1))) == 0);
@@ -406,10 +447,34 @@ DWORD ComIo::SetLineControl(DWORD lineControl)
   if (GetLineControl() == lineControl)
     return lineControl;
 
-  dcb.ByteSize = LC2VAL_BYTESIZE(lineControl);
-  dcb.Parity = LC2VAL_PARITY(lineControl);
-  dcb.StopBits = LC2VAL_STOPBITS(lineControl);
-  mySetCommState(handle, &dcb);
+  DWORD returned;
+  SERIAL_LINE_CONTROL serialLineControl;
+
+  serialLineControl.WordLength = LC2VAL_BYTESIZE(lineControl);
+  serialLineControl.Parity = LC2VAL_PARITY(lineControl);
+  serialLineControl.StopBits = LC2VAL_STOPBITS(lineControl);
+
+  if (!DeviceIoControl(handle,
+                       IOCTL_SERIAL_SET_LINE_CONTROL,
+                       &serialLineControl, sizeof(serialLineControl),
+                       NULL, 0, &returned,
+                       NULL))
+  {
+    TraceError(GetLastError(), "IOCTL_SERIAL_SET_LINE_CONTROL");
+  }
+
+  if (!DeviceIoControl(handle,
+                       IOCTL_SERIAL_GET_LINE_CONTROL,
+                       NULL, 0,
+                       &serialLineControl, sizeof(serialLineControl), &returned,
+                       NULL))
+  {
+    TraceError(GetLastError(), "IOCTL_SERIAL_GET_LINE_CONTROL");
+  } else {
+    dcb.ByteSize = serialLineControl.WordLength;
+    dcb.Parity = serialLineControl.Parity;
+    dcb.StopBits = serialLineControl.StopBits;
+  }
 
   return GetLineControl();
 }
