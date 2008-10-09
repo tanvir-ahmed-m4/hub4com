@@ -19,14 +19,18 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/10/09 11:02:58  vfrolov
+ * Redesigned class TelnetProtocol
+ *
  * Revision 1.1  2008/03/28 16:05:15  vfrolov
  * Initial revision
- *
  *
  */
 
 #ifndef _TELNET_H
 #define _TELNET_H
+
+#include "../plugins_api.h"
 
 ///////////////////////////////////////////////////////////////
 typedef vector<BYTE> BYTE_vector;
@@ -38,23 +42,19 @@ class TelnetProtocol
     TelnetProtocol(const char *pName);
     void SetTerminalType(const char *pTerminalType);
 
-    void Write(const BYTE *pBuf, DWORD count);
-    void Send(const BYTE *pBuf, DWORD count);
-
-    DWORD ReadDataLength() const { return (DWORD)streamSendRead.size(); }
-    const BYTE *ReadData() const { return streamSendRead.data(); }
-    void ReadDataClear() { streamSendRead.clear(); }
-
-    DWORD RecvDataLength() const { return (DWORD)streamWriteRecv.size(); }
-    const BYTE *RecvData() const { return streamWriteRecv.data(); }
-    void RecvDataClear() { streamWriteRecv.clear(); }
+    HUB_MSG *Decode(HUB_MSG *pMsg);
+    HUB_MSG *Encode(HUB_MSG *pMsg);
+    HUB_MSG *FlushEncodedStream() { return FlushEncodedStream(NULL); }
 
     void Clear();
   protected:
     void SendOption(BYTE code, BYTE option);
     void SendSubNegotiation(int option, const BYTE_vector &params);
-    void SendRaw(const BYTE *pBuf, DWORD count) { streamSendRead.append(pBuf, count); }
-    void WriteRaw(const BYTE *pBuf, DWORD count) { streamWriteRecv.append(pBuf, count); }
+
+    static HUB_MSG *Flush(HUB_MSG *pMsg, BYTE_string &stream);
+
+    HUB_MSG *FlushEncodedStream(HUB_MSG *pMsg) { return Flush(pMsg, streamEncoded); }
+    HUB_MSG *FlushDecodedStream(HUB_MSG *pMsg) { return Flush(pMsg, streamDecoded); }
 
     string name;
 
@@ -73,8 +73,8 @@ class TelnetProtocol
     OptionState options[256];
     BYTE_vector terminalType;
 
-    BYTE_string streamSendRead;
-    BYTE_string streamWriteRecv;
+    BYTE_string streamEncoded;
+    BYTE_string streamDecoded;
 };
 ///////////////////////////////////////////////////////////////
 

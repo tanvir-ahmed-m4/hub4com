@@ -19,18 +19,22 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/10/09 11:02:58  vfrolov
+ * Redesigned class TelnetProtocol
+ *
  * Revision 1.1  2008/03/28 16:05:15  vfrolov
  * Initial revision
- *
  *
  */
 
 #include "precomp.h"
 #include "telnet.h"
+#include "import.h"
 
 ///////////////////////////////////////////////////////////////
 enum {
   cdSE   = 240,
+  cdNOP  = 241,
   cdSB   = 250,
   cdWILL = 251,
   cdWONT = 252,
@@ -44,6 +48,9 @@ static const char *code2name(unsigned code)
   switch (code) {
     case cdSE:
       return "SE";
+      break;
+    case cdNOP:
+      return "NOP";
       break;
     case cdSB:
       return "SB";
@@ -109,38 +116,76 @@ void TelnetProtocol::Clear()
   options[opEcho].remoteOptionState = OptionState::osNo;
   options[opTerminalType].localOptionState = OptionState::osNo;
 
-  streamSendRead.clear();
-  streamWriteRecv.clear();
+  streamEncoded.clear();
+  streamDecoded.clear();
 }
 
-void TelnetProtocol::Send(const BYTE *pBuf, DWORD count)
+HUB_MSG *TelnetProtocol::Flush(HUB_MSG *pMsg, BYTE_string &stream)
 {
-  for (DWORD i = 0 ; i < count ; i++) {
-    BYTE ch = ((const BYTE *)pBuf)[i];
+  if (!stream.empty()) {
+    pMsg = pMsgInsertBuf(pMsg,
+                         HUB_MSG_TYPE_LINE_DATA,
+                         stream.data(),
+                         (DWORD)stream.size());
+
+    stream.clear();
+  }
+
+  return pMsg;
+}
+
+HUB_MSG *TelnetProtocol::Encode(HUB_MSG *pMsg)
+{
+  _ASSERTE(pMsg->type == HUB_MSG_TYPE_LINE_DATA);
+
+  DWORD len = pMsg->u.buf.size;
+  BYTE_string org(pMsg->u.buf.pBuf, len);
+  const BYTE *pBuf = org.data();
+
+  // discard original data from the stream
+  pMsg = pMsgReplaceBuf(pMsg, HUB_MSG_TYPE_LINE_DATA, NULL, 0);
+
+  for (; len ; len--) {
+    BYTE ch = *pBuf++;
 
     if (ch == cdIAC)
-          SendRaw(&ch, 1);
+      streamEncoded += ch;
 
-    SendRaw(&ch, 1);
+    streamEncoded += ch;
   }
+
+  return FlushEncodedStream(pMsg);
 }
 
-void TelnetProtocol::Write(const BYTE *pBuf, DWORD count)
+HUB_MSG *TelnetProtocol::Decode(HUB_MSG *pMsg)
 {
-  for (DWORD i = 0 ; i < count ; i++) {
-    BYTE ch = ((const BYTE *)pBuf)[i];
+  _ASSERTE(pMsg->type == HUB_MSG_TYPE_LINE_DATA);
+
+  DWORD len = pMsg->u.buf.size;
+  BYTE_string org(pMsg->u.buf.pBuf, len);
+  const BYTE *pBuf = org.data();
+
+  // discard original data from the stream
+  pMsg = pMsgReplaceBuf(pMsg, HUB_MSG_TYPE_LINE_DATA, NULL, 0);
+
+  for (; len ; len--) {
+    BYTE ch = *pBuf++;
 
     switch (state) {
       case stData:
         if (ch == cdIAC)
           state = stCode;
         else
-          WriteRaw(&ch, 1);
+          streamDecoded += ch;
         break;
       case stCode:
         switch (ch) {
           case cdIAC:
-            WriteRaw(&ch, 1);
+            streamDecoded += ch;
+            state = stData;
+            break;
+          case cdNOP:
+            cout << name << " RECV: " << code2name(ch) << endl;
             state = stData;
             break;
           case cdSB:
@@ -227,6 +272,7 @@ void TelnetProtocol::Write(const BYTE *pBuf, DWORD count)
       case stSubCode:
         switch (ch) {
           case cdIAC:
+            params.push_back(ch);
             state = stSubParams;
             break;
           case cdSE:
@@ -257,15 +303,17 @@ void TelnetProtocol::Write(const BYTE *pBuf, DWORD count)
         break;
     }
   }
+
+  return FlushDecodedStream(pMsg);
 }
 
 void TelnetProtocol::SendOption(BYTE code, BYTE option)
 {
-  BYTE buf[3] = {cdIAC, code, option};
-
   cout << name << " SEND: " << code2name(code) << " " << (unsigned)option << endl;
 
-  SendRaw(buf, sizeof(buf));
+  streamEncoded += (BYTE)cdIAC;
+  streamEncoded += code;
+  streamEncoded += option;
 }
 
 void TelnetProtocol::SendSubNegotiation(int option, const BYTE_vector &params)
@@ -277,12 +325,11 @@ void TelnetProtocol::SendSubNegotiation(int option, const BYTE_vector &params)
     BYTE b = *i;
 
     cout << (unsigned)b << " ";
-    SendRaw(&b, sizeof(b));
+    streamEncoded += b;
   }
   cout << "SE" << endl;
 
-  BYTE buf[2] = {cdIAC, cdSE};
-
-  SendRaw(buf, sizeof(buf));
+  streamEncoded += (BYTE)cdIAC;
+  streamEncoded += (BYTE)cdSE;
 }
 ///////////////////////////////////////////////////////////////

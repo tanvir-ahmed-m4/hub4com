@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/10/09 11:02:58  vfrolov
+ * Redesigned class TelnetProtocol
+ *
  * Revision 1.3  2008/08/20 10:08:29  vfrolov
  * Added strict option checking
  *
@@ -31,13 +34,11 @@
  */
 
 #include "precomp.h"
-#include "../plugins_api.h"
 #include "telnet.h"
+#include "import.h"
 
 ///////////////////////////////////////////////////////////////
-static ROUTINE_MSG_REPLACE_BUF *pMsgReplaceBuf = NULL;
-static ROUTINE_MSG_INSERT_BUF *pMsgInsertBuf = NULL;
-static ROUTINE_PORT_NAME_A *pPortName = NULL;
+static ROUTINE_PORT_NAME_A *pPortName;
 ///////////////////////////////////////////////////////////////
 const char *GetParam(const char *pArg, const char *pPattern)
 {
@@ -179,8 +180,14 @@ static void CALLBACK Help(const char *pProgPath)
   << "  LINE_DATA(<data>) - <data> is the telnet protocol wrapped raw bytes." << endl
   << endl
   << "Examples:" << endl
-  << "  " << pProgPath << " --create-filter=" << GetPluginAbout()->pName << ":\"--terminal=ANSI\" --add-filters=1:" << GetPluginAbout()->pName << " COM1 --use-driver=tcp *your.telnet.server:telnet" << endl
-  << "    - use the ANSI terminal connected to the port COM1 for working on the" << endl
+  << "  " << pProgPath << " --load=,,_END_" << endl
+  << "      COM1" << endl
+  << "      --create-filter=telnet:--terminal=ANSI" << endl
+  << "      add-filters=1:telnet" << endl
+  << "      --use-driver=tcp" << endl
+  << "      *your.telnet.server:telnet" << endl
+  << "      _END_" << endl
+  << "    - use the ANSI terminal connected to the port COM1 for working with the" << endl
   << "      telnet server your.telnet.server." << endl
   ;
 }
@@ -237,28 +244,11 @@ static BOOL CALLBACK InMethod(
     if (!pTelnetProtocol)
       return FALSE;
 
-    pTelnetProtocol->Write(pInMsg->u.buf.pBuf, pInMsg->u.buf.size);
-
-    pInMsg = pMsgReplaceBuf(pInMsg,
-                            HUB_MSG_TYPE_LINE_DATA,
-                            pTelnetProtocol->RecvData(),
-                            pTelnetProtocol->RecvDataLength());
-    pTelnetProtocol->RecvDataClear();
+    pInMsg = pTelnetProtocol->Decode(pInMsg);
+    *ppEchoMsg = pTelnetProtocol->FlushEncodedStream();
 
     if (!pInMsg)
       return FALSE;
-
-    if (pTelnetProtocol->ReadDataLength()) {
-      *ppEchoMsg = pMsgInsertBuf(NULL,
-                                 HUB_MSG_TYPE_LINE_DATA,
-                                 pTelnetProtocol->ReadData(),
-                                 pTelnetProtocol->ReadDataLength());
-
-      pTelnetProtocol->ReadDataClear();
-
-      if (!*ppEchoMsg)
-        return FALSE;
-    }
   }
   else
   if (pInMsg->type == HUB_MSG_TYPE_CONNECT) {
@@ -290,13 +280,7 @@ static BOOL CALLBACK OutMethod(
     if (!pTelnetProtocol)
       return FALSE;
 
-    pTelnetProtocol->Send(pOutMsg->u.buf.pBuf, pOutMsg->u.buf.size);
-
-    pOutMsg = pMsgReplaceBuf(pOutMsg,
-                             HUB_MSG_TYPE_LINE_DATA,
-                             pTelnetProtocol->ReadData(),
-                             pTelnetProtocol->ReadDataLength());
-    pTelnetProtocol->ReadDataClear();
+    pOutMsg = pTelnetProtocol->Encode(pOutMsg);
 
     if (!pOutMsg)
       return FALSE;
@@ -322,6 +306,9 @@ static const PLUGIN_ROUTINES_A *const plugins[] = {
   (const PLUGIN_ROUTINES_A *)&routines,
   NULL
 };
+///////////////////////////////////////////////////////////////
+ROUTINE_MSG_REPLACE_BUF *pMsgReplaceBuf;
+ROUTINE_MSG_INSERT_BUF *pMsgInsertBuf;
 ///////////////////////////////////////////////////////////////
 PLUGIN_INIT_A InitA;
 const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
