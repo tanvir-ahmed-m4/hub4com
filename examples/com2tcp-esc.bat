@@ -20,6 +20,12 @@ SETLOCAL
       GOTO BEGIN_PARSE_OPTIONS
     :END_OPTION_INTERFACE
 
+    IF /I "%OPTION%" NEQ "--linectl" GOTO END_OPTION_LINECTL
+      SET LC_CLIENT_MODE=%1
+      SHIFT /1
+      GOTO BEGIN_PARSE_OPTIONS
+    :END_OPTION_LINECTL
+
     GOTO USAGE
   :END_PARSE_OPTIONS
 
@@ -36,11 +42,20 @@ SETLOCAL
     SET TCP=%TCP%:%1
     SHIFT /1
 
+    IF /I "%LC_CLIENT_MODE%"=="no" GOTO END_SET_LC_CLIENT_MODE
+      SET LC_CLIENT_MODE=yes
+    :END_SET_LC_CLIENT_MODE
+
     IF NOT "%1"=="" GOTO USAGE
   :END_PARSE_ARGS
 
+  IF /I "%LC_CLIENT_MODE%"=="yes" GOTO END_SET_LC_SERVER_MODE_OPTIONS
+    SET TCP_LC_OPTIONS=:"--br=local --lc=local"
+  :END_SET_LC_SERVER_MODE_OPTIONS
+
  :SET OPTIONS=%OPTIONS% --create-filter=trace,com,COM
   SET OPTIONS=%OPTIONS% --create-filter=escparse,com,parse
+ :SET OPTIONS=%OPTIONS% --create-filter=trace,com,ExM
   SET OPTIONS=%OPTIONS% --create-filter=pinmap,com,pinmap:"--rts=cts --dtr=dsr --break=break"
   SET OPTIONS=%OPTIONS% --create-filter=linectl,com,lc
  :SET OPTIONS=%OPTIONS% --create-filter=trace,com,CxT
@@ -52,8 +67,7 @@ SETLOCAL
   SET OPTIONS=%OPTIONS% --create-filter=escinsert,tcp,insert
  :SET OPTIONS=%OPTIONS% --create-filter=trace,tcp,ExM
   SET OPTIONS=%OPTIONS% --create-filter=pinmap,tcp,pinmap:"--cts=cts --dsr=dsr --ring=ring --dcd=dcd --break=break"
-  SET OPTIONS=%OPTIONS% --create-filter=lsrmap,tcp,lsrmap
-  SET OPTIONS=%OPTIONS% --create-filter=linectl,tcp,lc
+  SET OPTIONS=%OPTIONS% --create-filter=linectl,tcp,lc%TCP_LC_OPTIONS%
 
   SET OPTIONS=%OPTIONS% --add-filters=1:tcp
 
@@ -73,6 +87,9 @@ ECHO Usage (server mode):
 ECHO     %0 [options] \\.\^<com port^> ^<listen port^>
 ECHO.
 ECHO Common options:
+ECHO     --linectl ^{yes^|no^}    - enable/disable forwarding of baud rate, data bits,
+ECHO                             parity and stop bits settings from COM port to TCP
+ECHO                             port (default is yes for client mode).
 ECHO     --help                - show this help.
 ECHO.
 ECHO Client mode options:
