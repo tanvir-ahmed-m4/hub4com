@@ -76,6 +76,12 @@ extern "C" {
 #define   PIN_STATE_RTS            0x0002
 #define   PIN_STATE_OUT1           0x0004
 #define   PIN_STATE_OUT2           0x0008
+#define   SPS_P2V_MST(p)           ((BYTE)(((p) & 0xF000) >> 8))
+#define   SPS_V2P_MST(v)           (((WORD)(BYTE)(v) << 8) & 0xF000)
+#define   PIN_STATE_CTS            SPS_V2P_MST(MODEM_STATUS_CTS)
+#define   PIN_STATE_DSR            SPS_V2P_MST(MODEM_STATUS_DSR)
+#define   PIN_STATE_RI             SPS_V2P_MST(MODEM_STATUS_RI)
+#define   PIN_STATE_DCD            SPS_V2P_MST(MODEM_STATUS_DCD)
 #define   PIN_STATE_BREAK          0x0100
 #define HUB_MSG_TYPE_GET_IN_OPTS   (6   | HUB_MSG_UNION_TYPE_PVAL)
 #define   GO_O2V_MODEM_STATUS(o)   ((BYTE)(o))
@@ -89,8 +95,10 @@ extern "C" {
 #define HUB_MSG_TYPE_SET_OUT_OPTS  (7   | HUB_MSG_UNION_TYPE_VAL)
 #define   SO_O2V_PIN_STATE(o)      ((WORD)(o))
 #define   SO_V2O_PIN_STATE(v)      ((DWORD)(WORD)(v))
-#define   SO_SET_BR                ((DWORD)1 << 16)
-#define   SO_SET_LC                ((DWORD)1 << 17)
+#define   SO_O2V_LINE_STATUS(o)    ((BYTE)((o) >> 16))
+#define   SO_V2O_LINE_STATUS(v)    ((DWORD)(BYTE)(v) << 16)
+#define   SO_SET_BR                ((DWORD)1 << 24)
+#define   SO_SET_LC                ((DWORD)1 << 25)
 #define HUB_MSG_TYPE_FAIL_IN_OPTS  (8   | HUB_MSG_UNION_TYPE_VAL)
 #define HUB_MSG_TYPE_RBR_STATUS    (9   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_UINT)
 #define HUB_MSG_TYPE_RLC_STATUS    (10  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_LC)
@@ -104,6 +112,7 @@ extern "C" {
 #define HUB_MSG_TYPE_BREAK_STATUS  (14  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_BOOL)
 #define HUB_MSG_TYPE_SET_BR        (15  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_UINT)
 #define HUB_MSG_TYPE_SET_LC        (16  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_LC)
+#define HUB_MSG_TYPE_SET_LSR       (17  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_MASK_VAL)
 /*******************************************************************/
 typedef struct _HUB_MSG {
   WORD type;

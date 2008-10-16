@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/10/16 06:46:13  vfrolov
+ * Added PIN_STATE_* for DCE
+ * Added HUB_MSG_TYPE_SET_LSR
+ *
  * Revision 1.4  2008/10/02 14:01:43  vfrolov
  * Added help
  *
@@ -196,33 +200,27 @@ static void CALLBACK Help(const char *pProgPath)
   << "Examples:" << endl
   << "  " << pProgPath << " --load=,,_END_" << endl
   << "      COM4" << endl
+  << endl
   << "      --trace-file=com.log" << endl
-  << "      --create-filter=trace,com" << endl
-  << "      --add-filters=0:com" << endl
-  << endl
-  << "      --create-filter=pin2con" << endl
-  << "      --add-filters=0:pin2con" << endl
+  << "      --create-filter=trace,com,com" << endl
+  << "      --create-filter=pin2con,com,pin2con" << endl
   << "      --trace-file=p2c.log" << endl
-  << "      --create-filter=trace,p2c" << endl
-  << "      --add-filters=0:p2c" << endl
-  << endl
-  << "      --create-filter=awakseq:--awak-seq=aaa" << endl
-  << "      --add-filters=0:awakseq" << endl
+  << "      --create-filter=trace,com,p2c" << endl
+  << "      --create-filter=awakseq,com,awakseq:--awak-seq=aaa" << endl
   << "      --trace-file=awk.log" << endl
-  << "      --create-filter=trace,awk" << endl
-  << "      --add-filters=0:awk" << endl
+  << "      --create-filter=trace,com,awk" << endl
+  << "      --add-filters=0:com" << endl
   << endl
   << "      --use-driver=tcp" << endl
   << "      1.1.1.1:23" << endl
+  << endl
   << "      --trace-file=tcp.log" << endl
-  << "      --create-filter=trace,tcp" << endl
+  << "      --create-filter=trace,tcp,tcp" << endl
+  << "      --create-filter=telnet,tcp,telnet" << endl
+  << "      --trace-file=tel.log" << endl
+  << "      --create-filter=trace,tcp,tel" << endl
   << "      --add-filters=1:tcp" << endl
   << endl
-  << "      --create-filter=telnet" << endl
-  << "      --add-filters=1:telnet" << endl
-  << "      --trace-file=tel.log" << endl
-  << "      --create-filter=trace,tel" << endl
-  << "      --add-filters=1:tel" << endl
   << "      _END_" << endl
   << "    - Trace data to different files by this way:" << endl
   << "      COM4 <---> pin2con <---> awakseq <--->   <---> telnet <---> 1.1.1.1:23" << endl
@@ -414,6 +412,7 @@ static const CODE2NAME codeNameTableHubMsg[] = {
   TOCODE2NAME(HUB_MSG_TYPE_, BREAK_STATUS),
   TOCODE2NAME(HUB_MSG_TYPE_, SET_BR),
   TOCODE2NAME(HUB_MSG_TYPE_, SET_LC),
+  TOCODE2NAME(HUB_MSG_TYPE_, SET_LSR),
   {0, NULL}
 };
 ///////////////////////////////////////////////////////////////
@@ -471,6 +470,10 @@ static const FIELD2NAME codeNameTableSetPinState[] = {
   TOFIELD2NAME2(PIN_STATE_, DTR),
   TOFIELD2NAME2(PIN_STATE_, OUT1),
   TOFIELD2NAME2(PIN_STATE_, OUT2),
+  TOFIELD2NAME2(PIN_STATE_, CTS),
+  TOFIELD2NAME2(PIN_STATE_, DSR),
+  TOFIELD2NAME2(PIN_STATE_, RI),
+  TOFIELD2NAME2(PIN_STATE_, DCD),
   TOFIELD2NAME2(PIN_STATE_, BREAK),
   {0, 0, NULL}
 };
