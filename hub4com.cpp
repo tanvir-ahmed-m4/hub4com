@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.16  2008/10/16 06:19:12  vfrolov
+ * Divided filter ID to filter group ID and filter name
+ *
  * Revision 1.15  2008/09/26 15:34:50  vfrolov
  * Fixed adding order for filters with the same FID
  *
@@ -116,10 +119,12 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "  port to first port)." << endl
   << endl
   << "Filter options:" << endl
-  << "  --create-filter=<MID>[,<FID>][:<Args>]" << endl
+  << "  --create-filter=<MID>[,<FGID>[,<FN>]][:<Args>]" << endl
   << "                           - by using filter module with name <MID> create a" << endl
-  << "                             filter with name <FID> (<FID> is <MID> by default)" << endl
+  << "                             filter with name <FN> (<FN> is <FGID> by default)" << endl
   << "                             and put arguments <Args> (if any) to the filter." << endl
+  << "                             Add filter to the end of filter group <FGID>" << endl
+  << "                             (<FGID> is <MID> by default)." << endl
   << "  --add-filters=<Lst>:<LstF>" << endl
   << "                           - attach the filters listed in <LstF> to the ports" << endl
   << "                             listed in <Lst>. These filters will handle the" << endl
@@ -128,11 +133,11 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "                             sending to ports listed in <Lst>." << endl
   << endl
   << "  The syntax of <LstF> above is <F1>[,<F2>...], where the syntax of <Fn> is" << endl
-  << "  <FID>[.<Method>][(<Lst>)], where <FID> is a filter name, <Method> is IN or" << endl
+  << "  <FGID>[.<Method>][(<Lst>)], where <FGID> is a filter group, <Method> is IN or" << endl
   << "  OUT and <Lst> lists the source ports (the data only from them will be handled" << endl
-  << "  by OUT method). The <FID> w/o <Method> is equivalent to adding IN and OUT for" << endl
-  << "  each filter with name <FID>. If the list of the source ports is not specified" << endl
-  << "  then the data routed from any port will be handled by OUT method." << endl
+  << "  by OUT method). The <FGID> w/o <Method> is equivalent to adding IN and OUT" << endl
+  << "  for each filter from the group <FGID>. If the list of the source ports is not" << endl
+  << "  specified then the data routed from any port will be handled by OUT method." << endl
   << endl
   << "Port options:" << endl
   << "  --use-driver=<MID>       - use driver module with name <MID> to create the" << endl
@@ -309,12 +314,17 @@ static void CreateFilter(
     exit(1);
   }
 
+  const char *pFilterGroup = STRTOK_R(NULL, ",", &pSave);
+
+  if (!pFilterGroup || !*pFilterGroup)
+    pFilterGroup = pPluginName;
+
   const char *pFilterName = STRTOK_R(NULL, "", &pSave);
 
   if (!pFilterName || !*pFilterName)
-    pFilterName = pPluginName;
+    pFilterName = pFilterGroup;
 
-  if (!filter.CreateFilter(pFltRoutines, pFilterName, hConfig, pArgs)) {
+  if (!filter.CreateFilter(pFltRoutines, pFilterGroup, pFilterName, hConfig, pArgs)) {
     cerr << "Invalid filter " << pParam << endl;
     exit(1);
   }
