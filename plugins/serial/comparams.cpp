@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/10/16 06:57:29  vfrolov
+ * Added ignoring the case of the params
+ *
  * Revision 1.3  2008/08/28 10:24:35  vfrolov
  * Removed linking with ....utils.h and ....utils.cpp
  *
@@ -47,18 +50,6 @@
 #include "comparams.h"
 
 ///////////////////////////////////////////////////////////////
-static struct {
-  DWORD val;
-  const char *pName;
-} event_names[] = {
-  {EV_CTS,   "cts"},
-  {EV_DSR,   "dsr"},
-  {EV_RLSD,  "dcd"},
-  {EV_RING,  "ring"},
-  {EV_BREAK, "break"},
-  {EV_ERR,   "err"},
-};
-///////////////////////////////////////////////////////////////
 ComParams::ComParams()
   : baudRate(CBR_19200),
     byteSize(8),
@@ -75,7 +66,7 @@ ComParams::ComParams()
 
 BOOL ComParams::SetBaudRate(const char *pBaudRate)
 {
-  if (*pBaudRate == 'c') {
+  if (tolower(*pBaudRate) == 'c') {
     baudRate = -1;
     return TRUE;
   }
@@ -90,7 +81,7 @@ BOOL ComParams::SetBaudRate(const char *pBaudRate)
 
 BOOL ComParams::SetByteSize(const char *pByteSize)
 {
-  if (*pByteSize == 'c') {
+  if (tolower(*pByteSize) == 'c') {
     byteSize = -1;
     return TRUE;
   }
@@ -105,7 +96,7 @@ BOOL ComParams::SetByteSize(const char *pByteSize)
 
 BOOL ComParams::SetParity(const char *pParity)
 {
-  switch (*pParity) {
+  switch (tolower(*pParity)) {
     case 'n': parity = NOPARITY; break;
     case 'o': parity = ODDPARITY; break;
     case 'e': parity = EVENPARITY; break;
@@ -119,7 +110,7 @@ BOOL ComParams::SetParity(const char *pParity)
 
 BOOL ComParams::SetStopBits(const char *pStopBits)
 {
-  switch (*pStopBits) {
+  switch (tolower(*pStopBits)) {
     case '1':
       if ((pStopBits[1] == '.' || pStopBits[1] == ',') && pStopBits[2] == '5')
         stopBits = ONE5STOPBITS;
@@ -153,7 +144,7 @@ BOOL ComParams::SetFlag(const char *pFlagStr, int *pFlag)
     *pFlag = 0;
   }
   else
-  if (*pFlagStr == 'c') {
+  if (tolower(*pFlagStr) == 'c') {
     *pFlag = -1;
   }
   else
