@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/10/16 06:34:27  vfrolov
+ * Fixed typo
+ *
  * Revision 1.1  2008/09/30 08:34:38  vfrolov
  * Initial revision
  *
@@ -232,6 +235,7 @@ static BOOL CALLBACK OutMethod(
       if (fail_options) {
         cerr << ((Filter *)hFilter)->PortName(nFromPort)
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
+             << " for port " << ((Filter *)hFilter)->PortName(nToPort)
              << " option(s) 0x" << hex << fail_options << dec
              << " not accepted" << endl;
       }
@@ -262,7 +266,7 @@ static BOOL CALLBACK OutMethod(
       break;
     }
     case HUB_MSG_TYPE_RLC_STATUS: {
-      if (((Filter *)hFilter)->soOutMask & SO_SET_BR) {
+      if (((Filter *)hFilter)->soOutMask & SO_SET_LC) {
         State *pState = ((Filter *)hFilter)->GetState(nToPort);
 
         if (!pState)
