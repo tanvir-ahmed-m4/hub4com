@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/10/16 07:46:04  vfrolov
+ * Redesigned escinsert filter to accept SET instead STATUS messages
+ *
  * Revision 1.1  2008/09/30 08:32:38  vfrolov
  * Initial revision
  *
@@ -29,10 +32,9 @@
 #include "../cncext.h"
 
 ///////////////////////////////////////////////////////////////
-static ROUTINE_MSG_INSERT_BUF *pMsgInsertBuf = NULL;
-static ROUTINE_MSG_REPLACE_BUF *pMsgReplaceBuf = NULL;
-static ROUTINE_PORT_NAME_A *pPortName = NULL;
-static ROUTINE_FILTER_NAME_A *pFilterName = NULL;
+static ROUTINE_MSG_INSERT_BUF *pMsgInsertBuf;
+static ROUTINE_MSG_REPLACE_BUF *pMsgReplaceBuf;
+static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone;
 ///////////////////////////////////////////////////////////////
 const char *GetParam(const char *pArg, const char *pPattern)
 {
@@ -57,31 +59,28 @@ class State {
   public:
     State()
     : isConnected(FALSE),
-      mstInVal(0),
-      rbr(CBR_19200),
-      rlc(VAL2LC_BYTESIZE(8)|VAL2LC_PARITY(NOPARITY)|VAL2LC_STOPBITS(ONESTOPBIT))
+      mstVal(0),
+      lsrVal(0),
+      br(CBR_19200),
+      lc(VAL2LC_BYTESIZE(8)|VAL2LC_PARITY(NOPARITY)|VAL2LC_STOPBITS(ONESTOPBIT))
     {}
 
     BOOL isConnected;
-    BYTE mstInVal;
-    ULONG rbr;
-    DWORD rlc;
+    BYTE mstVal;
+    BYTE lsrVal;
+    DWORD br;
+    DWORD lc;
 };
 ///////////////////////////////////////////////////////////////
 class Filter : public Valid {
   public:
     Filter(int argc, const char *const argv[]);
-    void SetHub(HHUB _hHub) { hHub = _hHub; }
     State *GetState(int nPort);
-    const char *PortName(int nPort) const { return pPortName(hHub, nPort); }
-    const char *FilterName() const { return pFilterName(hHub, (HFILTER)this); }
 
-    DWORD goInMask;
+    DWORD soMask;
     BYTE escapeChar;
 
   private:
-    HHUB hHub;
-
     typedef map<int, State*> PortsMap;
     typedef pair<int, State*> PortPair;
 
@@ -89,11 +88,10 @@ class Filter : public Valid {
 };
 
 Filter::Filter(int argc, const char *const argv[])
-  : goInMask(GO_V2O_MODEM_STATUS(MODEM_STATUS_CTS|MODEM_STATUS_DSR|MODEM_STATUS_DCD|MODEM_STATUS_RI) |
-             GO_V2O_LINE_STATUS(LINE_STATUS_OE|LINE_STATUS_PE|LINE_STATUS_FE|LINE_STATUS_BI|LINE_STATUS_FIFOERR) |
-             GO_RBR_STATUS|GO_RLC_STATUS|GO_BREAK_STATUS),
-    escapeChar(0xFF),
-    hHub(NULL)
+  : soMask(SO_V2O_PIN_STATE(PIN_STATE_CTS|PIN_STATE_DSR|PIN_STATE_DCD|PIN_STATE_RI|PIN_STATE_BREAK) |
+           SO_V2O_LINE_STATUS(LINE_STATUS_OE|LINE_STATUS_PE|LINE_STATUS_FE|LINE_STATUS_BI|LINE_STATUS_FIFOERR) |
+           SO_SET_BR|SO_SET_LC),
+    escapeChar(0xFF)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
@@ -162,7 +160,10 @@ static void CALLBACK Help(const char *pProgPath)
   << "      --add-filters=0:escparse" << endl
   << "      \\\\.\\CNCB0" << endl
   << "      --create-filter=escinsert" << endl
-  << "      --add-filters=1:escinsert" << endl
+  << "      --create-filter=pinmap:--cts=cts --dsr=dsr --ring=ring --dcd=dcd --break=break" << endl
+  << "      --create-filter=lsrmap" << endl
+  << "      --create-filter=linectl" << endl
+  << "      --add-filters=1:escinsert,pinmap,lsrmap,linectl" << endl
   << "      --use-driver=tcp" << endl
   << "      222.22.22.22:2222" << endl
   << "      _END_" << endl
@@ -187,18 +188,6 @@ static HFILTER CALLBACK Create(
   }
 
   return (HFILTER)pFilter;
-}
-///////////////////////////////////////////////////////////////
-static BOOL CALLBACK Init(
-    HFILTER hFilter,
-    HHUB hHub)
-{
-  _ASSERTE(hFilter != NULL);
-  _ASSERTE(hHub != NULL);
-
-  ((Filter *)hFilter)->SetHub(hHub);
-
-  return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 static void InsertStatus(
@@ -274,24 +263,26 @@ static BOOL CALLBACK InMethod(
         return FALSE;
 
       if (pInMsg->u.val) {
+        _ASSERTE(pState->isConnected == FALSE);
         pState->isConnected = TRUE;
       } else {
+        _ASSERTE(pState->isConnected == TRUE);
         pState->isConnected = FALSE;
         break;
       }
 
       // init state
-      if (((Filter *)hFilter)->goInMask & GO_O2V_MODEM_STATUS(-1))
-        InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_MST, pState->mstInVal, ppEchoMsg);
+      if (((Filter *)hFilter)->soMask & SO_V2O_PIN_STATE(SPS_V2P_MST(-1)))
+        InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_MST, pState->mstVal, ppEchoMsg);
 
-      if (((Filter *)hFilter)->goInMask & (GO_V2O_LINE_STATUS(-1) | GO_BREAK_STATUS))
-        InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_LSR_NODATA, 0, ppEchoMsg);
+      if (((Filter *)hFilter)->soMask & (SO_V2O_LINE_STATUS(-1) | SO_V2O_PIN_STATE(PIN_STATE_BREAK)))
+        InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_LSR_NODATA, pState->lsrVal, ppEchoMsg);
 
-      if (((Filter *)hFilter)->goInMask & GO_RBR_STATUS)
-        InsertRBR(*(Filter *)hFilter, pState->rbr, ppEchoMsg);
+      if (((Filter *)hFilter)->soMask & SO_SET_BR)
+        InsertRBR(*(Filter *)hFilter, pState->br, ppEchoMsg);
 
-      if (((Filter *)hFilter)->goInMask & GO_RLC_STATUS)
-        InsertRLC(*(Filter *)hFilter, pState->rlc, ppEchoMsg);
+      if (((Filter *)hFilter)->soMask & SO_SET_LC)
+        InsertRLC(*(Filter *)hFilter, pState->lc, ppEchoMsg);
 
       break;
     }
@@ -302,7 +293,7 @@ static BOOL CALLBACK InMethod(
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK OutMethod(
     HFILTER hFilter,
-    int nFromPort,
+    int /*nFromPort*/,
     int nToPort,
     HUB_MSG *pOutMsg)
 {
@@ -310,115 +301,117 @@ static BOOL CALLBACK OutMethod(
   _ASSERTE(pOutMsg != NULL);
 
   switch (pOutMsg->type) {
-    case HUB_MSG_TYPE_GET_IN_OPTS: {
-      _ASSERTE(pOutMsg->u.pv.pVal != NULL);
-
-      // or'e with the required mask to get line status and modem status
-      *pOutMsg->u.pv.pVal |= (((Filter *)hFilter)->goInMask & pOutMsg->u.pv.val);
+    case HUB_MSG_TYPE_SET_OUT_OPTS:
+      // discard supported options
+      pOutMsg->u.val &= ~((Filter *)hFilter)->soMask;
       break;
-    }
-    case HUB_MSG_TYPE_FAIL_IN_OPTS: {
-      DWORD fail_options = (pOutMsg->u.val & ((Filter *)hFilter)->goInMask);
+    case HUB_MSG_TYPE_SET_BR:
+      if (((Filter *)hFilter)->soMask & SO_SET_BR) {
+        DWORD val = pOutMsg->u.val;
 
-      if (fail_options) {
-        cerr << ((Filter *)hFilter)->PortName(nFromPort)
-             << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
-             << " option(s) 0x" << hex << fail_options << dec
-             << " not accepted" << endl;
-      }
-      break;
-    }
-    case HUB_MSG_TYPE_RBR_STATUS:
-      if (((Filter *)hFilter)->goInMask & GO_RBR_STATUS) {
+        // discard messages for supported options
+        pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY);
+
         State *pState = ((Filter *)hFilter)->GetState(nToPort);
 
         if (!pState)
           return FALSE;
 
-        if (pState->rbr != pOutMsg->u.val) {
-          pState->rbr = pOutMsg->u.val;
+        if (pState->br != val) {
+          pState->br = val;
 
           if (pState->isConnected)
-            InsertRBR(*(Filter *)hFilter, pState->rbr, &pOutMsg);
+            InsertRBR(*(Filter *)hFilter, pState->br, &pOutMsg);
         }
       }
+
       break;
-    case HUB_MSG_TYPE_RLC_STATUS:
+    case HUB_MSG_TYPE_SET_LC:
       _ASSERTE((pOutMsg->u.val & ~(VAL2LC_BYTESIZE(-1)|VAL2LC_PARITY(-1)|VAL2LC_STOPBITS(-1))) == 0);
 
-      if (((Filter *)hFilter)->goInMask & GO_RLC_STATUS) {
+      if (((Filter *)hFilter)->soMask & SO_SET_LC) {
+        DWORD val = pOutMsg->u.val;
+
+        // discard messages for supported options
+        pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY);
+
         State *pState = ((Filter *)hFilter)->GetState(nToPort);
 
         if (!pState)
           return FALSE;
 
-        if (pState->rlc != pOutMsg->u.val) {
-          pState->rlc = pOutMsg->u.val;
+        if (pState->lc != val) {
+          pState->lc = val;
 
           if (pState->isConnected)
-            InsertRLC(*(Filter *)hFilter, pState->rlc, &pOutMsg);
+            InsertRLC(*(Filter *)hFilter, pState->lc, &pOutMsg);
         }
       }
+
       break;
-    case HUB_MSG_TYPE_BREAK_STATUS:
-      if (((Filter *)hFilter)->goInMask & GO_BREAK_STATUS) {
-        State *pState = ((Filter *)hFilter)->GetState(nToPort);
+    case HUB_MSG_TYPE_SET_PIN_STATE: {
+      WORD mask = MASK2VAL(pOutMsg->u.val) & SO_O2V_PIN_STATE(((Filter *)hFilter)->soMask);
 
-        if (!pState)
-          return FALSE;
+      if (!mask)
+        break;
 
-        if (!pState->isConnected)
-          break;
+      WORD val = (WORD)pOutMsg->u.val;
 
-        if (pOutMsg->u.val) {
-          if ((((Filter *)hFilter)->goInMask & GO_V2O_LINE_STATUS(LINE_STATUS_BI)) == 0)
-            InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_LSR_NODATA, LINE_STATUS_BI, &pOutMsg);
-        } else {
-          InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_LSR_NODATA, 0, &pOutMsg);
+      // discard settings for supported options
+      pOutMsg->u.val &= ~VAL2MASK(mask);
+
+      State *pState = ((Filter *)hFilter)->GetState(nToPort);
+
+      if (!pState)
+        return FALSE;
+
+      BYTE mstMask = SPS_P2V_MST(mask);
+
+      if (mstMask) {
+        BYTE mstVal;
+
+        mstVal = ((SPS_P2V_MST(val) & mstMask) | (pState->mstVal & ~mstMask));
+        mstMask = pState->mstVal ^ mstVal;
+
+        if (mstMask) {
+          if (pState->isConnected)
+            InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_MST, mstVal, &pOutMsg);
+
+          pState->mstVal = mstVal;
         }
       }
-      break;
-    case HUB_MSG_TYPE_LINE_STATUS: {
-      BYTE lsr;
 
-      lsr = (BYTE)pOutMsg->u.val & (BYTE)MASK2VAL(pOutMsg->u.val) & GO_O2V_LINE_STATUS(((Filter *)hFilter)->goInMask);
+      if (mask & PIN_STATE_BREAK) {
+        pState->lsrVal = (val & PIN_STATE_BREAK) ? LINE_STATUS_BI : 0;
 
-      if (lsr) {
-        State *pState = ((Filter *)hFilter)->GetState(nToPort);
-
-        if (!pState)
-          return FALSE;
-
-        if (pState->isConnected)
-          InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_LSR_NODATA, lsr, &pOutMsg);
+        if (pState->isConnected && (!pState->lsrVal ||
+            (((Filter *)hFilter)->soMask & SO_V2O_LINE_STATUS(LINE_STATUS_BI)) == 0))
+        {
+          InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_LSR_NODATA, pState->lsrVal, &pOutMsg);
+        }
       }
 
       break;
     }
-    case HUB_MSG_TYPE_MODEM_STATUS: {
-      BYTE mstInMask;
+    case HUB_MSG_TYPE_SET_LSR: {
+      BYTE lsr;
 
-      mstInMask = (BYTE)MASK2VAL(pOutMsg->u.val) & GO_O2V_MODEM_STATUS(((Filter *)hFilter)->goInMask);
+      lsr = (BYTE)pOutMsg->u.val & (BYTE)MASK2VAL(pOutMsg->u.val) & SO_O2V_LINE_STATUS(((Filter *)hFilter)->soMask);
 
-      if (mstInMask) {
-        State *pState = ((Filter *)hFilter)->GetState(nToPort);
+      // discard settings for supported options
+      pOutMsg->u.val &= ~VAL2MASK(SO_O2V_LINE_STATUS(((Filter *)hFilter)->soMask));
 
-        if (!pState)
-          return FALSE;
+      if (!lsr)
+        break;
 
-        BYTE mstInVal;
+      State *pState = ((Filter *)hFilter)->GetState(nToPort);
 
-        mstInVal = (((BYTE)pOutMsg->u.val & mstInMask) | (pState->mstInVal & ~mstInMask));
-        mstInMask = pState->mstInVal ^ mstInVal;
+      if (!pState)
+        return FALSE;
 
-        if (!mstInMask)
-          break;
+      if (pState->isConnected)
+        InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_LSR_NODATA, lsr, &pOutMsg);
 
-        if (pState->isConnected)
-          InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_MST, mstInVal, &pOutMsg);
-
-        pState->mstInVal = mstInVal;
-      }
       break;
     }
     case HUB_MSG_TYPE_LINE_DATA: {
@@ -467,7 +460,7 @@ static const FILTER_ROUTINES_A routines = {
   NULL,           // Config
   NULL,           // ConfigStop
   Create,
-  Init,
+  NULL,           // Init
   InMethod,
   OutMethod,
 };
@@ -483,16 +476,14 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 {
   if (!ROUTINE_IS_VALID(pHubRoutines, pMsgInsertBuf) ||
       !ROUTINE_IS_VALID(pHubRoutines, pMsgReplaceBuf) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pPortName) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pFilterName))
+      !ROUTINE_IS_VALID(pHubRoutines, pMsgReplaceNone))
   {
     return NULL;
   }
 
   pMsgInsertBuf = pHubRoutines->pMsgInsertBuf;
   pMsgReplaceBuf = pHubRoutines->pMsgReplaceBuf;
-  pPortName = pHubRoutines->pPortName;
-  pFilterName = pHubRoutines->pFilterName;
+  pMsgReplaceNone = pHubRoutines->pMsgReplaceNone;
 
   return plugins;
 }

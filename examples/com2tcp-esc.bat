@@ -39,18 +39,23 @@ SETLOCAL
     IF NOT "%1"=="" GOTO USAGE
   :END_PARSE_ARGS
 
-  :SET OPTIONS=%OPTIONS% --create-filter=trace,ser --add-filters=0:ser
+ :SET OPTIONS=%OPTIONS% --create-filter=trace,com,COM
+  SET OPTIONS=%OPTIONS% --create-filter=escparse,com,parse
+  SET OPTIONS=%OPTIONS% --create-filter=pinmap,com,pinmap:"--rts=cts --dtr=dsr --break=break"
+  SET OPTIONS=%OPTIONS% --create-filter=linectl,com,lc
+ :SET OPTIONS=%OPTIONS% --create-filter=trace,com,CxT
 
-  SET OPTIONS=%OPTIONS% --create-filter=escparse,escparse-com --add-filters=0:escparse-com
-  SET OPTIONS=%OPTIONS% --create-filter=pinmap:"--rts=cts --dtr=dsr --break=break" --add-filters=0:pinmap
-  SET OPTIONS=%OPTIONS% --create-filter=linectl --add-filters=0:linectl
+  SET OPTIONS=%OPTIONS% --add-filters=0:com
 
-  :SET OPTIONS=%OPTIONS% --create-filter=trace,tcp --add-filters=1:tcp
+ :SET OPTIONS=%OPTIONS% --create-filter=trace,tcp,TCP
+  SET OPTIONS=%OPTIONS% --create-filter=escparse,tcp,parse:"--request-esc-mode=no"
+  SET OPTIONS=%OPTIONS% --create-filter=escinsert,tcp,insert
+ :SET OPTIONS=%OPTIONS% --create-filter=trace,tcp,ExM
+  SET OPTIONS=%OPTIONS% --create-filter=pinmap,tcp,pinmap:"--cts=cts --dsr=dsr --ring=ring --dcd=dcd --break=break"
+  SET OPTIONS=%OPTIONS% --create-filter=lsrmap,tcp,lsrmap
+  SET OPTIONS=%OPTIONS% --create-filter=linectl,tcp,lc
 
-  SET OPTIONS=%OPTIONS% --create-filter=escparse,escparse-tcp:"--request-esc-mode=no" --add-filters=1:escparse-tcp
-  SET OPTIONS=%OPTIONS% --create-filter=escinsert --add-filters=1:escinsert
-
-  :SET OPTIONS=%OPTIONS% --create-filter=trace,s2t --add-filters=1:s2t
+  SET OPTIONS=%OPTIONS% --add-filters=1:tcp
 
   @ECHO ON
     "%HUB4COM%" %OPTIONS% --octs=off "%COMPORT%" --use-driver=tcp "*%TCP%"
