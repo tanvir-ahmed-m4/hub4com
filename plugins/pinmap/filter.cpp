@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.10  2008/10/16 06:49:58  vfrolov
+ * Added wiring to DCE's output pins
+ *
  * Revision 1.9  2008/10/02 08:20:17  vfrolov
  * Added connect mapping
  *
@@ -86,6 +89,10 @@ static struct {
   {"dtr=",    PIN_STATE_DTR},
   {"out1=",   PIN_STATE_OUT1},
   {"out2=",   PIN_STATE_OUT2},
+  {"cts=",    PIN_STATE_CTS},
+  {"dsr=",    PIN_STATE_DSR},
+  {"ring=",   PIN_STATE_RI},
+  {"dcd=",    PIN_STATE_DCD},
   {"break=",  PIN_STATE_BREAK},
 };
 ///////////////////////////////////////////////////////////////
@@ -277,6 +284,10 @@ static void CALLBACK Help(const char *pProgPath)
   << "  --dtr=[!]<s>          - wire input state of <s> to output pin DTR." << endl
   << "  --out1=[!]<s>         - wire input state of <s> to output pin OUT1." << endl
   << "  --out2=[!]<s>         - wire input state of <s> to output pin OUT2." << endl
+  << "  --cts=[!]<s>          - wire input state of <s> to output pin CTS." << endl
+  << "  --dsr=[!]<s>          - wire input state of <s> to output pin DSR." << endl
+  << "  --ring=[!]<s>         - wire input state of <s> to output pin RI." << endl
+  << "  --dcd=[!]<s>          - wire input state of <s> to output pin DCD." << endl
   << "  --break=[!]<s>        - wire input state of <s> to output state of BREAK." << endl
   << endl
   << "  The possible values of <s> above can be cts, dsr, dcd, ring, break or" << endl
@@ -420,6 +431,7 @@ static BOOL CALLBACK OutMethod(
       if (fail_options) {
         cerr << ((Filter *)hFilter)->PortName(nFromPort)
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
+             << " for port " << ((Filter *)hFilter)->PortName(nToPort)
              << " option(s) 0x" << hex << fail_options << dec
              << " not accepted" << endl;
       }
