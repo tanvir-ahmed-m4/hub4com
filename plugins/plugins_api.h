@@ -92,6 +92,8 @@ extern "C" {
 #define   GO_RLC_STATUS            ((DWORD)1 << 17)
 #define   GO_BREAK_STATUS          ((DWORD)1 << 18)
 #define   GO_ESCAPE_MODE           ((DWORD)1 << 24)
+#define   GO_LBR_STATUS            ((DWORD)1 << 25)
+#define   GO_LLC_STATUS            ((DWORD)1 << 26)
 #define HUB_MSG_TYPE_SET_OUT_OPTS  (7   | HUB_MSG_UNION_TYPE_VAL)
 #define   SO_O2V_PIN_STATE(o)      ((WORD)(o))
 #define   SO_V2O_PIN_STATE(v)      ((DWORD)(WORD)(v))
@@ -113,6 +115,8 @@ extern "C" {
 #define HUB_MSG_TYPE_SET_BR        (15  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_UINT)
 #define HUB_MSG_TYPE_SET_LC        (16  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_LC)
 #define HUB_MSG_TYPE_SET_LSR       (17  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_MASK_VAL)
+#define HUB_MSG_TYPE_LBR_STATUS    (18  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_UINT)
+#define HUB_MSG_TYPE_LLC_STATUS    (19  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_LC)
 /*******************************************************************/
 typedef struct _HUB_MSG {
   WORD type;

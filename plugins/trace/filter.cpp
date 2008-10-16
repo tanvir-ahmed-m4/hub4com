@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/10/16 16:02:34  vfrolov
+ * Added LBR_STATUS and LLC_STATUS
+ *
  * Revision 1.5  2008/10/16 06:46:13  vfrolov
  * Added PIN_STATE_* for DCE
  * Added HUB_MSG_TYPE_SET_LSR
@@ -413,6 +416,8 @@ static const CODE2NAME codeNameTableHubMsg[] = {
   TOCODE2NAME(HUB_MSG_TYPE_, SET_BR),
   TOCODE2NAME(HUB_MSG_TYPE_, SET_LC),
   TOCODE2NAME(HUB_MSG_TYPE_, SET_LSR),
+  TOCODE2NAME(HUB_MSG_TYPE_, LBR_STATUS),
+  TOCODE2NAME(HUB_MSG_TYPE_, LLC_STATUS),
   {0, NULL}
 };
 ///////////////////////////////////////////////////////////////
@@ -460,6 +465,8 @@ static const FIELD2NAME fieldNameTableLineStatus[] = {
 static const FIELD2NAME fieldNameTableGoOptions[] = {
   TOFIELD2NAME2(GO_, RBR_STATUS),
   TOFIELD2NAME2(GO_, RLC_STATUS),
+  TOFIELD2NAME2(GO_, LBR_STATUS),
+  TOFIELD2NAME2(GO_, LLC_STATUS),
   TOFIELD2NAME2(GO_, BREAK_STATUS),
   TOFIELD2NAME2(GO_, ESCAPE_MODE),
   {0, 0, NULL}
