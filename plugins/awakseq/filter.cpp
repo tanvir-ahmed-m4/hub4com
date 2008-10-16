@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/10/16 09:24:23  vfrolov
+ * Changed return type of ROUTINE_MSG_REPLACE_*() to BOOL
+ *
  * Revision 1.6  2008/08/27 11:38:29  vfrolov
  * Fixed CONNECT(FALSE) losing
  *
@@ -49,7 +52,7 @@
   #define DEBUG_PARAM(par) par
 #endif  /* _DEBUG */
 ///////////////////////////////////////////////////////////////
-static ROUTINE_MSG_INSERT_VAL *pMsgReplaceVal = NULL;
+static ROUTINE_MSG_REPLACE_VAL *pMsgReplaceVal = NULL;
 static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone = NULL;
 static ROUTINE_MSG_INSERT_NONE *pMsgInsertNone = NULL;
 ///////////////////////////////////////////////////////////////
@@ -257,7 +260,8 @@ static BOOL CALLBACK InMethod(
       } else {
         // insert CONNECT(TRUE) instead data
 
-        pInMsg = pMsgReplaceVal(pInMsg, HUB_MSG_TYPE_CONNECT, TRUE);
+        if(!pMsgReplaceVal(pInMsg, HUB_MSG_TYPE_CONNECT, TRUE))
+          return FALSE;
       }
 
       pState->connectSent = TRUE;
@@ -270,7 +274,8 @@ static BOOL CALLBACK InMethod(
   if (pInMsg->type == HUB_MSG_TYPE_CONNECT) {
     if (pInMsg->u.val) {
       // discard CONNECT(TRUE) from the input stream
-      pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
+      if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+        return FALSE;
     } else {
       State *pState = ((Filter *)hFilter)->GetState(nFromPort);
 
@@ -279,10 +284,12 @@ static BOOL CALLBACK InMethod(
 
       // discard CONNECT(FALSE) from the input stream
       // if CONNECT(TRUE) was not added yet
-      if (pState->connectSent)
+      if (pState->connectSent) {
         pState->connectSent = FALSE;
-      else
-        pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
+      } else {
+        if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+          return FALSE;
+      }
 
       // start awakening sequence waiting
       pState->StartAwakSeq(((Filter *)hFilter)->pAwakSeq);

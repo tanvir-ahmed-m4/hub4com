@@ -137,7 +137,7 @@ typedef BYTE *(CALLBACK ROUTINE_BUF_ALLOC)(
         DWORD size);
 typedef VOID (CALLBACK ROUTINE_BUF_FREE)(
         BYTE *pBuf);
-typedef HUB_MSG *(CALLBACK ROUTINE_MSG_REPLACE_BUF)(
+typedef BOOL (CALLBACK ROUTINE_MSG_REPLACE_BUF)(
         HUB_MSG *pMsg,
         WORD type,
         const BYTE *pSrc,
@@ -147,7 +147,7 @@ typedef HUB_MSG *(CALLBACK ROUTINE_MSG_INSERT_BUF)(
         WORD type,
         const BYTE *pSrc,
         DWORD sizeSrc);
-typedef HUB_MSG *(CALLBACK ROUTINE_MSG_REPLACE_VAL)(
+typedef BOOL (CALLBACK ROUTINE_MSG_REPLACE_VAL)(
         HUB_MSG *pMsg,
         WORD type,
         DWORD val);
@@ -155,7 +155,7 @@ typedef HUB_MSG *(CALLBACK ROUTINE_MSG_INSERT_VAL)(
         HUB_MSG *pMsg,
         WORD type,
         DWORD val);
-typedef HUB_MSG *(CALLBACK ROUTINE_MSG_REPLACE_NONE)(
+typedef BOOL (CALLBACK ROUTINE_MSG_REPLACE_NONE)(
         HUB_MSG *pMsg,
         WORD type);
 typedef HUB_MSG *(CALLBACK ROUTINE_MSG_INSERT_NONE)(

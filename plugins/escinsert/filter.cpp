@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/10/16 09:24:23  vfrolov
+ * Changed return type of ROUTINE_MSG_REPLACE_*() to BOOL
+ *
  * Revision 1.2  2008/10/16 07:46:04  vfrolov
  * Redesigned escinsert filter to accept SET instead STATUS messages
  *
@@ -310,7 +313,8 @@ static BOOL CALLBACK OutMethod(
         DWORD val = pOutMsg->u.val;
 
         // discard messages for supported options
-        pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY);
+        if (!pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY))
+          return FALSE;
 
         State *pState = ((Filter *)hFilter)->GetState(nToPort);
 
@@ -333,7 +337,8 @@ static BOOL CALLBACK OutMethod(
         DWORD val = pOutMsg->u.val;
 
         // discard messages for supported options
-        pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY);
+        if (!pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY))
+          return FALSE;
 
         State *pState = ((Filter *)hFilter)->GetState(nToPort);
 
@@ -439,10 +444,8 @@ static BOOL CALLBACK OutMethod(
         }
       }
 
-      pOutMsg = pMsgReplaceBuf(pOutMsg,
-                               HUB_MSG_TYPE_LINE_DATA,
-                               line_data.data(),
-                               (DWORD)line_data.size());
+      if(!pMsgReplaceBuf(pOutMsg, HUB_MSG_TYPE_LINE_DATA, line_data.data(), (DWORD)line_data.size()))
+        return FALSE;
 
       break;
     }

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/10/16 09:24:23  vfrolov
+ * Changed return type of ROUTINE_MSG_REPLACE_*() to BOOL
+ *
  * Revision 1.3  2008/08/20 09:06:48  vfrolov
  * Added HUB_ROUTINES_A::pFilterName
  *
@@ -48,12 +51,12 @@ static VOID CALLBACK buf_free(BYTE *pBuf)
   BufFree(pBuf);
 }
 ///////////////////////////////////////////////////////////////
-static HUB_MSG *CALLBACK msg_replace_buf(HUB_MSG *pMsg, WORD type, const BYTE *pSrc, DWORD sizeSrc)
+static BOOL CALLBACK msg_replace_buf(HUB_MSG *pMsg, WORD type, const BYTE *pSrc, DWORD sizeSrc)
 {
   _ASSERTE((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_BUF);
 
   if (!pMsg)
-    return NULL;
+    return FALSE;
 
   if ((pMsg->type & HUB_MSG_UNION_TYPE_MASK) != HUB_MSG_UNION_TYPE_BUF)
     ((HubMsg *)pMsg)->Clean();
@@ -62,13 +65,13 @@ static HUB_MSG *CALLBACK msg_replace_buf(HUB_MSG *pMsg, WORD type, const BYTE *p
 
   if (!pMsg->u.buf.pBuf && sizeSrc) {
     ((HubMsg *)pMsg)->Clean();
-    return NULL;
+    return FALSE;
   }
 
   pMsg->u.buf.size = sizeSrc;
   pMsg->type = type;
 
-  return pMsg;
+  return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 static HUB_MSG *CALLBACK msg_insert_buf(HUB_MSG *pPrevMsg, WORD type, const BYTE *pSrc, DWORD sizeSrc)
@@ -106,19 +109,19 @@ static HUB_MSG *CALLBACK msg_insert_buf(HUB_MSG *pPrevMsg, WORD type, const BYTE
   return pMsg;
 }
 ///////////////////////////////////////////////////////////////
-static HUB_MSG *CALLBACK msg_replace_val(HUB_MSG *pMsg, WORD type, DWORD val)
+static BOOL CALLBACK msg_replace_val(HUB_MSG *pMsg, WORD type, DWORD val)
 {
   _ASSERTE((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_VAL);
 
   if (!pMsg)
-    return NULL;
+    return FALSE;
 
   ((HubMsg *)pMsg)->Clean();
 
   pMsg->u.val = val;
   pMsg->type = type;
 
-  return pMsg;
+  return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 static HUB_MSG *CALLBACK msg_insert_val(HUB_MSG *pPrevMsg, WORD type, DWORD val)
@@ -141,18 +144,18 @@ static HUB_MSG *CALLBACK msg_insert_val(HUB_MSG *pPrevMsg, WORD type, DWORD val)
   return pMsg;
 }
 ///////////////////////////////////////////////////////////////
-static HUB_MSG *CALLBACK msg_replace_none(HUB_MSG *pMsg, WORD type)
+static BOOL CALLBACK msg_replace_none(HUB_MSG *pMsg, WORD type)
 {
   _ASSERTE((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_NONE);
 
   if (!pMsg)
-    return NULL;
+    return FALSE;
 
   ((HubMsg *)pMsg)->Clean();
 
   pMsg->type = type;
 
-  return pMsg;
+  return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 static HUB_MSG *CALLBACK msg_insert_none(HUB_MSG *pPrevMsg, WORD type)

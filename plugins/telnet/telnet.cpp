@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/10/16 09:24:23  vfrolov
+ * Changed return type of ROUTINE_MSG_REPLACE_*() to BOOL
+ *
  * Revision 1.2  2008/10/09 11:02:58  vfrolov
  * Redesigned class TelnetProtocol
  *
@@ -143,7 +146,8 @@ HUB_MSG *TelnetProtocol::Encode(HUB_MSG *pMsg)
   const BYTE *pBuf = org.data();
 
   // discard original data from the stream
-  pMsg = pMsgReplaceBuf(pMsg, HUB_MSG_TYPE_LINE_DATA, NULL, 0);
+  if (!pMsgReplaceBuf(pMsg, HUB_MSG_TYPE_LINE_DATA, NULL, 0))
+    return NULL;
 
   for (; len ; len--) {
     BYTE ch = *pBuf++;
@@ -166,7 +170,8 @@ HUB_MSG *TelnetProtocol::Decode(HUB_MSG *pMsg)
   const BYTE *pBuf = org.data();
 
   // discard original data from the stream
-  pMsg = pMsgReplaceBuf(pMsg, HUB_MSG_TYPE_LINE_DATA, NULL, 0);
+  if (!pMsgReplaceBuf(pMsg, HUB_MSG_TYPE_LINE_DATA, NULL, 0))
+    return NULL;
 
   for (; len ; len--) {
     BYTE ch = *pBuf++;

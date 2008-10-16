@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/10/16 09:24:23  vfrolov
+ * Changed return type of ROUTINE_MSG_REPLACE_*() to BOOL
+ *
  * Revision 1.3  2008/09/30 08:28:32  vfrolov
  * Added ability to control OUT1 and OUT2 pins
  * Added ability to get remote baud rate and line control settings
@@ -137,6 +140,8 @@ HUB_MSG *EscParse::Flush(HUB_MSG *pMsg)
 
 HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
 {
+  _ASSERTE(pMsg->type == HUB_MSG_TYPE_LINE_DATA);
+
   if (!escMode)
     return pMsg;
 
@@ -145,7 +150,8 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
   const BYTE *pBuf = org.data();
 
   // discard original data from the stream
-  pMsg = pMsgReplaceBuf(pMsg, HUB_MSG_TYPE_LINE_DATA, NULL, 0);
+  if(!pMsgReplaceBuf(pMsg, HUB_MSG_TYPE_LINE_DATA, NULL, 0))
+    return NULL;
 
   for (; len ; len--) {
     BYTE ch = *pBuf++;
@@ -179,11 +185,19 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
               case 2:
                 if (Options() & GO_BREAK_STATUS) {
                   pMsg = Flush(pMsg);
+                  if (!pMsg)
+                    return NULL;
                   pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_BREAK_STATUS, (data[0] & LINE_STATUS_BI) != 0);
+                  if (!pMsg)
+                    return NULL;
                 }
                 if (data[0] & maskLsr) {
                   pMsg = Flush(pMsg);
+                  if (!pMsg)
+                    return NULL;
                   pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_LINE_STATUS, data[0] | VAL2MASK(maskLsr));
+                  if (!pMsg)
+                    return NULL;
                 }
                 if (subState == 2 && ((data[0] & LINE_STATUS_BI) == 0 || ch != 0)) {
                   // insert error character if it is not part of break
@@ -204,7 +218,11 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
             } else if (subState == 1) {
               if (maskMst) {
                 pMsg = Flush(pMsg);
+                if (!pMsg)
+                  return NULL;
                 pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_MODEM_STATUS, ch | VAL2MASK(maskMst));
+                if (!pMsg)
+                  return NULL;
               }
               Reset();
             } else {
@@ -224,7 +242,11 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
               } else {
                 if (Options() & GO_RBR_STATUS) {
                   pMsg = Flush(pMsg);
+                  if (!pMsg)
+                    return NULL;
                   pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_RBR_STATUS, *(ULONG *)data);
+                  if (!pMsg)
+                    return NULL;
                 }
                 Reset();
               }
@@ -245,10 +267,14 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
               } else {
                 if (Options() & GO_RLC_STATUS) {
                   pMsg = Flush(pMsg);
+                  if (!pMsg)
+                    return NULL;
                   pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_RLC_STATUS,
                       (VAL2LC_BYTESIZE(data[0])
                       |VAL2LC_PARITY(data[1])
                       |VAL2LC_STOPBITS(data[2])));
+                  if (!pMsg)
+                    return NULL;
                 }
                 Reset();
               }
@@ -277,9 +303,7 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
     line_data.append(&ch, 1);
   }
 
-  pMsg = Flush(pMsg);
-
-  return pMsg;
+  return Flush(pMsg);
 }
 ///////////////////////////////////////////////////////////////
 class Filter : public Valid {
@@ -500,7 +524,8 @@ static BOOL CALLBACK InMethod(
                            ESC_OPTS_V2O_ESCCHAR(((Filter *)hFilter)->escapeChar);
 
       // hide this message from subsequent filters
-      pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
+      if(!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+        return FALSE;
 
       break;
     }
@@ -523,7 +548,8 @@ static BOOL CALLBACK InMethod(
       }
 
       // hide this message from subsequent filters
-      pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
+      if(!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+        return FALSE;
 
       break;
     }
@@ -589,7 +615,8 @@ static BOOL CALLBACK InMethod(
 
       if (pEscParse->Options() & GO_RBR_STATUS) {
         // discard any status settings controlled by this filter
-        pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
+        if(!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+          return FALSE;
       }
       break;
     }
@@ -601,7 +628,8 @@ static BOOL CALLBACK InMethod(
 
       if (pEscParse->Options() & GO_RLC_STATUS) {
         // discard any status settings controlled by this filter
-        pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
+        if(!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+          return FALSE;
       }
       break;
     }
@@ -613,7 +641,8 @@ static BOOL CALLBACK InMethod(
 
       if (pEscParse->Options() & GO_BREAK_STATUS) {
         // discard any status settings controlled by this filter
-        pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY);
+        if(!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+          return FALSE;
       }
       break;
     }

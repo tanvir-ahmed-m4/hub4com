@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/10/16 09:24:23  vfrolov
+ * Changed return type of ROUTINE_MSG_REPLACE_*() to BOOL
+ *
  * Revision 1.2  2008/10/16 06:34:27  vfrolov
  * Fixed typo
  *
@@ -243,13 +246,17 @@ static BOOL CALLBACK OutMethod(
     }
     case HUB_MSG_TYPE_SET_BR:
       // discard if controlled by this filter
-      if (((Filter *)hFilter)->soOutMask & SO_SET_BR)
-        pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY);
+      if (((Filter *)hFilter)->soOutMask & SO_SET_BR) {
+        if (!pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY))
+          return FALSE;
+      }
       break;
     case HUB_MSG_TYPE_SET_LC:
       // discard if controlled by this filter
-      if (((Filter *)hFilter)->soOutMask & SO_SET_LC)
-        pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY);
+      if (((Filter *)hFilter)->soOutMask & SO_SET_LC) {
+        if (!pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY))
+          return FALSE;
+      }
       break;
     case HUB_MSG_TYPE_RBR_STATUS: {
       if (((Filter *)hFilter)->soOutMask & SO_SET_BR) {
