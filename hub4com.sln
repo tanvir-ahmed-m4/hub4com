@@ -25,6 +25,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-escinsert", "plugins
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-linectl", "plugins\linectl\linectl.vcproj", "{8060E11C-18B2-4F9D-BDC0-A37726A3B8B9}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-lsrmap", "plugins\lsrmap\lsrmap.vcproj", "{9089D426-5B23-4F82-B32E-33D56AF225DC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -79,6 +81,10 @@ Global
 		{8060E11C-18B2-4F9D-BDC0-A37726A3B8B9}.Debug|Win32.Build.0 = Debug|Win32
 		{8060E11C-18B2-4F9D-BDC0-A37726A3B8B9}.Release|Win32.ActiveCfg = Release|Win32
 		{8060E11C-18B2-4F9D-BDC0-A37726A3B8B9}.Release|Win32.Build.0 = Release|Win32
+		{9089D426-5B23-4F82-B32E-33D56AF225DC}.Debug|Win32.ActiveCfg = Debug|Win32
+		{9089D426-5B23-4F82-B32E-33D56AF225DC}.Debug|Win32.Build.0 = Debug|Win32
+		{9089D426-5B23-4F82-B32E-33D56AF225DC}.Release|Win32.ActiveCfg = Release|Win32
+		{9089D426-5B23-4F82-B32E-33D56AF225DC}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
