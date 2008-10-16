@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/10/16 16:06:30  vfrolov
+ * Added --br and --lc options
+ *
  * Revision 1.3  2008/10/16 09:24:23  vfrolov
  * Changed return type of ROUTINE_MSG_REPLACE_*() to BOOL
  *
@@ -87,11 +90,13 @@ class Filter : public Valid {
     typedef pair<int, State*> PortPair;
 
     PortsMap portsMap;
+
+    void Parse(const char *pArg);
 };
 
 Filter::Filter(int argc, const char *const argv[])
-  : soOutMask(SO_SET_BR|SO_SET_LC),
-    goInMask(GO_RBR_STATUS|GO_RLC_STATUS),
+  : soOutMask(0),
+    goInMask(0),
     hHub(NULL)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
@@ -103,10 +108,53 @@ Filter::Filter(int argc, const char *const argv[])
       continue;
     }
 
-    {
-      cerr << "Unknown option --" << pArg << endl;
-      Invalidate();
+    Parse(pArg);
+  }
+
+  if (!soOutMask) {
+    Parse("br=remote");
+    Parse("lc=remote");
+  }
+}
+
+void Filter::Parse(const char *pArg)
+{
+  const char *pParam;
+
+  if ((pParam = GetParam(pArg, "br=")) != NULL) {
+    soOutMask |= SO_SET_BR;
+
+    switch (tolower(*pParam)) {
+      case 'l':
+        goInMask |= GO_LBR_STATUS;
+        break;
+      case 'r':
+        goInMask |= GO_RBR_STATUS;
+        break;
+      default:
+        cerr << "Invalid option " << pArg << endl;
+        Invalidate();
     }
+  }
+  else
+  if ((pParam = GetParam(pArg, "lc=")) != NULL) {
+    soOutMask |= SO_SET_LC;
+
+    switch (tolower(*pParam)) {
+      case 'l':
+        goInMask |= GO_LLC_STATUS;
+        break;
+      case 'r':
+        goInMask |= GO_RLC_STATUS;
+        break;
+      default:
+        cerr << "Invalid option " << pArg << endl;
+        Invalidate();
+    }
+  }
+  else {
+    cerr << "Unknown option " << pArg << endl;
+    Invalidate();
   }
 }
 
@@ -153,7 +201,12 @@ static void CALLBACK Help(const char *pProgPath)
   << "Usage:" << endl
   << "  " << pProgPath << " ... --create-filter=" << GetPluginAbout()->pName << "[,<FID>][:<options>] ... --add-filters=<ports>:[...,]<FID>[,...] ..." << endl
   << endl
-  << "Options:" << endl
+  << "Wire options:" << endl
+  << "  --br=<s>              - wire input state of <s> baudrate to output one." << endl
+  << "  --lc=<s>              - wire input state of <s> line control to output one." << endl
+  << endl
+  << "  The possible values of <s> above can be l[ocal] or r[emote]. If no any wire" << endl
+  << "  option specified, then the options --br=remote --lc=remote are used." << endl
   << endl
   << "Examples:" << endl
   << "  " << pProgPath << " --load=,,_END_" << endl
@@ -197,7 +250,7 @@ static BOOL CALLBACK Init(
 
   return TRUE;
 }
-
+///////////////////////////////////////////////////////////////
 static BOOL CALLBACK OutMethod(
     HFILTER hFilter,
     int nFromPort,
@@ -228,7 +281,7 @@ static BOOL CALLBACK OutMethod(
     case HUB_MSG_TYPE_GET_IN_OPTS: {
       _ASSERTE(pOutMsg->u.pv.pVal != NULL);
 
-      // or'e with the required mask to get remote baudrate and line control
+      // or'e with the required mask to get baudrate and line control
       *pOutMsg->u.pv.pVal |= (((Filter *)hFilter)->goInMask & pOutMsg->u.pv.val);
       break;
     }
@@ -258,8 +311,15 @@ static BOOL CALLBACK OutMethod(
           return FALSE;
       }
       break;
+    case HUB_MSG_TYPE_LBR_STATUS:
     case HUB_MSG_TYPE_RBR_STATUS: {
-      if (((Filter *)hFilter)->soOutMask & SO_SET_BR) {
+      if ((((Filter *)hFilter)->soOutMask & SO_SET_BR) && (
+            (pOutMsg->type == HUB_MSG_TYPE_LBR_STATUS &&
+              (((Filter *)hFilter)->goInMask & GO_LBR_STATUS)) ||
+            (pOutMsg->type == HUB_MSG_TYPE_RBR_STATUS &&
+              (((Filter *)hFilter)->goInMask & GO_RBR_STATUS))
+         ))
+      {
         State *pState = ((Filter *)hFilter)->GetState(nToPort);
 
         if (!pState)
@@ -272,8 +332,15 @@ static BOOL CALLBACK OutMethod(
       }
       break;
     }
+    case HUB_MSG_TYPE_LLC_STATUS:
     case HUB_MSG_TYPE_RLC_STATUS: {
-      if (((Filter *)hFilter)->soOutMask & SO_SET_LC) {
+      if ((((Filter *)hFilter)->soOutMask & SO_SET_LC) && (
+            (pOutMsg->type == HUB_MSG_TYPE_LLC_STATUS &&
+              (((Filter *)hFilter)->goInMask & GO_LLC_STATUS)) ||
+            (pOutMsg->type == HUB_MSG_TYPE_RLC_STATUS &&
+              (((Filter *)hFilter)->goInMask & GO_RLC_STATUS))
+         ))
+      {
         State *pState = ((Filter *)hFilter)->GetState(nToPort);
 
         if (!pState)
