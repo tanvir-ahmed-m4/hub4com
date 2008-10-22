@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/10/22 15:31:38  vfrolov
+ * Fixed race condition
+ *
  * Revision 1.3  2008/10/06 12:12:29  vfrolov
  * Duplicated code moved to SetThread()
  *
@@ -338,7 +341,7 @@ WaitEventOverlapped::WaitEventOverlapped(ComPort &_port, SOCKET hSockWait)
   }
 }
 
-WaitEventOverlapped::~WaitEventOverlapped()
+void WaitEventOverlapped::Delete()
 {
   if (hSock != INVALID_SOCKET) {
     if (closesocket(hSock) != 0) {
@@ -373,18 +376,24 @@ WaitEventOverlapped::~WaitEventOverlapped()
           port.Name().c_str());
     }
   }
+
+  SafeDelete::Delete();
 }
 
 VOID CALLBACK WaitEventOverlapped::OnEvent(
     PVOID pOverlapped,
     BOOLEAN /*timerOrWaitFired*/)
 {
-  ::QueueUserAPC(OnEvent, hThread, (ULONG_PTR)pOverlapped);
+  if (::QueueUserAPC(OnEvent, hThread, (ULONG_PTR)pOverlapped))
+    ((WaitEventOverlapped *)pOverlapped)->LockDelete();
 }
 
 VOID CALLBACK WaitEventOverlapped::OnEvent(ULONG_PTR pOverlapped)
 {
   WaitEventOverlapped *pOver = (WaitEventOverlapped *)pOverlapped;
+
+  if (!pOver->UnockDelete())
+    return;
 
   WSANETWORKEVENTS events;
 
@@ -459,7 +468,7 @@ ListenOverlapped::ListenOverlapped(Listener &_listener, SOCKET hSockWait)
   }
 }
 
-ListenOverlapped::~ListenOverlapped()
+void ListenOverlapped::Delete()
 {
   if (hSock != INVALID_SOCKET) {
     if (closesocket(hSock) != 0) {
@@ -491,18 +500,24 @@ ListenOverlapped::~ListenOverlapped()
           "ListenOverlapped::~ListenOverlapped(): CloseHandle(hEvent) %s");
     }
   }
+
+  SafeDelete::Delete();
 }
 
 VOID CALLBACK ListenOverlapped::OnEvent(
     PVOID pOverlapped,
     BOOLEAN /*timerOrWaitFired*/)
 {
-  ::QueueUserAPC(OnEvent, hThread, (ULONG_PTR)pOverlapped);
+  if (::QueueUserAPC(OnEvent, hThread, (ULONG_PTR)pOverlapped))
+    ((ListenOverlapped *)pOverlapped)->LockDelete();
 }
 
 VOID CALLBACK ListenOverlapped::OnEvent(ULONG_PTR pOverlapped)
 {
   ListenOverlapped *pOver = (ListenOverlapped *)pOverlapped;
+
+  if (!pOver->UnockDelete())
+    return;
 
   WSANETWORKEVENTS events;
 
