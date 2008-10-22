@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/10/22 08:27:26  vfrolov
+ * Added ability to set bytesize, parity and stopbits separately
+ *
  * Revision 1.4  2008/10/16 09:24:23  vfrolov
  * Changed return type of ROUTINE_MSG_REPLACE_*() to BOOL
  *
@@ -150,7 +153,7 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
   const BYTE *pBuf = org.data();
 
   // discard original data from the stream
-  if(!pMsgReplaceBuf(pMsg, HUB_MSG_TYPE_LINE_DATA, NULL, 0))
+  if (!pMsgReplaceBuf(pMsg, HUB_MSG_TYPE_LINE_DATA, NULL, 0))
     return NULL;
 
   for (; len ; len--) {
@@ -270,9 +273,9 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
                   if (!pMsg)
                     return NULL;
                   pMsg = pMsgInsertVal(pMsg, HUB_MSG_TYPE_RLC_STATUS,
-                      (VAL2LC_BYTESIZE(data[0])
-                      |VAL2LC_PARITY(data[1])
-                      |VAL2LC_STOPBITS(data[2])));
+                      (VAL2LC_BYTESIZE(data[0])|LC_MASK_BYTESIZE
+                      |VAL2LC_PARITY(data[1])|LC_MASK_PARITY
+                      |VAL2LC_STOPBITS(data[2])|LC_MASK_STOPBITS));
                   if (!pMsg)
                     return NULL;
                 }
@@ -524,7 +527,7 @@ static BOOL CALLBACK InMethod(
                            ESC_OPTS_V2O_ESCCHAR(((Filter *)hFilter)->escapeChar);
 
       // hide this message from subsequent filters
-      if(!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+      if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
         return FALSE;
 
       break;
@@ -548,7 +551,7 @@ static BOOL CALLBACK InMethod(
       }
 
       // hide this message from subsequent filters
-      if(!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+      if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
         return FALSE;
 
       break;
@@ -615,7 +618,7 @@ static BOOL CALLBACK InMethod(
 
       if (pEscParse->Options() & GO_RBR_STATUS) {
         // discard any status settings controlled by this filter
-        if(!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+        if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
           return FALSE;
       }
       break;
@@ -628,7 +631,7 @@ static BOOL CALLBACK InMethod(
 
       if (pEscParse->Options() & GO_RLC_STATUS) {
         // discard any status settings controlled by this filter
-        if(!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+        if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
           return FALSE;
       }
       break;
@@ -641,7 +644,7 @@ static BOOL CALLBACK InMethod(
 
       if (pEscParse->Options() & GO_BREAK_STATUS) {
         // discard any status settings controlled by this filter
-        if(!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+        if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
           return FALSE;
       }
       break;

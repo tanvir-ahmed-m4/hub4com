@@ -41,6 +41,9 @@ extern "C" {
 #define HUB_MSG_VAL_TYPE_MSG_TYPE  0x0300
 #define HUB_MSG_VAL_TYPE_UINT      0x0400
 #define HUB_MSG_VAL_TYPE_LC        0x0500
+#define   LC_MASK_BYTESIZE         ((DWORD)1 << 24)
+#define   LC_MASK_PARITY           ((DWORD)1 << 25)
+#define   LC_MASK_STOPBITS         ((DWORD)1 << 26)
 #define   LC2VAL_BYTESIZE(t)       ((BYTE)((t)))
 #define   VAL2LC_BYTESIZE(v)       ((DWORD)(BYTE)(v))
 #define   LC2VAL_PARITY(t)         ((BYTE)((t) >> 8))

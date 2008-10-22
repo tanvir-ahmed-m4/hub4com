@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/10/22 08:27:26  vfrolov
+ * Added ability to set bytesize, parity and stopbits separately
+ *
  * Revision 1.3  2008/10/16 09:24:23  vfrolov
  * Changed return type of ROUTINE_MSG_REPLACE_*() to BOOL
  *
@@ -62,15 +65,15 @@ class State {
   public:
     State()
     : isConnected(FALSE),
-      mstVal(0),
-      lsrVal(0),
-      br(CBR_19200),
-      lc(VAL2LC_BYTESIZE(8)|VAL2LC_PARITY(NOPARITY)|VAL2LC_STOPBITS(ONESTOPBIT))
+      soMask(0),
+      pinState(0),
+      br(0),
+      lc(0)
     {}
 
     BOOL isConnected;
-    BYTE mstVal;
-    BYTE lsrVal;
+    DWORD soMask;
+    WORD pinState;
     DWORD br;
     DWORD lc;
 };
@@ -91,8 +94,8 @@ class Filter : public Valid {
 };
 
 Filter::Filter(int argc, const char *const argv[])
-  : soMask(SO_V2O_PIN_STATE(PIN_STATE_CTS|PIN_STATE_DSR|PIN_STATE_DCD|PIN_STATE_RI|PIN_STATE_BREAK) |
-           SO_V2O_LINE_STATUS(LINE_STATUS_OE|LINE_STATUS_PE|LINE_STATUS_FE|LINE_STATUS_BI|LINE_STATUS_FIFOERR) |
+  : soMask(SO_V2O_PIN_STATE(SPS_V2P_MST(-1)|PIN_STATE_BREAK) |
+           SO_V2O_LINE_STATUS(-1) |
            SO_SET_BR|SO_SET_LC),
     escapeChar(0xFF)
 {
@@ -194,14 +197,14 @@ static HFILTER CALLBACK Create(
 }
 ///////////////////////////////////////////////////////////////
 static void InsertStatus(
-    Filter &filter,
+    BYTE escapeChar,
     BYTE code,
     BYTE val,
     HUB_MSG **ppMsg)
 {
   BYTE insert[3];
 
-  insert[0] = filter.escapeChar;
+  insert[0] = escapeChar;
   insert[1] = code;
   insert[2] = val;
 
@@ -212,13 +215,13 @@ static void InsertStatus(
 }
 ///////////////////////////////////////////////////////////////
 static void InsertRBR(
-    Filter &filter,
+    BYTE escapeChar,
     ULONG rbr,
     HUB_MSG **ppMsg)
 {
   BYTE insert[2 + sizeof(ULONG)];
 
-  insert[0] = filter.escapeChar;
+  insert[0] = escapeChar;
   insert[1] = C0CE_INSERT_RBR;
   *(ULONG *)&insert[2] = rbr;
 
@@ -229,13 +232,13 @@ static void InsertRBR(
 }
 ///////////////////////////////////////////////////////////////
 static void InsertRLC(
-    Filter &filter,
+    BYTE escapeChar,
     DWORD rlc,
     HUB_MSG **ppMsg)
 {
   BYTE insert[2 + 3];
 
-  insert[0] = filter.escapeChar;
+  insert[0] = escapeChar;
   insert[1] = C0CE_INSERT_RLC;
   insert[2] = LC2VAL_BYTESIZE(rlc);
   insert[3] = LC2VAL_PARITY(rlc);
@@ -274,18 +277,25 @@ static BOOL CALLBACK InMethod(
         break;
       }
 
-      // init state
-      if (((Filter *)hFilter)->soMask & SO_V2O_PIN_STATE(SPS_V2P_MST(-1)))
-        InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_MST, pState->mstVal, ppEchoMsg);
+      // Insert current state
 
-      if (((Filter *)hFilter)->soMask & (SO_V2O_LINE_STATUS(-1) | SO_V2O_PIN_STATE(PIN_STATE_BREAK)))
-        InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_LSR_NODATA, pState->lsrVal, ppEchoMsg);
+      if ((pState->soMask & SO_SET_BR) && pState->br != 0)
+        InsertRBR(((Filter *)hFilter)->escapeChar, pState->br, ppEchoMsg);
 
-      if (((Filter *)hFilter)->soMask & SO_SET_BR)
-        InsertRBR(*(Filter *)hFilter, pState->br, ppEchoMsg);
+      if ((pState->soMask & SO_SET_LC) &&
+          (pState->lc & (LC_MASK_BYTESIZE|LC_MASK_PARITY|LC_MASK_STOPBITS)) == (LC_MASK_BYTESIZE|LC_MASK_PARITY|LC_MASK_STOPBITS))
+      {
+        InsertRLC(((Filter *)hFilter)->escapeChar, pState->lc, ppEchoMsg);
+      }
 
-      if (((Filter *)hFilter)->soMask & SO_SET_LC)
-        InsertRLC(*(Filter *)hFilter, pState->lc, ppEchoMsg);
+      if (pState->soMask & SO_V2O_PIN_STATE(SPS_V2P_MST(-1)))
+        InsertStatus(((Filter *)hFilter)->escapeChar, SERIAL_LSRMST_MST, SPS_P2V_MST(pState->pinState), ppEchoMsg);
+
+      if (pState->soMask & (SO_V2O_LINE_STATUS(-1) | SO_V2O_PIN_STATE(PIN_STATE_BREAK))) {
+        BYTE brk = (pState->pinState & PIN_STATE_BREAK) ? LINE_STATUS_BI : 0;
+
+        InsertStatus(((Filter *)hFilter)->escapeChar, SERIAL_LSRMST_LSR_NODATA, brk, ppEchoMsg);
+      }
 
       break;
     }
@@ -304,118 +314,149 @@ static BOOL CALLBACK OutMethod(
   _ASSERTE(pOutMsg != NULL);
 
   switch (pOutMsg->type) {
-    case HUB_MSG_TYPE_SET_OUT_OPTS:
+    case HUB_MSG_TYPE_SET_OUT_OPTS: {
+      DWORD soMask = (pOutMsg->u.val & ((Filter *)hFilter)->soMask);
+
       // discard supported options
       pOutMsg->u.val &= ~((Filter *)hFilter)->soMask;
+
+      State *pState = ((Filter *)hFilter)->GetState(nToPort);
+
+      if (!pState)
+        return FALSE;
+
+      pState->soMask |= soMask;
+
       break;
-    case HUB_MSG_TYPE_SET_BR:
-      if (((Filter *)hFilter)->soMask & SO_SET_BR) {
+    }
+    case HUB_MSG_TYPE_SET_BR: {
+      State *pState = ((Filter *)hFilter)->GetState(nToPort);
+
+      if (!pState)
+        return FALSE;
+
+      _ASSERTE(((pState->soMask | ~((Filter *)hFilter)->soMask) & SO_SET_BR) != 0);
+
+      if (pState->soMask & SO_SET_BR) {
         DWORD val = pOutMsg->u.val;
 
         // discard messages for supported options
         if (!pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY))
-          return FALSE;
-
-        State *pState = ((Filter *)hFilter)->GetState(nToPort);
-
-        if (!pState)
           return FALSE;
 
         if (pState->br != val) {
           pState->br = val;
 
           if (pState->isConnected)
-            InsertRBR(*(Filter *)hFilter, pState->br, &pOutMsg);
+            InsertRBR(((Filter *)hFilter)->escapeChar, pState->br, &pOutMsg);
         }
       }
 
       break;
-    case HUB_MSG_TYPE_SET_LC:
-      _ASSERTE((pOutMsg->u.val & ~(VAL2LC_BYTESIZE(-1)|VAL2LC_PARITY(-1)|VAL2LC_STOPBITS(-1))) == 0);
+    }
+    case HUB_MSG_TYPE_SET_LC: {
+      _ASSERTE((pOutMsg->u.val & ~(VAL2LC_BYTESIZE(-1)|LC_MASK_BYTESIZE
+                                  |VAL2LC_PARITY(-1)|LC_MASK_PARITY
+                                  |VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS)) == 0);
 
-      if (((Filter *)hFilter)->soMask & SO_SET_LC) {
+      State *pState = ((Filter *)hFilter)->GetState(nToPort);
+
+      if (!pState)
+        return FALSE;
+
+      _ASSERTE(((pState->soMask | ~((Filter *)hFilter)->soMask) & SO_SET_LC) != 0);
+
+      if (pState->soMask & SO_SET_LC) {
         DWORD val = pOutMsg->u.val;
 
         // discard messages for supported options
         if (!pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY))
           return FALSE;
 
-        State *pState = ((Filter *)hFilter)->GetState(nToPort);
+        if ((val & LC_MASK_BYTESIZE) == 0) {
+          _ASSERTE((val & VAL2LC_BYTESIZE(-1)) == 0);
+          val |= (pState->lc & (VAL2LC_BYTESIZE(-1)|LC_MASK_BYTESIZE));
+        }
 
-        if (!pState)
-          return FALSE;
+        if ((val & LC_MASK_PARITY) == 0) {
+          _ASSERTE((val & VAL2LC_PARITY(-1)) == 0);
+          val |= (pState->lc & (VAL2LC_PARITY(-1)|LC_MASK_PARITY));
+        }
+
+        if ((val & LC_MASK_STOPBITS) == 0) {
+          _ASSERTE((val & VAL2LC_STOPBITS(-1)) == 0);
+          val |= (pState->lc & (VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS));
+        }
 
         if (pState->lc != val) {
           pState->lc = val;
 
           if (pState->isConnected)
-            InsertRLC(*(Filter *)hFilter, pState->lc, &pOutMsg);
-        }
-      }
-
-      break;
-    case HUB_MSG_TYPE_SET_PIN_STATE: {
-      WORD mask = MASK2VAL(pOutMsg->u.val) & SO_O2V_PIN_STATE(((Filter *)hFilter)->soMask);
-
-      if (!mask)
-        break;
-
-      WORD val = (WORD)pOutMsg->u.val;
-
-      // discard settings for supported options
-      pOutMsg->u.val &= ~VAL2MASK(mask);
-
-      State *pState = ((Filter *)hFilter)->GetState(nToPort);
-
-      if (!pState)
-        return FALSE;
-
-      BYTE mstMask = SPS_P2V_MST(mask);
-
-      if (mstMask) {
-        BYTE mstVal;
-
-        mstVal = ((SPS_P2V_MST(val) & mstMask) | (pState->mstVal & ~mstMask));
-        mstMask = pState->mstVal ^ mstVal;
-
-        if (mstMask) {
-          if (pState->isConnected)
-            InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_MST, mstVal, &pOutMsg);
-
-          pState->mstVal = mstVal;
-        }
-      }
-
-      if (mask & PIN_STATE_BREAK) {
-        pState->lsrVal = (val & PIN_STATE_BREAK) ? LINE_STATUS_BI : 0;
-
-        if (pState->isConnected && (!pState->lsrVal ||
-            (((Filter *)hFilter)->soMask & SO_V2O_LINE_STATUS(LINE_STATUS_BI)) == 0))
-        {
-          InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_LSR_NODATA, pState->lsrVal, &pOutMsg);
+            InsertRLC(((Filter *)hFilter)->escapeChar, pState->lc, &pOutMsg);
         }
       }
 
       break;
     }
-    case HUB_MSG_TYPE_SET_LSR: {
-      BYTE lsr;
-
-      lsr = (BYTE)pOutMsg->u.val & (BYTE)MASK2VAL(pOutMsg->u.val) & SO_O2V_LINE_STATUS(((Filter *)hFilter)->soMask);
-
-      // discard settings for supported options
-      pOutMsg->u.val &= ~VAL2MASK(SO_O2V_LINE_STATUS(((Filter *)hFilter)->soMask));
-
-      if (!lsr)
-        break;
-
+    case HUB_MSG_TYPE_SET_PIN_STATE: {
       State *pState = ((Filter *)hFilter)->GetState(nToPort);
 
       if (!pState)
         return FALSE;
 
+      _ASSERTE(((pState->soMask | ~((Filter *)hFilter)->soMask) & SO_V2O_PIN_STATE(-1)) != 0);
+
+      WORD mask = MASK2VAL(pOutMsg->u.val) & SO_O2V_PIN_STATE(pState->soMask);
+
+      if (!mask)
+        break;
+
+      WORD pinState = (WORD)pOutMsg->u.val;
+
+      // discard settings for supported options
+      pOutMsg->u.val &= ~VAL2MASK(mask);
+
+      pinState = ((pinState & mask) | (pState->pinState & ~mask));
+      mask = pState->pinState ^ pinState;
+
+      if (mask) {
+        if (pState->isConnected) {
+          if (SPS_P2V_MST(mask))
+            InsertStatus(((Filter *)hFilter)->escapeChar, SERIAL_LSRMST_MST, SPS_P2V_MST(pinState), &pOutMsg);
+
+          if (mask & PIN_STATE_BREAK) {
+            BYTE brk = (pinState & PIN_STATE_BREAK) ? LINE_STATUS_BI : 0;
+
+            if (!brk || (pState->soMask & SO_V2O_LINE_STATUS(LINE_STATUS_BI)) == 0)
+              InsertStatus(((Filter *)hFilter)->escapeChar, SERIAL_LSRMST_LSR_NODATA, brk, &pOutMsg);
+          }
+        }
+
+        pState->pinState = pinState;
+      }
+
+      break;
+    }
+    case HUB_MSG_TYPE_SET_LSR: {
+      State *pState = ((Filter *)hFilter)->GetState(nToPort);
+
+      if (!pState)
+        return FALSE;
+
+      _ASSERTE(((pState->soMask | ~((Filter *)hFilter)->soMask) & SO_V2O_LINE_STATUS(-1)) != 0);
+
+      BYTE lsr;
+
+      lsr = (BYTE)pOutMsg->u.val & (BYTE)MASK2VAL(pOutMsg->u.val) & SO_O2V_LINE_STATUS(pState->soMask);
+
+      // discard settings for supported options
+      pOutMsg->u.val &= ~VAL2MASK(SO_O2V_LINE_STATUS(pState->soMask));
+
+      if (!lsr)
+        break;
+
       if (pState->isConnected)
-        InsertStatus(*(Filter *)hFilter, SERIAL_LSRMST_LSR_NODATA, lsr, &pOutMsg);
+        InsertStatus(((Filter *)hFilter)->escapeChar, SERIAL_LSRMST_LSR_NODATA, lsr, &pOutMsg);
 
       break;
     }
@@ -444,7 +485,7 @@ static BOOL CALLBACK OutMethod(
         }
       }
 
-      if(!pMsgReplaceBuf(pOutMsg, HUB_MSG_TYPE_LINE_DATA, line_data.data(), (DWORD)line_data.size()))
+      if (!pMsgReplaceBuf(pOutMsg, HUB_MSG_TYPE_LINE_DATA, line_data.data(), (DWORD)line_data.size()))
         return FALSE;
 
       break;

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2008/10/22 08:27:26  vfrolov
+ * Added ability to set bytesize, parity and stopbits separately
+ *
  * Revision 1.7  2008/09/30 08:28:32  vfrolov
  * Added ability to control OUT1 and OUT2 pins
  * Added ability to get remote baud rate and line control settings
@@ -98,8 +101,11 @@ class ComIo
     DWORD GetBaudRate() const { return dcb.BaudRate; }
     DWORD GetLineControl() const {
       return (VAL2LC_BYTESIZE(dcb.ByteSize)
+             |LC_MASK_BYTESIZE
              |VAL2LC_PARITY(dcb.Parity)
-             |VAL2LC_STOPBITS(dcb.StopBits));
+             |LC_MASK_PARITY
+             |VAL2LC_STOPBITS(dcb.StopBits)
+             |LC_MASK_STOPBITS);
     }
 
   public:

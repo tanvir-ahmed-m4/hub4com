@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.11  2008/10/22 08:27:26  vfrolov
+ * Added ability to set bytesize, parity and stopbits separately
+ *
  * Revision 1.10  2008/10/07 09:26:00  vfrolov
  * Fixed reseting MCR by setting BR or LC
  *
@@ -442,7 +445,9 @@ struct SERIAL_LINE_CONTROL {
 
 DWORD ComIo::SetLineControl(DWORD lineControl)
 {
-  _ASSERTE((lineControl & ~(VAL2LC_BYTESIZE(-1)|VAL2LC_PARITY(-1)|VAL2LC_STOPBITS(-1))) == 0);
+  _ASSERTE((lineControl & ~(VAL2LC_BYTESIZE(-1)|LC_MASK_BYTESIZE
+                           |VAL2LC_PARITY(-1)|LC_MASK_PARITY
+                           |VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS)) == 0);
 
   if (GetLineControl() == lineControl)
     return lineControl;
@@ -450,9 +455,20 @@ DWORD ComIo::SetLineControl(DWORD lineControl)
   DWORD returned;
   SERIAL_LINE_CONTROL serialLineControl;
 
-  serialLineControl.WordLength = LC2VAL_BYTESIZE(lineControl);
-  serialLineControl.Parity = LC2VAL_PARITY(lineControl);
-  serialLineControl.StopBits = LC2VAL_STOPBITS(lineControl);
+  if (lineControl & LC_MASK_BYTESIZE)
+    serialLineControl.WordLength = LC2VAL_BYTESIZE(lineControl);
+  else
+    serialLineControl.WordLength = dcb.ByteSize;
+
+  if (lineControl & LC_MASK_PARITY)
+    serialLineControl.Parity = LC2VAL_PARITY(lineControl);
+  else
+    serialLineControl.Parity = dcb.Parity;
+
+  if (lineControl & LC_MASK_STOPBITS)
+    serialLineControl.StopBits = LC2VAL_STOPBITS(lineControl);
+  else
+    serialLineControl.StopBits = dcb.StopBits;
 
   if (!DeviceIoControl(handle,
                        IOCTL_SERIAL_SET_LINE_CONTROL,

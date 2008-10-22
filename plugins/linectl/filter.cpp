@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/10/22 08:27:26  vfrolov
+ * Added ability to set bytesize, parity and stopbits separately
+ *
  * Revision 1.4  2008/10/16 16:06:30  vfrolov
  * Added --br and --lc options
  *
@@ -61,22 +64,10 @@ class Valid {
     BOOL isValid;
 };
 ///////////////////////////////////////////////////////////////
-class State {
-  public:
-    State()
-    : br(CBR_19200),
-      lc(VAL2LC_BYTESIZE(8)|VAL2LC_PARITY(NOPARITY)|VAL2LC_PARITY(ONESTOPBIT))
-    {}
-
-    ULONG br;
-    DWORD lc;
-};
-///////////////////////////////////////////////////////////////
 class Filter : public Valid {
   public:
     Filter(int argc, const char *const argv[]);
     void SetHub(HHUB _hHub) { hHub = _hHub; }
-    State *GetState(int nPort);
     const char *PortName(int nPort) const { return pPortName(hHub, nPort); }
     const char *FilterName() const { return pFilterName(hHub, (HFILTER)this); }
 
@@ -85,11 +76,6 @@ class Filter : public Valid {
 
   private:
     HHUB hHub;
-
-    typedef map<int, State*> PortsMap;
-    typedef pair<int, State*> PortPair;
-
-    PortsMap portsMap;
 
     void Parse(const char *pArg);
 };
@@ -156,25 +142,6 @@ void Filter::Parse(const char *pArg)
     cerr << "Unknown option " << pArg << endl;
     Invalidate();
   }
-}
-
-State *Filter::GetState(int nPort)
-{
-  PortsMap::iterator iPair = portsMap.find(nPort);
-
-  if (iPair == portsMap.end()) {
-      portsMap.insert(PortPair(nPort, NULL));
-
-      iPair = portsMap.find(nPort);
-
-      if (iPair == portsMap.end())
-        return NULL;
-  }
-
-  if (!iPair->second)
-    iPair->second = new State();
-
-  return iPair->second;
 }
 ///////////////////////////////////////////////////////////////
 static PLUGIN_TYPE CALLBACK GetPluginType()
@@ -264,18 +231,6 @@ static BOOL CALLBACK OutMethod(
     case HUB_MSG_TYPE_SET_OUT_OPTS: {
       // or'e with the required mask to set
       pOutMsg->u.val |= ((Filter *)hFilter)->soOutMask;
-
-      State *pState = ((Filter *)hFilter)->GetState(nToPort);
-
-      if (!pState)
-        return FALSE;
-
-      // init baudrate and line control
-      if (((Filter *)hFilter)->soOutMask & SO_SET_BR)
-        pOutMsg = pMsgInsertVal(pOutMsg, HUB_MSG_TYPE_SET_BR, pState->br);
-      if (((Filter *)hFilter)->soOutMask & SO_SET_LC)
-        pOutMsg = pMsgInsertVal(pOutMsg, HUB_MSG_TYPE_SET_LC, pState->lc);
-
       break;
     }
     case HUB_MSG_TYPE_GET_IN_OPTS: {
@@ -312,49 +267,41 @@ static BOOL CALLBACK OutMethod(
       }
       break;
     case HUB_MSG_TYPE_LBR_STATUS:
-    case HUB_MSG_TYPE_RBR_STATUS: {
-      if ((((Filter *)hFilter)->soOutMask & SO_SET_BR) && (
-            (pOutMsg->type == HUB_MSG_TYPE_LBR_STATUS &&
-              (((Filter *)hFilter)->goInMask & GO_LBR_STATUS)) ||
-            (pOutMsg->type == HUB_MSG_TYPE_RBR_STATUS &&
-              (((Filter *)hFilter)->goInMask & GO_RBR_STATUS))
-         ))
-      {
-        State *pState = ((Filter *)hFilter)->GetState(nToPort);
+      if ((((Filter *)hFilter)->goInMask & GO_LBR_STATUS) == 0)
+        break;
 
-        if (!pState)
-          return FALSE;
+      if ((((Filter *)hFilter)->soOutMask & SO_SET_BR) == 0)
+        break;
 
-        if (pState->br != pOutMsg->u.val) {
-          pOutMsg = pMsgInsertVal(pOutMsg, HUB_MSG_TYPE_SET_BR, pOutMsg->u.val);
-          pState->br = pOutMsg->u.val;
-        }
-      }
+      pOutMsg = pMsgInsertVal(pOutMsg, HUB_MSG_TYPE_SET_BR, pOutMsg->u.val);
       break;
-    }
+    case HUB_MSG_TYPE_RBR_STATUS:
+      if ((((Filter *)hFilter)->goInMask & GO_RBR_STATUS) == 0)
+        break;
+
+      if ((((Filter *)hFilter)->soOutMask & SO_SET_BR) == 0)
+        break;
+
+      pOutMsg = pMsgInsertVal(pOutMsg, HUB_MSG_TYPE_SET_BR, pOutMsg->u.val);
+      break;
     case HUB_MSG_TYPE_LLC_STATUS:
-    case HUB_MSG_TYPE_RLC_STATUS: {
-      if ((((Filter *)hFilter)->soOutMask & SO_SET_LC) && (
-            (pOutMsg->type == HUB_MSG_TYPE_LLC_STATUS &&
-              (((Filter *)hFilter)->goInMask & GO_LLC_STATUS)) ||
-            (pOutMsg->type == HUB_MSG_TYPE_RLC_STATUS &&
-              (((Filter *)hFilter)->goInMask & GO_RLC_STATUS))
-         ))
-      {
-        State *pState = ((Filter *)hFilter)->GetState(nToPort);
+      if ((((Filter *)hFilter)->goInMask & GO_LLC_STATUS) == 0)
+        break;
 
-        if (!pState)
-          return FALSE;
+      if ((((Filter *)hFilter)->soOutMask & SO_SET_LC) == 0)
+        break;
 
-        _ASSERTE((pOutMsg->u.val & ~(VAL2LC_BYTESIZE(-1)|VAL2LC_PARITY(-1)|VAL2LC_STOPBITS(-1))) == 0);
-
-        if (pState->lc != pOutMsg->u.val) {
-          pOutMsg = pMsgInsertVal(pOutMsg, HUB_MSG_TYPE_SET_LC, pOutMsg->u.val);
-          pState->lc = pOutMsg->u.val;
-        }
-      }
+      pOutMsg = pMsgInsertVal(pOutMsg, HUB_MSG_TYPE_SET_LC, pOutMsg->u.val);
       break;
-    }
+    case HUB_MSG_TYPE_RLC_STATUS:
+      if ((((Filter *)hFilter)->goInMask & GO_RLC_STATUS) == 0)
+        break;
+
+      if ((((Filter *)hFilter)->soOutMask & SO_SET_LC) == 0)
+        break;
+
+      pOutMsg = pMsgInsertVal(pOutMsg, HUB_MSG_TYPE_SET_LC, pOutMsg->u.val);
+      break;
   }
 
   return pOutMsg != NULL;

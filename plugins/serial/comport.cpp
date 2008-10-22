@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.14  2008/10/22 08:27:26  vfrolov
+ * Added ability to set bytesize, parity and stopbits separately
+ *
  * Revision 1.13  2008/10/16 16:04:39  vfrolov
  * Added LBR_STATUS and LLC_STATUS
  *
@@ -558,20 +561,42 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     if (!pComIo)
       return FALSE;
 
-    DWORD oldVal = pComIo->GetLineControl();;
+    DWORD oldVal = pComIo->GetLineControl();
     DWORD curVal = pComIo->SetLineControl(pMsg->u.val);
 
-    if (curVal != pMsg->u.val) {
+    DWORD mask = (pMsg->u.val & (LC_MASK_BYTESIZE|LC_MASK_PARITY|LC_MASK_STOPBITS));
+
+    if (mask & LC_MASK_BYTESIZE)
+      mask |= VAL2LC_BYTESIZE(-1);
+
+    if (mask & LC_MASK_PARITY)
+      mask |= VAL2LC_PARITY(-1);
+
+    if (mask & LC_MASK_STOPBITS)
+      mask |= VAL2LC_STOPBITS(-1);
+
+    if ((curVal & mask) != (pMsg->u.val & mask)) {
       cerr << name << " WARNING: can't change"
            << hex
            << " line control 0x" << oldVal
-           << " to 0x" << pMsg->u.val
+           << " to 0x" << (pMsg->u.val | (oldVal & ~mask))
            << " (current=0x" << curVal << ")"
            << dec
            << endl;
     }
 
-    if (oldVal != curVal) {
+    DWORD changes = (oldVal ^ curVal);
+
+    if (changes) {
+      if ((changes & (VAL2LC_BYTESIZE(-1)|LC_MASK_BYTESIZE)) == 0)
+        curVal &= ~(VAL2LC_BYTESIZE(-1)|LC_MASK_BYTESIZE);
+
+      if ((changes & (VAL2LC_PARITY(-1)|LC_MASK_PARITY)) == 0)
+        curVal &= ~(VAL2LC_PARITY(-1)|LC_MASK_PARITY);
+
+      if ((changes & (VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS)) == 0)
+        curVal &= ~(VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS);
+
       if (inOptions & GO_LLC_STATUS) {
         HUB_MSG msg;
 
