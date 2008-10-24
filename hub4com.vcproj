@@ -302,17 +302,25 @@
 			Name="Other Files"
 			>
 			<File
-				RelativePath=".\examples\com2tcp-esc.bat"
-				>
-			</File>
-			<File
-				RelativePath=".\examples\com2tcp.bat"
-				>
-			</File>
-			<File
 				RelativePath=".\ReadMe.txt"
 				>
 			</File>
+			<Filter
+				Name="examples"
+				>
+				<File
+					RelativePath=".\examples\com2tcp-esc.bat"
+					>
+				</File>
+				<File
+					RelativePath=".\examples\com2tcp-rfc2217.bat"
+					>
+				</File>
+				<File
+					RelativePath=".\examples\com2tcp.bat"
+					>
+				</File>
+			</Filter>
 		</Filter>
 	</Files>
 	<Globals>
