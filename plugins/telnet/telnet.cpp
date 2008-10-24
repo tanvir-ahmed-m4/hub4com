@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/10/24 08:29:01  vfrolov
+ * Implemented RFC 2217
+ *
  * Revision 1.3  2008/10/16 09:24:23  vfrolov
  * Changed return type of ROUTINE_MSG_REPLACE_*() to BOOL
  *
@@ -31,53 +34,37 @@
  */
 
 #include "precomp.h"
-#include "telnet.h"
 #include "import.h"
+#include "telnet.h"
 
 ///////////////////////////////////////////////////////////////
-enum {
-  cdSE   = 240,
-  cdNOP  = 241,
-  cdSB   = 250,
-  cdWILL = 251,
-  cdWONT = 252,
-  cdDO   = 253,
-  cdDONT = 254,
-  cdIAC  = 255,
-};
-
 static const char *code2name(unsigned code)
 {
   switch (code) {
-    case cdSE:
+    case TelnetProtocol::cdSE:
       return "SE";
       break;
-    case cdNOP:
+    case TelnetProtocol::cdNOP:
       return "NOP";
       break;
-    case cdSB:
+    case TelnetProtocol::cdSB:
       return "SB";
       break;
-    case cdWILL:
+    case TelnetProtocol::cdWILL:
       return "WILL";
       break;
-    case cdWONT:
+    case TelnetProtocol::cdWONT:
       return "WONT";
       break;
-    case cdDO:
+    case TelnetProtocol::cdDO:
       return "DO";
       break;
-    case cdDONT:
+    case TelnetProtocol::cdDONT:
       return "DONT";
       break;
   }
   return "UNKNOWN";
 }
-///////////////////////////////////////////////////////////////
-enum {
-  opEcho            = 1,
-  opTerminalType    = 24,
-};
 ///////////////////////////////////////////////////////////////
 enum {
   stData,
@@ -90,37 +77,43 @@ enum {
 TelnetProtocol::TelnetProtocol(const char *pName)
   : name(pName ? pName : "NONAME")
 {
-  SetTerminalType(NULL);
-  Clear();
-}
-
-void TelnetProtocol::SetTerminalType(const char *pTerminalType)
-{
-  terminalType.clear();
-
-  if (!pTerminalType)
-    pTerminalType = "UNKNOWN";
-
-  while (*pTerminalType)
-    terminalType.push_back(*pTerminalType++);
-}
-
-void TelnetProtocol::Clear()
-{
-  cout << name << " RESET" << endl;
+  cout << name << " START" << endl;
 
   state = stData;
 
-  for(int i = 0 ; i < sizeof(options)/sizeof(options[0]) ; i++) {
-    options[i].remoteOptionState = OptionState::osCant;
-    options[i].localOptionState = OptionState::osCant;
+  for(int i = 0 ; i < BYTE(-1) ; i++)
+    options[i] = NULL;
+}
+
+TelnetProtocol::~TelnetProtocol()
+{
+  cout << name << " STOP" << endl;
+
+  for(int i = 0 ; i < BYTE(-1) ; i++) {
+    if (options[i])
+      delete options[i];
+  }
+}
+
+void TelnetProtocol::Start()
+{
+  _ASSERTE(started != TRUE);
+
+  for(int i = 0 ; i < BYTE(-1) ; i++) {
+    if (options[i])
+      options[i]->Start();
   }
 
-  options[opEcho].remoteOptionState = OptionState::osNo;
-  options[opTerminalType].localOptionState = OptionState::osNo;
+#ifdef _DEBUG
+  started = TRUE;
+#endif  /* _DEBUG */
+}
 
-  streamEncoded.clear();
-  streamDecoded.clear();
+void TelnetProtocol::SetOption(TelnetOption &telnetOption)
+{
+  _ASSERTE(started != TRUE);
+  _ASSERTE(options[telnetOption.option] == NULL);
+  options[telnetOption.option] = &telnetOption;
 }
 
 HUB_MSG *TelnetProtocol::Flush(HUB_MSG *pMsg, BYTE_string &stream)
@@ -139,6 +132,7 @@ HUB_MSG *TelnetProtocol::Flush(HUB_MSG *pMsg, BYTE_string &stream)
 
 HUB_MSG *TelnetProtocol::Encode(HUB_MSG *pMsg)
 {
+  _ASSERTE(started == TRUE);
   _ASSERTE(pMsg->type == HUB_MSG_TYPE_LINE_DATA);
 
   DWORD len = pMsg->u.buf.size;
@@ -163,6 +157,7 @@ HUB_MSG *TelnetProtocol::Encode(HUB_MSG *pMsg)
 
 HUB_MSG *TelnetProtocol::Decode(HUB_MSG *pMsg)
 {
+  _ASSERTE(started == TRUE);
   _ASSERTE(pMsg->type == HUB_MSG_TYPE_LINE_DATA);
 
   DWORD len = pMsg->u.buf.size;
@@ -215,51 +210,35 @@ HUB_MSG *TelnetProtocol::Decode(HUB_MSG *pMsg)
             state = stSubParams;
             break;
           case cdWILL:
-            switch (options[ch].remoteOptionState) {
-              case OptionState::osCant:
-                SendOption(cdDONT, ch);
-                break;
-              case OptionState::osNo:
-                options[ch].remoteOptionState = OptionState::osYes;
-                SendOption(cdDO, ch);
-                break;
-              case OptionState::osYes:
-                break;
+            if (options[ch] == NULL || options[ch]->stateRemote == TelnetOption::osCant) {
+              SendOption(cdDONT, ch);
+            }
+            else
+            if (options[ch]->stateRemote == TelnetOption::osNo) {
+              options[ch]->stateRemote = TelnetOption::osYes;
+              SendOption(cdDO, ch);
             }
             break;
           case cdWONT:
-            switch (options[ch].remoteOptionState) {
-              case OptionState::osCant:
-              case OptionState::osNo:
-                break;
-              case OptionState::osYes:
-                options[ch].remoteOptionState = OptionState::osNo;
-                SendOption(cdDONT, ch);
-                break;
+            if (options[ch] != NULL && options[ch]->stateRemote == TelnetOption::osYes) {
+              options[ch]->stateRemote = TelnetOption::osNo;
+              SendOption(cdDONT, ch);
             }
             break;
           case cdDO:
-            switch (options[ch].localOptionState) {
-              case OptionState::osCant:
-                SendOption(cdWONT, ch);
-                break;
-              case OptionState::osNo:
-                options[ch].localOptionState = OptionState::osYes;
-                SendOption(cdWILL, ch);
-                break;
-              case OptionState::osYes:
-                break;
+            if (options[ch] == NULL || options[ch]->stateLocal == TelnetOption::osCant) {
+              SendOption(cdWONT, ch);
+            }
+            else
+            if (options[ch]->stateLocal == TelnetOption::osNo) {
+              options[ch]->stateLocal = TelnetOption::osYes;
+              SendOption(cdWILL, ch);
             }
             break;
           case cdDONT:
-            switch (options[ch].localOptionState) {
-              case OptionState::osCant:
-              case OptionState::osNo:
-                break;
-              case OptionState::osYes:
-                options[ch].localOptionState = OptionState::osNo;
-                SendOption(cdWONT, ch);
-                break;
+            if (options[ch] != NULL && options[ch]->stateLocal == TelnetOption::osYes) {
+              options[ch]->stateLocal = TelnetOption::osNo;
+              SendOption(cdWONT, ch);
             }
             break;
           default:
@@ -288,16 +267,11 @@ HUB_MSG *TelnetProtocol::Decode(HUB_MSG *pMsg)
             }
             cout << "SE" << endl;
 
-            switch (option) {
-              case opTerminalType:
-                params.clear();
-                params.push_back(0);
-                params.insert(params.end(), terminalType.begin(), terminalType.end());
-                SendSubNegotiation(option, params);
-                break;
-              default:
-                cout << "  ignored" << endl;
-            }
+            if (!options[option] || !options[option]->OnSubNegotiation(params, &pMsg))
+              cout << "  ignored" << endl;
+
+            if (!pMsg)
+              return NULL;
 
             state = stData;
             break;
@@ -312,6 +286,16 @@ HUB_MSG *TelnetProtocol::Decode(HUB_MSG *pMsg)
   return FlushDecodedStream(pMsg);
 }
 
+void TelnetProtocol::FlushEncodedStream(HUB_MSG **ppEchoMsg)
+{
+  _ASSERTE(started == TRUE);
+
+  if (*ppEchoMsg)
+    FlushEncodedStream(*ppEchoMsg);
+  else
+    *ppEchoMsg = FlushEncodedStream((HUB_MSG *)NULL);
+}
+
 void TelnetProtocol::SendOption(BYTE code, BYTE option)
 {
   cout << name << " SEND: " << code2name(code) << " " << (unsigned)option << endl;
@@ -321,9 +305,9 @@ void TelnetProtocol::SendOption(BYTE code, BYTE option)
   streamEncoded += option;
 }
 
-void TelnetProtocol::SendSubNegotiation(int option, const BYTE_vector &params)
+void TelnetProtocol::SendSubNegotiation(BYTE option, const BYTE_vector &params)
 {
-  SendOption(cdSB, (BYTE)option);
+  SendOption(cdSB, option);
 
   cout << "  ";
   for (BYTE_vector::const_iterator i = params.begin() ; i != params.end() ; i++) {
@@ -331,10 +315,22 @@ void TelnetProtocol::SendSubNegotiation(int option, const BYTE_vector &params)
 
     cout << (unsigned)b << " ";
     streamEncoded += b;
+
+    if (b == cdIAC)
+      streamEncoded += b;
   }
   cout << "SE" << endl;
 
   streamEncoded += (BYTE)cdIAC;
   streamEncoded += (BYTE)cdSE;
+}
+///////////////////////////////////////////////////////////////
+void TelnetOption::Start()
+{
+  if (stateLocal == osYes)
+    SendOption(TelnetProtocol::cdWILL);
+
+  if (stateRemote == osYes)
+    SendOption(TelnetProtocol::cdDO);
 }
 ///////////////////////////////////////////////////////////////

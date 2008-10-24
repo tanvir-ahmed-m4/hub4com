@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/10/24 08:29:01  vfrolov
+ * Implemented RFC 2217
+ *
  * Revision 1.2  2008/10/09 11:02:58  vfrolov
  * Redesigned class TelnetProtocol
  *
@@ -36,20 +39,39 @@
 typedef vector<BYTE> BYTE_vector;
 typedef basic_string<BYTE> BYTE_string;
 ///////////////////////////////////////////////////////////////
+class TelnetOption;
+///////////////////////////////////////////////////////////////
 class TelnetProtocol
 {
   public:
     TelnetProtocol(const char *pName);
-    void SetTerminalType(const char *pTerminalType);
+    ~TelnetProtocol();
+
+    void Start();
 
     HUB_MSG *Decode(HUB_MSG *pMsg);
+    void FlushEncodedStream(HUB_MSG **ppEchoMsg);
     HUB_MSG *Encode(HUB_MSG *pMsg);
-    HUB_MSG *FlushEncodedStream() { return FlushEncodedStream(NULL); }
 
-    void Clear();
+  public:
+    enum {
+      cdSE   = 240,
+      cdNOP  = 241,
+      cdSB   = 250,
+      cdWILL = 251,
+      cdWONT = 252,
+      cdDO   = 253,
+      cdDONT = 254,
+      cdIAC  = 255,
+    };
+
   protected:
+    friend class TelnetOption;
+
+    void SetOption(TelnetOption &telnetOption);
+
     void SendOption(BYTE code, BYTE option);
-    void SendSubNegotiation(int option, const BYTE_vector &params);
+    void SendSubNegotiation(BYTE option, const BYTE_vector &params);
 
     static HUB_MSG *Flush(HUB_MSG *pMsg, BYTE_string &stream);
 
@@ -59,22 +81,66 @@ class TelnetProtocol
     string name;
 
     int state;
-    int code;
-    int option;
+    BYTE code;
+    BYTE option;
     BYTE_vector params;
 
-    struct OptionState
-    {
-      enum {osCant, osNo, osYes};
-      int localOptionState  : 2;
-      int remoteOptionState : 2;
-    };
-
-    OptionState options[256];
-    BYTE_vector terminalType;
+    TelnetOption *options[BYTE(-1)];
 
     BYTE_string streamEncoded;
     BYTE_string streamDecoded;
+
+#ifdef _DEBUG
+  private:
+    BOOL started;
+#endif  /* _DEBUG */
+};
+///////////////////////////////////////////////////////////////
+class TelnetOption
+{
+  public:
+    TelnetOption(TelnetProtocol &_telnet, BYTE _option)
+    : telnet(_telnet),
+      option(_option),
+      stateLocal(osCant),
+      stateRemote(osCant)
+    {
+      telnet.SetOption(*this);
+    }
+
+    void LocalWill() { _ASSERTE(telnet.started != TRUE); stateLocal  = osYes; }
+    void LocalCan()  { _ASSERTE(telnet.started != TRUE); stateLocal  = osNo; }
+    void RemoteDo()  { _ASSERTE(telnet.started != TRUE); stateRemote = osYes; }
+    void RemoteMay() { _ASSERTE(telnet.started != TRUE); stateRemote = osNo; }
+
+  protected:
+    friend class TelnetProtocol;
+
+    virtual void Start();
+
+    void SendOption(BYTE code) {
+      telnet.SendOption(code, option);
+    }
+
+    void SendSubNegotiation(const BYTE_vector &params) {
+      telnet.SendSubNegotiation(option, params);
+    }
+
+    HUB_MSG *FlushDecodedStream(HUB_MSG *pMsg) {
+      return telnet.FlushDecodedStream(pMsg);
+    }
+
+    virtual BOOL OnSubNegotiation(const BYTE_vector &/*params*/, HUB_MSG ** /*ppMsg*/) {
+      return FALSE;
+    }
+
+    TelnetProtocol &telnet;
+    BYTE option;
+
+    enum {osCant, osNo, osYes};
+
+    int stateLocal;
+    int stateRemote;
 };
 ///////////////////////////////////////////////////////////////
 

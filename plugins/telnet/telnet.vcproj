@@ -186,6 +186,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\opt_comport.h"
+				>
+			</File>
+			<File
+				RelativePath=".\opt_termtype.h"
+				>
+			</File>
+			<File
 				RelativePath="..\plugins_api.h"
 				>
 			</File>
@@ -205,6 +213,14 @@
 			>
 			<File
 				RelativePath=".\filter.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\opt_comport.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\opt_termtype.cpp"
 				>
 			</File>
 			<File
