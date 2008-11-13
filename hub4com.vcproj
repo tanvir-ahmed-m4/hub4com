@@ -218,6 +218,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\static.h"
+				>
+			</File>
+			<File
 				RelativePath=".\utils.h"
 				>
 			</File>
@@ -291,6 +295,10 @@
 			</File>
 			<File
 				RelativePath=".\route.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\static.cpp"
 				>
 			</File>
 			<File
