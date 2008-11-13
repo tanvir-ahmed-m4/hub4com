@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/11/13 07:44:12  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.3  2008/10/24 08:29:01  vfrolov
  * Implemented RFC 2217
  *
@@ -32,8 +35,6 @@
 
 #ifndef _TELNET_H
 #define _TELNET_H
-
-#include "../plugins_api.h"
 
 ///////////////////////////////////////////////////////////////
 typedef vector<BYTE> BYTE_vector;

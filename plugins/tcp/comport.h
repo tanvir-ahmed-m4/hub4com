@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/11/13 07:41:09  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.3  2008/10/06 12:15:14  vfrolov
  * Added --reconnect option
  *
@@ -32,8 +35,6 @@
 
 #ifndef _COMPORT_H
 #define _COMPORT_H
-
-#include "../plugins_api.h"
 
 ///////////////////////////////////////////////////////////////
 class ComParams;

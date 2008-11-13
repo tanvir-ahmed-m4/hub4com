@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2008/11/13 07:52:20  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.7  2008/11/12 08:46:39  vfrolov
  * Fixed TYPE_LC and SET_LSR tracing
  *
@@ -48,7 +51,8 @@
 
 #include "precomp.h"
 #include "../plugins_api.h"
-
+///////////////////////////////////////////////////////////////
+namespace FilterTrace {
 ///////////////////////////////////////////////////////////////
 #ifndef _DEBUG
   #define DEBUG_PARAM(par)
@@ -767,4 +771,6 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 
   return plugins;
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////

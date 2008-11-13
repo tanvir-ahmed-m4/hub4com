@@ -19,15 +19,21 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/11/13 07:44:12  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.1  2008/10/24 06:51:23  vfrolov
  * Initial revision
  *
  */
 
 #include "precomp.h"
+#include "../plugins_api.h"
+///////////////////////////////////////////////////////////////
+namespace FilterTelnet {
+///////////////////////////////////////////////////////////////
 #include "import.h"
 #include "opt_comport.h"
-
 ///////////////////////////////////////////////////////////////
 enum {
   cpcSignature          = 0,
@@ -769,4 +775,6 @@ BOOL TelnetOptionComPortServer::OnSubNegotiation(const BYTE_vector &params, HUB_
 
   return TRUE;
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/11/13 07:44:12  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.4  2008/10/24 08:29:01  vfrolov
  * Implemented RFC 2217
  *
@@ -34,9 +37,12 @@
  */
 
 #include "precomp.h"
+#include "../plugins_api.h"
+///////////////////////////////////////////////////////////////
+namespace FilterTelnet {
+///////////////////////////////////////////////////////////////
 #include "import.h"
 #include "telnet.h"
-
 ///////////////////////////////////////////////////////////////
 static const char *code2name(unsigned code)
 {
@@ -333,4 +339,6 @@ void TelnetOption::Start()
   if (stateRemote == osYes)
     SendOption(TelnetProtocol::cdDO);
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////

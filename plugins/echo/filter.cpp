@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/11/13 07:45:58  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.2  2008/10/02 07:59:37  vfrolov
  * Changed example
  *
@@ -29,7 +32,8 @@
 
 #include "precomp.h"
 #include "../plugins_api.h"
-
+///////////////////////////////////////////////////////////////
+namespace FilterEcho {
 ///////////////////////////////////////////////////////////////
 #ifndef _DEBUG
   #define DEBUG_PARAM(par)
@@ -152,4 +156,6 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 
   return plugins;
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////

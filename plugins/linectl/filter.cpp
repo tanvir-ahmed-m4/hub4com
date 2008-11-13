@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/11/13 07:48:35  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.5  2008/10/22 08:27:26  vfrolov
  * Added ability to set bytesize, parity and stopbits separately
  *
@@ -38,7 +41,8 @@
 
 #include "precomp.h"
 #include "../plugins_api.h"
-
+///////////////////////////////////////////////////////////////
+namespace FilterLineCtl {
 ///////////////////////////////////////////////////////////////
 static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal = NULL;
 static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone = NULL;
@@ -345,4 +349,6 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 
   return plugins;
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////

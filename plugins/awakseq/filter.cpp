@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2008/11/13 07:45:07  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.7  2008/10/16 09:24:23  vfrolov
  * Changed return type of ROUTINE_MSG_REPLACE_*() to BOOL
  *
@@ -44,7 +47,8 @@
 
 #include "precomp.h"
 #include "../plugins_api.h"
-
+///////////////////////////////////////////////////////////////
+namespace FilterAwakSeq {
 ///////////////////////////////////////////////////////////////
 #ifndef _DEBUG
   #define DEBUG_PARAM(par)
@@ -366,4 +370,6 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 
   return plugins;
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////

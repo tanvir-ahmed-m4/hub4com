@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.11  2008/11/13 07:51:34  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.10  2008/10/16 06:49:58  vfrolov
  * Added wiring to DCE's output pins
  *
@@ -56,7 +59,8 @@
 
 #include "precomp.h"
 #include "../plugins_api.h"
-
+///////////////////////////////////////////////////////////////
+namespace FilterPinMap {
 ///////////////////////////////////////////////////////////////
 static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal = NULL;
 static ROUTINE_PORT_NAME_A *pPortName = NULL;
@@ -526,4 +530,6 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 
   return plugins;
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////

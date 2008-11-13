@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/11/13 07:41:09  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.4  2008/10/22 15:31:38  vfrolov
  * Fixed race condition
  *
@@ -34,10 +37,13 @@
  */
 
 #include "precomp.h"
+#include "../plugins_api.h"
+///////////////////////////////////////////////////////////////
+namespace PortTcp {
+///////////////////////////////////////////////////////////////
 #include "comio.h"
 #include "comport.h"
 #include "import.h"
-
 ///////////////////////////////////////////////////////////////
 static void TraceError(DWORD err, const char *pFmt, ...)
 {
@@ -547,4 +553,6 @@ BOOL ListenOverlapped::StartWaitEvent()
 
   return TRUE;
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////

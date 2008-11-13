@@ -19,16 +19,16 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/11/13 07:41:09  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.1  2008/03/27 17:19:18  vfrolov
  * Initial revision
- *
  *
  */
 
 #ifndef _IMPORT_H
 #define _IMPORT_H
-
-#include "../plugins_api.h"
 
 ///////////////////////////////////////////////////////////////
 extern ROUTINE_BUF_ALLOC *pBufAlloc;

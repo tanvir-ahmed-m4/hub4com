@@ -19,14 +19,20 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/11/13 07:44:12  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.1  2008/10/24 06:51:23  vfrolov
  * Initial revision
  *
  */
 
 #include "precomp.h"
+#include "../plugins_api.h"
+///////////////////////////////////////////////////////////////
+namespace FilterTelnet {
+///////////////////////////////////////////////////////////////
 #include "opt_termtype.h"
-
 ///////////////////////////////////////////////////////////////
 enum {
   ttIs = 0,
@@ -68,4 +74,6 @@ BOOL TelnetOptionTerminalType::OnSubNegotiation(const BYTE_vector &params, HUB_M
 
   return TRUE;
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////

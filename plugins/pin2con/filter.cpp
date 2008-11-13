@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.11  2008/11/13 07:50:41  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.10  2008/10/16 09:24:23  vfrolov
  * Changed return type of ROUTINE_MSG_REPLACE_*() to BOOL
  *
@@ -64,7 +67,8 @@
 
 #include "precomp.h"
 #include "../plugins_api.h"
-
+///////////////////////////////////////////////////////////////
+namespace FilterPin2Con {
 ///////////////////////////////////////////////////////////////
 static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal = NULL;
 static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone = NULL;
@@ -357,4 +361,6 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 
   return plugins;
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////

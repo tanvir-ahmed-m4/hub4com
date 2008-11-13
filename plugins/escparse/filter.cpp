@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/11/13 07:47:48  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.5  2008/10/22 08:27:26  vfrolov
  * Added ability to set bytesize, parity and stopbits separately
  *
@@ -42,7 +45,8 @@
 #include "precomp.h"
 #include "../plugins_api.h"
 #include "../cncext.h"
-
+///////////////////////////////////////////////////////////////
+namespace FilterEscParse {
 ///////////////////////////////////////////////////////////////
 #ifndef _DEBUG
   #define DEBUG_PARAM(par)
@@ -698,4 +702,6 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 
   return plugins;
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////
