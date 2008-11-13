@@ -53,19 +53,21 @@ SETLOCAL
     SET TCP_LC_OPTIONS=:"--br=local --lc=local"
   :END_SET_LC_SERVER_MODE_OPTIONS
 
- :SET OPTIONS=%OPTIONS% --create-filter=trace,com,COM
+  SET TC=:
+
+  %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,com,COM
   SET OPTIONS=%OPTIONS% --create-filter=escparse,com,parse
- :SET OPTIONS=%OPTIONS% --create-filter=trace,com,ExM
+  %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,com,ExM
   SET OPTIONS=%OPTIONS% --create-filter=pinmap,com,pinmap:"--rts=cts --dtr=dsr --break=break"
   SET OPTIONS=%OPTIONS% --create-filter=linectl,com,lc
- :SET OPTIONS=%OPTIONS% --create-filter=trace,com,CxT
+  %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,com,CxT
 
   SET OPTIONS=%OPTIONS% --add-filters=0:com
 
- :SET OPTIONS=%OPTIONS% --create-filter=trace,tcp,TCP
+  %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,tcp,TCP
   SET OPTIONS=%OPTIONS% --create-filter=escparse,tcp,parse:"--request-esc-mode=no"
   SET OPTIONS=%OPTIONS% --create-filter=escinsert,tcp,insert
- :SET OPTIONS=%OPTIONS% --create-filter=trace,tcp,ExM
+  %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,tcp,ExM
   SET OPTIONS=%OPTIONS% --create-filter=pinmap,tcp,pinmap:"--cts=cts --dsr=dsr --ring=ring --dcd=dcd --break=break"
   SET OPTIONS=%OPTIONS% --create-filter=linectl,tcp,lc%TCP_LC_OPTIONS%
 
