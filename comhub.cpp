@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.10  2008/11/13 08:07:40  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.9  2008/08/20 14:30:18  vfrolov
  * Redesigned serial port options
  *
@@ -56,6 +59,8 @@
  */
 
 #include "precomp.h"
+#include "plugins/plugins_api.h"
+
 #include "comhub.h"
 #include "port.h"
 #include "filters.h"

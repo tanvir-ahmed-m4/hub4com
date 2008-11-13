@@ -19,16 +19,16 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/11/13 08:07:40  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.1  2008/03/26 08:35:03  vfrolov
  * Initial revision
- *
  *
  */
 
 #ifndef _EXPORT_H
 #define _EXPORT_H
-
-#include "plugins/plugins_api.h"
 
 ///////////////////////////////////////////////////////////////
 extern HUB_ROUTINES_A hubRoutines;

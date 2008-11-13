@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2008/11/13 08:07:40  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.7  2008/08/20 08:46:06  vfrolov
  * Implemented ComHub::FilterName()
  *
@@ -44,8 +47,6 @@
 
 #ifndef _COMHUB_H
 #define _COMHUB_H
-
-#include "plugins/plugins_api.h"
 
 ///////////////////////////////////////////////////////////////
 class Port;

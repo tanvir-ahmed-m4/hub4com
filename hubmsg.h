@@ -19,17 +19,17 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/11/13 08:07:40  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.1  2008/03/26 08:36:03  vfrolov
  * Initial revision
- *
  *
  */
 
 #ifndef _HUBMSG_H
 #define _HUBMSG_H
 
-///////////////////////////////////////////////////////////////
-#include "plugins/plugins_api.h"
 ///////////////////////////////////////////////////////////////
 #define MSG_SIGNATURE 'h4cM'
 ///////////////////////////////////////////////////////////////

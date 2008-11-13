@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/11/13 08:07:40  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.4  2008/10/16 09:24:23  vfrolov
  * Changed return type of ROUTINE_MSG_REPLACE_*() to BOOL
  *
@@ -34,6 +37,8 @@
  */
 
 #include "precomp.h"
+#include "plugins/plugins_api.h"
+
 #include "export.h"
 #include "port.h"
 #include "comhub.h"

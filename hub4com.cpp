@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.17  2008/11/13 08:07:40  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.16  2008/10/16 06:19:12  vfrolov
  * Divided filter ID to filter group ID and filter name
  *
@@ -72,6 +75,8 @@
  */
 
 #include "precomp.h"
+#include "plugins/plugins_api.h"
+
 #include "comhub.h"
 #include "filters.h"
 #include "utils.h"

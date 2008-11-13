@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/11/13 08:07:40  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.2  2008/08/15 12:44:59  vfrolov
  * Added fake read filter method to ports
  *
@@ -29,8 +32,6 @@
 
 #ifndef _PORT_H
 #define _PORT_H
-
-#include "plugins/plugins_api.h"
 
 ///////////////////////////////////////////////////////////////
 class ComHub;

@@ -19,13 +19,17 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/11/13 08:07:40  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.1  2008/03/26 08:36:03  vfrolov
  * Initial revision
- *
  *
  */
 
 #include "precomp.h"
+#include "plugins/plugins_api.h"
+
 #include "hubmsg.h"
 #include "bufutils.h"
 
