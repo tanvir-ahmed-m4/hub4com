@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.9  2008/11/13 07:35:10  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.8  2008/08/28 10:24:35  vfrolov
  * Removed linking with ....utils.h and ....utils.cpp
  *
@@ -46,10 +49,13 @@
  */
 
 #include "precomp.h"
+#include "../plugins_api.h"
+///////////////////////////////////////////////////////////////
+namespace PortSerial {
+///////////////////////////////////////////////////////////////
 #include "comparams.h"
 #include "comport.h"
 #include "import.h"
-
 ///////////////////////////////////////////////////////////////
 static const char *GetParam(const char *pArg, const char *pPattern)
 {
@@ -396,4 +402,6 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 
   return plugins;
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////

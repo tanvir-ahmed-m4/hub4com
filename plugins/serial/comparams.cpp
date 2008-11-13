@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/11/13 07:35:10  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.4  2008/10/16 06:57:29  vfrolov
  * Added ignoring the case of the params
  *
@@ -47,8 +50,10 @@
  */
 
 #include "precomp.h"
+///////////////////////////////////////////////////////////////
+namespace PortSerial {
+///////////////////////////////////////////////////////////////
 #include "comparams.h"
-
 ///////////////////////////////////////////////////////////////
 ComParams::ComParams()
   : baudRate(CBR_19200),
@@ -249,4 +254,6 @@ const char *ComParams::FlagLst()
 {
   return "on, off or c[urrent]";
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////

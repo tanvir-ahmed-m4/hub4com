@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.10  2008/11/13 07:35:10  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.9  2008/09/30 08:28:32  vfrolov
  * Added ability to control OUT1 and OUT2 pins
  * Added ability to get remote baud rate and line control settings
@@ -74,8 +77,6 @@
 
 #ifndef _COMPORT_H
 #define _COMPORT_H
-
-#include "../plugins_api.h"
 
 ///////////////////////////////////////////////////////////////
 class ComParams;

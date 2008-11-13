@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.15  2008/11/13 07:35:10  vfrolov
+ * Changed for staticaly linking
+ *
  * Revision 1.14  2008/10/22 08:27:26  vfrolov
  * Added ability to set bytesize, parity and stopbits separately
  *
@@ -91,11 +94,14 @@
  */
 
 #include "precomp.h"
+#include "../plugins_api.h"
+///////////////////////////////////////////////////////////////
+namespace PortSerial {
+///////////////////////////////////////////////////////////////
 #include "comport.h"
 #include "comio.h"
 #include "comparams.h"
 #include "import.h"
-
 ///////////////////////////////////////////////////////////////
 ComPort::ComPort(
     const ComParams &comParams,
@@ -835,4 +841,6 @@ void ComPort::LostReport()
     cout << endl;
   }
 }
+///////////////////////////////////////////////////////////////
+} // end namespace
 ///////////////////////////////////////////////////////////////
