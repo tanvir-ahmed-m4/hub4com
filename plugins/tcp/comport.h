@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/11/17 16:44:57  vfrolov
+ * Fixed race conditions
+ *
  * Revision 1.4  2008/11/13 07:41:09  vfrolov
  * Changed for staticaly linking
  *
@@ -84,7 +87,7 @@ class ComPort
     BOOL Write(HUB_MSG *pMsg);
     void OnWrite(WriteOverlapped *pOverlapped, DWORD len, DWORD done);
     void OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done);
-    BOOL OnEvent(WaitEventOverlapped *pOverlapped, long e, int err);
+    BOOL OnEvent(WaitEventOverlapped *pOverlapped, long e);
     void AddXoff(int count);
     void LostReport();
     void Accept();
@@ -99,6 +102,7 @@ class ComPort
     BOOL StartRead();
     BOOL StartWaitEvent(SOCKET hSockWait);
     void OnConnect();
+    void OnDisconnect();
 
     struct sockaddr_in snLocal;
     struct sockaddr_in snRemote;
@@ -108,6 +112,7 @@ class ComPort
 
     SOCKET hSock;
     BOOL isConnected;
+    BOOL isDisconnected;
     int connectionCounter;
     BOOL permanent;
 

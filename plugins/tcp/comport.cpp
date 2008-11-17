@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2008/11/17 16:44:57  vfrolov
+ * Fixed race conditions
+ *
  * Revision 1.7  2008/11/13 07:41:09  vfrolov
  * Changed for staticaly linking
  *
@@ -88,7 +91,7 @@ BOOL Listener::Start()
 
 BOOL Listener::OnEvent(ListenOverlapped * /*pOverlapped*/, long e, int /*err*/)
 {
-  //cout << "OnEvent " << hex << e << dec << " " << err << endl;
+  //cout << "Listener::OnEvent " << hex << e << dec << " " << err << endl;
 
   if (e == FD_ACCEPT) {
     if (!empty()) {
@@ -115,6 +118,7 @@ ComPort::ComPort(
   : pListener(NULL),
     hSock(INVALID_SOCKET),
     isConnected(FALSE),
+    isDisconnected(FALSE),
     connectionCounter(0),
     reconnectTime(-1),
     hReconnectTimer(NULL),
@@ -244,13 +248,16 @@ void ComPort::StartConnect()
   if (hSock == INVALID_SOCKET)
     return;
 
-  if (!StartWaitEvent(hSock) || !Connect(hSock, snRemote))
+  if (!StartWaitEvent(hSock) || !Connect(hSock, snRemote)) {
+    Close(hSock);
     hSock = INVALID_SOCKET;
+  }
 }
 
 void ComPort::Accept()
 {
   _ASSERTE(pListener);
+  _ASSERTE(hSock == INVALID_SOCKET);
 
   if (hSock != INVALID_SOCKET)
     return;
@@ -284,7 +291,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
       return FALSE;
     }
 
-    if (hSock == INVALID_SOCKET) {
+    if (hSock == INVALID_SOCKET || isDisconnected) {
       writeLost += len;
       return FALSE;
     }
@@ -347,19 +354,8 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
 
       connectionCounter--;
 
-      if (hSock != INVALID_SOCKET && !permanent && connectionCounter <= 0) {
-        Disconnect(hSock);
-
-        isConnected = FALSE;
-        hSock = INVALID_SOCKET;
-
-        HUB_MSG msg;
-
-        msg.type = HUB_MSG_TYPE_CONNECT;
-        msg.u.val = FALSE;
-
-        pOnRead(hHub, hMasterPort, &msg);
-      }
+      if (hSock != INVALID_SOCKET && !permanent && connectionCounter <= 0)
+        PortTcp::Disconnect(hSock);
     }
   }
   else
@@ -419,11 +415,16 @@ void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)
 
   pOnRead(hHub, hMasterPort, &msg);
 
+  if (done == 0 && isDisconnected) {
+    isDisconnected = FALSE;
+    OnDisconnect();
+  }
+
   if (countXoff > 0 || !isConnected || !pOverlapped->StartRead()) {
+    _ASSERTE(countReadOverlapped > 0);
+
     delete pOverlapped;
     countReadOverlapped--;
-
-    //cout << "Stopped Read " << name << " " << countReadOverlapped << endl;
   }
 }
 
@@ -436,68 +437,72 @@ static VOID CALLBACK TimerAPCProc(
     ((ComPort *)pArg)->StartConnect();
 }
 
-BOOL ComPort::OnEvent(WaitEventOverlapped *pOverlapped, long e, int err)
+void ComPort::OnDisconnect()
 {
-  //cout << "OnEvent " << name << " " << hex << e << dec << " " << err << endl;
+  Close(hSock);
+  hSock = INVALID_SOCKET;
 
-  if (e == FD_CLOSE || (e == FD_CONNECT && err != ERROR_SUCCESS)) {
-    if (hSock == pOverlapped->Sock()) {
-      hSock = INVALID_SOCKET;
+  if (isConnected) {
+    isConnected = FALSE;
 
-      if (isConnected) {
-        isConnected = FALSE;
+    HUB_MSG msg;
 
-        HUB_MSG msg;
+    msg.type = HUB_MSG_TYPE_CONNECT;
+    msg.u.val = FALSE;
 
-        msg.type = HUB_MSG_TYPE_CONNECT;
-        msg.u.val = FALSE;
+    pOnRead(hHub, hMasterPort, &msg);
+  }
 
-        pOnRead(hHub, hMasterPort, &msg);
-      }
+  if (pListener) {
+    pListener->push(this);
+  }
+  else
+  if (CanConnect()) {
+    if (reconnectTime == 0) {
+      StartConnect();
+    }
+    else
+    if (reconnectTime > 0) {
+      if (!hReconnectTimer)
+        hReconnectTimer = ::CreateWaitableTimer(NULL, FALSE, NULL);
 
-      if (pListener) {
-        Accept();
-      }
-      else
-      if (CanConnect()) {
-        if (reconnectTime == 0) {
-          StartConnect();
+      if (hReconnectTimer) {
+        LARGE_INTEGER firstReportTime;
+
+        firstReportTime.QuadPart = -10000LL * reconnectTime;
+
+        if (!::SetWaitableTimer(hReconnectTimer, &firstReportTime, 0, TimerAPCProc, this, FALSE)) {
+          DWORD err = GetLastError();
+
+          cerr << "WARNING: SetWaitableTimer() - error=" << err << endl;
         }
-        else
-        if (reconnectTime > 0) {
-          if (!hReconnectTimer)
-            hReconnectTimer = ::CreateWaitableTimer(NULL, FALSE, NULL);
+      } else {
+        DWORD err = GetLastError();
 
-          if (hReconnectTimer) {
-            LARGE_INTEGER firstReportTime;
-
-            firstReportTime.QuadPart = -10000LL * reconnectTime;
-
-            if (!::SetWaitableTimer(hReconnectTimer, &firstReportTime, 0, TimerAPCProc, this, FALSE)) {
-              DWORD err = GetLastError();
-
-              cerr << "WARNING: SetWaitableTimer() - error=" << err << endl;
-            }
-          } else {
-            DWORD err = GetLastError();
-
-            cerr << "WARNING: CreateWaitableTimer() - error=" << err << endl;
-          }
-        }
+        cerr << "WARNING: CreateWaitableTimer() - error=" << err << endl;
       }
     }
+  }
+}
+
+BOOL ComPort::OnEvent(WaitEventOverlapped *pOverlapped, long e)
+{
+  //cout << "ComPort::OnEvent " << name << " " << hex << e << dec << endl;
+
+  _ASSERTE(hSock == pOverlapped->Sock());
+
+  if (e == FD_CLOSE) {
+    if (countReadOverlapped > 0)
+      isDisconnected = TRUE;
+    else
+      OnDisconnect();
 
     pOverlapped->Delete();
     return FALSE;
   }
   else
   if (e == FD_CONNECT) {
-    if (hSock == pOverlapped->Sock()) {
-      OnConnect();
-    } else {
-      pOverlapped->Delete();
-      return FALSE;
-    }
+    OnConnect();
   }
 
   return TRUE;
@@ -506,6 +511,7 @@ BOOL ComPort::OnEvent(WaitEventOverlapped *pOverlapped, long e, int err)
 void ComPort::OnConnect()
 {
   _ASSERTE(isConnected == FALSE);
+  _ASSERTE(isDisconnected == FALSE);
 
   isConnected = TRUE;
 
