@@ -43,6 +43,9 @@ TESTING
 EXAMPLES OF USAGE
 =================
 
+GPS hub
+-------
+
 You have a GPS device that connected to your computer via a phisical COM1
 port and you'd like to handle its data by two GPS applications. You can
 do it this way:
@@ -63,7 +66,9 @@ do it this way:
 
   3. Start the GPS applications on COM5 and COM6 ports.
 
----
+
+COM port to telnet redirector
+-----------------------------
 
 You have old TERM95.EXE application from the Norton Commander 5.0 for
 MS-DOS and you'd like to use it to communicate with your.telnet.server
@@ -84,7 +89,9 @@ BTW: com2tcp.bat is a wrapper to hub4com.exe. It works very similar to
      the "COM port to TCP redirector" (com2tcp). It supports all
      com2tcp's options.
 
----
+
+RFC 2217 COM port server
+------------------------
 
 You have a phisical COM1 port and you'd like to share it through the
 network by the RFC 2217 "Telnet Com Port Control Option" protocol.
@@ -96,7 +103,9 @@ network by the RFC 2217 "Telnet Com Port Control Option" protocol.
   It will listen TCP/IP port 7000 for incaming connections and
   redirect them to COM1 port.
 
----
+
+COM port to TCP redirector (RFC 2217)
+-------------------------------------
 
 On the first computer your.comport.server you have a phisical serial port
 shared through the network by the RFC 2217 protocol and you'd like to use
@@ -113,3 +122,47 @@ it like a virtual serial port on the second computer.
 
   It will redirect virtual serial port COM5 on the second computer to the
   phisical serial port on the first computer.
+
+
+CHAT server
+-----------
+
+You'd like by using computer with address your.computer.addr to allow up
+to 5 users to chat by using ordinary telnet application.
+
+  1. Start the hub4com.exe on the computer with address your.computer.addr:
+
+       hub4com --load=,,_END_
+          --create-filter=telnet
+          --add-filters=All:telnet
+          --route=All:All
+          --use-driver=tcp
+          *5555
+          *5555
+          *5555
+          *5555
+          *5555
+          _END_
+
+  2. Now users can join to the chat by connecting to port 5555 of your
+     computer. For example:
+
+       telnet your.computer.addr 5555
+
+
+CVS proxy
+---------
+
+You have a computer that has not access to the internet and you'd like to
+allow it to access to hub4com's CVS repository by using proxy computer
+with address your.computer.addr.
+
+  1. Start the hub4com.exe on the computer with address your.computer.addr:
+
+       hub4com.exe --use-driver=tcp 2401 com0com.cvs.sourceforge.net:2401
+
+  2. On computer that has not access to the internet check out the hub4com
+     souce code from the CVS repository:
+
+       cvs -d:pserver:anonymous@your.computer.addr:/cvsroot/com0com login
+       cvs -z3 -d:pserver:anonymous@172.16.36.111:/cvsroot/com0com co -P hub4com
