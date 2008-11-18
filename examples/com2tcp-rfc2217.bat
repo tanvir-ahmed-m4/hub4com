@@ -7,6 +7,8 @@ SETLOCAL
 
   PATH %~dp0;%PATH%
 
+  SET PERMANENT=*
+
   :BEGIN_PARSE_OPTIONS
     SET OPTION=%1
     IF NOT "%OPTION:~0,2%"=="--" GOTO END_PARSE_OPTIONS
@@ -34,6 +36,13 @@ SETLOCAL
       :END_OPTION_RFC2217_MODE_SERVER
       GOTO USAGE
     :END_OPTION_RFC2217_MODE
+
+    IF /I "%OPTION%" NEQ "--connect" GOTO END_OPTION_CONNECT
+      SET COM_PIN2CON=--create-filter=pin2con,com,connect:%1
+      SET PERMANENT=
+      SHIFT /1
+      GOTO BEGIN_PARSE_OPTIONS
+    :END_OPTION_CONNECT
 
     GOTO USAGE
   :END_PARSE_OPTIONS
@@ -85,6 +94,7 @@ SETLOCAL
   %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,com,COM
   SET OPTIONS=%OPTIONS% --create-filter=escparse,com,parse
   %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,com,ExM
+  SET OPTIONS=%OPTIONS% %COM_PIN2CON%
   SET OPTIONS=%OPTIONS% --create-filter=pinmap,com,pinmap%COM_PINMAP_OPTIONS%
   SET OPTIONS=%OPTIONS% --create-filter=linectl,com,lc%COM_LC_OPTIONS%
   %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,com,CxT
@@ -101,7 +111,7 @@ SETLOCAL
   SET OPTIONS=%OPTIONS% --add-filters=1:tcp
 
   @ECHO ON
-    "%HUB4COM%" %OPTIONS% --octs=off "%COMPORT%" --use-driver=tcp "*%TCP%"
+    "%HUB4COM%" %OPTIONS% --octs=off "%COMPORT%" --use-driver=tcp "%PERMANENT%%TCP%"
   @ECHO OFF
 ENDLOCAL
 
@@ -118,6 +128,11 @@ ECHO.
 ECHO Common options:
 ECHO     --rfc2217-mode ^{c^|s^}  - use RFC 2217 (c)lient or (s)erver mode (default is
 ECHO                             c for TCP client mode and s for TCP server mode).
+ECHO     --connect ^[^!^]^<state^>  - connect or disconnect on ^<state^> changing. Where
+ECHO                             ^<state^> is cts, dsr, dcd, ring or break. The
+ECHO                             exclamation sign ^(^!^) can be used to invert the
+ECHO                             action. By default the connection will be permanent
+ECHO                             as it's possible.
 ECHO     --help                - show this help.
 ECHO.
 ECHO TCP client mode options:
