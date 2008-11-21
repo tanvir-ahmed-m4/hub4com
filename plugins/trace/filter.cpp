@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.9  2008/11/21 08:16:56  vfrolov
+ * Added HUB_MSG_TYPE_LOOP_TEST
+ *
  * Revision 1.8  2008/11/13 07:52:20  vfrolov
  * Changed for staticaly linking
  *
@@ -113,7 +116,7 @@ ostream *TraceConfig::GetTraceStream() {
     }
 
     if (!pStream->is_open()) {
-      cerr << "Can't open " << path.c_str() << endl;
+      cerr << "Can't open " << path << endl;
       exit(2);
     }
 
@@ -425,6 +428,7 @@ static const CODE2NAME codeNameTableHubMsg[] = {
   TOCODE2NAME(HUB_MSG_TYPE_, SET_LSR),
   TOCODE2NAME(HUB_MSG_TYPE_, LBR_STATUS),
   TOCODE2NAME(HUB_MSG_TYPE_, LLC_STATUS),
+  TOCODE2NAME(HUB_MSG_TYPE_, LOOP_TEST),
   {0, NULL}
 };
 ///////////////////////////////////////////////////////////////
@@ -623,6 +627,9 @@ static void PrintMsgBody(ostream &tout, HUB_MSG *pMsg)
     case HUB_MSG_UNION_TYPE_PVAL:
       tout << hex << "&" << pMsg->u.pv.pVal << "[0x" << *pMsg->u.pv.pVal << dec << "] ";
       PrintVal(tout, pMsg->type, pMsg->u.pv.val);
+      break;
+    case HUB_MSG_UNION_TYPE_HVAL:
+      tout << pMsg->u.hVal;
       break;
     default:
       tout  << "???";

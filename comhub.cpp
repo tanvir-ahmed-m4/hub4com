@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.11  2008/11/21 08:16:56  vfrolov
+ * Added HUB_MSG_TYPE_LOOP_TEST
+ *
  * Revision 1.10  2008/11/13 08:07:40  vfrolov
  * Changed for staticaly linking
  *
@@ -102,6 +105,15 @@ BOOL ComHub::StartAll() const
 
   for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
     if (!(*i)->Init())
+      return FALSE;
+  }
+
+  for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
+    HubMsg msg;
+
+    msg.type = HUB_MSG_TYPE_LOOP_TEST;
+
+    if (!OnFakeRead(*i, &msg))
       return FALSE;
   }
 

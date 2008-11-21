@@ -32,6 +32,7 @@ extern "C" {
 #define HUB_MSG_UNION_TYPE_BUF     0x1000
 #define HUB_MSG_UNION_TYPE_VAL     0x2000
 #define HUB_MSG_UNION_TYPE_PVAL    0x3000
+#define HUB_MSG_UNION_TYPE_HVAL    0x4000
 /*******************************************************************/
 #define HUB_MSG_VAL_TYPES_MASK     0x0F00
 #define HUB_MSG_VAL_TYPE_MASK_VAL  0x0100
@@ -120,6 +121,7 @@ extern "C" {
 #define HUB_MSG_TYPE_SET_LSR       (17  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_MASK_VAL)
 #define HUB_MSG_TYPE_LBR_STATUS    (18  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_UINT)
 #define HUB_MSG_TYPE_LLC_STATUS    (19  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_LC)
+#define HUB_MSG_TYPE_LOOP_TEST     (20  | HUB_MSG_UNION_TYPE_HVAL)
 /*******************************************************************/
 typedef struct _HUB_MSG {
   WORD type;
@@ -133,6 +135,7 @@ typedef struct _HUB_MSG {
       DWORD val;
     } pv;
     DWORD val;
+    HANDLE hVal;
   } u;
 } HUB_MSG;
 /*******************************************************************/
