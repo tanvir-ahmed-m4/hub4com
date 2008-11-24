@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/11/24 16:39:58  vfrolov
+ * Implemented FLOWCONTROL-SUSPEND and FLOWCONTROL-RESUME commands (RFC 2217)
+ *
  * Revision 1.1  2008/10/24 06:51:23  vfrolov
  * Initial revision
  *
@@ -33,7 +36,9 @@
 class TelnetOptionComPort : public TelnetOption
 {
   public:
-    TelnetOptionComPort(TelnetProtocol &_telnet, DWORD &_goMask, DWORD &_soMask);
+    TelnetOptionComPort(TelnetProtocol &_telnet, BOOL _isClient, DWORD &_goMask, DWORD &_soMask);
+
+    void AddXoffXon(BOOL xoff);
 
     virtual void SetBR(DWORD br) = 0;
     virtual void SetLC(DWORD lc) = 0;
@@ -45,8 +50,15 @@ class TelnetOptionComPort : public TelnetOption
     virtual void SetBreak(BOOL on) = 0;
 
   protected:
+    void OnSuspendResume(BOOL suspend, HUB_MSG **ppMsg);
+
+    BOOL isClient;
+
     DWORD &goMask;
     DWORD &soMask;
+
+    int countXoff;
+    BOOL suspended;
 };
 ///////////////////////////////////////////////////////////////
 class TelnetOptionComPortClient : public TelnetOptionComPort

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2008/11/24 16:39:58  vfrolov
+ * Implemented FLOWCONTROL-SUSPEND and FLOWCONTROL-RESUME commands (RFC 2217)
+ *
  * Revision 1.7  2008/11/24 12:37:00  vfrolov
  * Changed plugin API
  *
@@ -718,6 +721,20 @@ static BOOL CALLBACK OutMethod(
 
       if (pState->pComPort) {
         pState->pComPort->NotifyLSR(lsr);
+        _ASSERTE(pState->pTelnetProtocol != NULL);
+        pState->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
+      }
+
+      break;
+    }
+    case HUB_MSG_TYPE_ADD_XOFF_XON: {
+      State *pState = ((Filter *)hFilter)->GetState(hToPort);
+
+      if (!pState)
+        return FALSE;
+
+      if (pState->pComPort) {
+        pState->pComPort->AddXoffXon(pOutMsg->u.val);
         _ASSERTE(pState->pTelnetProtocol != NULL);
         pState->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
       }
