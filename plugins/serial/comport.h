@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.12  2008/11/24 16:30:56  vfrolov
+ * Removed pOnXoffXon
+ *
  * Revision 1.11  2008/11/24 12:37:00  vfrolov
  * Changed plugin API
  *
@@ -125,7 +128,10 @@ class ComPort
     DWORD outOptions;
 
     DWORD writeQueueLimit;
+    DWORD writeQueueLimitSendXoff;
+    DWORD writeQueueLimitSendXon;
     DWORD writeQueued;
+    BOOL writeSuspended;
     DWORD writeLost;
     DWORD writeLostTotal;
     DWORD errors;

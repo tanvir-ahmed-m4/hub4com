@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.17  2008/11/24 16:30:56  vfrolov
+ * Removed pOnXoffXon
+ *
  * Revision 1.16  2008/11/24 12:37:00  vfrolov
  * Changed plugin API
  *
@@ -119,10 +122,14 @@ ComPort::ComPort(
     outOptions(0),
     writeQueueLimit(256),
     writeQueued(0),
+    writeSuspended(FALSE),
     writeLost(0),
     writeLostTotal(0),
     errors(0)
 {
+  writeQueueLimitSendXoff = (writeQueueLimit*2)/3;
+  writeQueueLimitSendXon = writeQueueLimit/3;
+
   filterX = comParams.InX();
   string path(pPath);
   name = path.substr(path.rfind('\\') + 1);
@@ -514,10 +521,18 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
       return FALSE;
     }
 
-    if (writeQueued <= writeQueueLimit/2 && (writeQueued + len) > writeQueueLimit/2)
-      pOnXoffXon(hMasterPort, TRUE);
-
     writeQueued += len;
+
+    if (writeQueued > writeQueueLimitSendXoff && !writeSuspended) {
+      writeSuspended = TRUE;
+
+      HUB_MSG msg;
+
+      msg.type = HUB_MSG_TYPE_ADD_XOFF_XON;
+      msg.u.val = TRUE;
+
+      pOnRead(hMasterPort, &msg);
+    }
 
     //cout << name << " Started Write " << len << " " << writeQueued << endl;
   }
@@ -719,10 +734,18 @@ void ComPort::OnWrite(WriteOverlapped *pOverlapped, DWORD len, DWORD done)
   if (len > done)
     writeLost += len - done;
 
-  if (writeQueued > writeQueueLimit/2 && (writeQueued - len) <= writeQueueLimit/2)
-    pOnXoffXon(hMasterPort, FALSE);
-
   writeQueued -= len;
+
+  if (writeQueued <= writeQueueLimitSendXon && writeSuspended) {
+    writeSuspended = FALSE;
+
+    HUB_MSG msg;
+
+    msg.type = HUB_MSG_TYPE_ADD_XOFF_XON;
+    msg.u.val = FALSE;
+
+    pOnRead(hMasterPort, &msg);
+  }
 }
 
 void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)

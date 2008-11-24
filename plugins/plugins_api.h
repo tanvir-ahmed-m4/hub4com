@@ -52,6 +52,8 @@ extern "C" {
 #define   LC2VAL_STOPBITS(t)       ((BYTE)((t) >> 16))
 #define   VAL2LC_STOPBITS(v)       ((DWORD)(BYTE)(v) << 16)
 /*******************************************************************/
+#define HUB_MSG_ROUTE_FLOW_CONTROL 0x0080
+/*******************************************************************/
 #define HUB_MSG_TYPE_EMPTY         (0   | HUB_MSG_UNION_TYPE_NONE)
 #define HUB_MSG_TYPE_LINE_DATA     (1   | HUB_MSG_UNION_TYPE_BUF)
 #define HUB_MSG_TYPE_CONNECT       (2   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_BOOL)
@@ -122,7 +124,7 @@ extern "C" {
 #define HUB_MSG_TYPE_LBR_STATUS    (18  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_UINT)
 #define HUB_MSG_TYPE_LLC_STATUS    (19  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_LC)
 #define HUB_MSG_TYPE_LOOP_TEST     (20  | HUB_MSG_UNION_TYPE_HVAL)
-#define HUB_MSG_TYPE_ADD_XOFF_XON  (21  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_BOOL)
+#define HUB_MSG_TYPE_ADD_XOFF_XON  (21  | HUB_MSG_ROUTE_FLOW_CONTROL | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_BOOL)
 /*******************************************************************/
 typedef struct _HUB_MSG {
   WORD type;
@@ -175,9 +177,6 @@ typedef const char *(CALLBACK ROUTINE_PORT_NAME_A)(
         HMASTERPORT hMasterPort);
 typedef const char *(CALLBACK ROUTINE_FILTER_NAME_A)(
         HMASTERFILTER hMasterFilter);
-typedef void (CALLBACK ROUTINE_ON_XOFF_XON)(
-        HMASTERPORT hMasterPort,
-        BOOL xoff);
 typedef void (CALLBACK ROUTINE_ON_READ)(
         HMASTERPORT hMasterPort,
         HUB_MSG *pMsg);
@@ -194,7 +193,6 @@ typedef struct _HUB_ROUTINES_A {
   ROUTINE_MSG_INSERT_NONE *pMsgInsertNone;
   ROUTINE_PORT_NAME_A *pPortName;
   ROUTINE_FILTER_NAME_A *pFilterName;
-  ROUTINE_ON_XOFF_XON *pOnXoffXon;
   ROUTINE_ON_READ *pOnRead;
 } HUB_ROUTINES_A;
 /*******************************************************************/

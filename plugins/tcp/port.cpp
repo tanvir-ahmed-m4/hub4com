@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.9  2008/11/24 16:30:56  vfrolov
+ * Removed pOnXoffXon
+ *
  * Revision 1.8  2008/11/24 12:37:00  vfrolov
  * Changed plugin API
  *
@@ -295,7 +298,6 @@ static const PLUGIN_ROUTINES_A *const plugins[] = {
 ///////////////////////////////////////////////////////////////
 ROUTINE_BUF_ALLOC *pBufAlloc;
 ROUTINE_BUF_FREE *pBufFree;
-ROUTINE_ON_XOFF_XON *pOnXoffXon;
 ROUTINE_ON_READ *pOnRead;
 ///////////////////////////////////////////////////////////////
 PLUGIN_INIT_A InitA;
@@ -304,7 +306,6 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 {
   if (!ROUTINE_IS_VALID(pHubRoutines, pBufAlloc) ||
       !ROUTINE_IS_VALID(pHubRoutines, pBufFree) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pOnXoffXon) ||
       !ROUTINE_IS_VALID(pHubRoutines, pOnRead))
   {
     return NULL;
@@ -312,7 +313,6 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 
   pBufAlloc = pHubRoutines->pBufAlloc;
   pBufFree = pHubRoutines->pBufFree;
-  pOnXoffXon = pHubRoutines->pOnXoffXon;
   pOnRead = pHubRoutines->pOnRead;
 
   WSADATA wsaData;

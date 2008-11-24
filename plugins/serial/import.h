@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/11/24 16:30:56  vfrolov
+ * Removed pOnXoffXon
+ *
  * Revision 1.4  2008/11/24 12:37:00  vfrolov
  * Changed plugin API
  *
@@ -40,7 +43,6 @@
 extern ROUTINE_BUF_ALLOC *pBufAlloc;
 extern ROUTINE_BUF_FREE *pBufFree;
 extern ROUTINE_MSG_INSERT_NONE *pMsgInsertNone;
-extern ROUTINE_ON_XOFF_XON *pOnXoffXon;
 extern ROUTINE_ON_READ *pOnRead;
 ///////////////////////////////////////////////////////////////
 
