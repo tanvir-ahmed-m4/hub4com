@@ -190,6 +190,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\filter.h"
+				>
+			</File>
+			<File
 				RelativePath=".\filters.h"
 				>
 			</File>
