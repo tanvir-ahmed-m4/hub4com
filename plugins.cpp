@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/11/24 12:36:59  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.4  2008/11/13 08:07:40  vfrolov
  * Changed for staticaly linking
  *
@@ -48,10 +51,12 @@
 class PluginEnt {
   public:
     PluginEnt(const PLUGIN_ROUTINES_A *_pRoutines, HMODULE _hDll);
-    ~PluginEnt();
 
     void Help(const char *pProgPath) const;
+
+    void ConfigStart();
     BOOL Config(const char *pArg) const;
+    void ConfigStop();
 
     #define ABOUT(item) \
     string item() const { \
@@ -92,14 +97,6 @@ PluginEnt::PluginEnt(const PLUGIN_ROUTINES_A *_pRoutines, HMODULE _hDll)
     inUse(FALSE),
     hConfig(NULL)
 {
-  if (ROUTINE_IS_VALID(pRoutines, pConfigStart))
-    hConfig = pRoutines->pConfigStart();
-}
-
-PluginEnt::~PluginEnt()
-{
-  if (hConfig && ROUTINE_IS_VALID(pRoutines, pConfigStop))
-    pRoutines->pConfigStop(hConfig);
 }
 
 void PluginEnt::Help(const char *pProgPath) const
@@ -110,12 +107,26 @@ void PluginEnt::Help(const char *pProgPath) const
     cerr << "No help found." << endl;
 }
 
+void PluginEnt::ConfigStart()
+{
+  if (ROUTINE_IS_VALID(pRoutines, pConfigStart))
+    hConfig = pRoutines->pConfigStart();
+}
+
 BOOL PluginEnt::Config(const char *pArg) const
 {
   if (hConfig && ROUTINE_IS_VALID(pRoutines, pConfig))
     return pRoutines->pConfig(hConfig, pArg);
 
   return FALSE;
+}
+
+void PluginEnt::ConfigStop()
+{
+  if (hConfig && ROUTINE_IS_VALID(pRoutines, pConfigStop)) {
+    pRoutines->pConfigStop(hConfig);
+    hConfig = NULL;
+  }
 }
 ///////////////////////////////////////////////////////////////
 static string type2str(PLUGIN_TYPE type)
@@ -415,6 +426,18 @@ void Plugins::Help(
     cerr << "The module " << pPluginName << " not found." << endl;
 }
 ///////////////////////////////////////////////////////////////
+void Plugins::ConfigStart() const
+{
+  for (TypePluginsMap::const_iterator iPair = plugins.begin() ; iPair != plugins.end() ; iPair++) {
+    if (iPair->second) {
+      for (PluginArray::const_iterator i = iPair->second->begin() ; i != iPair->second->end() ; i++) {
+        if (*i)
+          (*i)->ConfigStart();
+      }
+    }
+  }
+}
+///////////////////////////////////////////////////////////////
 BOOL Plugins::Config(const char *pArg) const
 {
   BOOL res = FALSE;
@@ -429,6 +452,18 @@ BOOL Plugins::Config(const char *pArg) const
   }
 
   return res;
+}
+///////////////////////////////////////////////////////////////
+void Plugins::ConfigStop() const
+{
+  for (TypePluginsMap::const_iterator iPair = plugins.begin() ; iPair != plugins.end() ; iPair++) {
+    if (iPair->second) {
+      for (PluginArray::const_iterator i = iPair->second->begin() ; i != iPair->second->end() ; i++) {
+        if (*i)
+          (*i)->ConfigStop();
+      }
+    }
+  }
 }
 ///////////////////////////////////////////////////////////////
 const PLUGIN_ROUTINES_A *Plugins::GetRoutines(

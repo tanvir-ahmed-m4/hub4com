@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.12  2008/11/24 12:37:00  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.11  2008/11/13 07:50:41  vfrolov
  * Changed for staticaly linking
  *
@@ -70,6 +73,12 @@
 ///////////////////////////////////////////////////////////////
 namespace FilterPin2Con {
 ///////////////////////////////////////////////////////////////
+#ifndef _DEBUG
+  #define DEBUG_PARAM(par)
+#else   /* _DEBUG */
+  #define DEBUG_PARAM(par) par
+#endif  /* _DEBUG */
+///////////////////////////////////////////////////////////////
 static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal = NULL;
 static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone = NULL;
 static ROUTINE_PORT_NAME_A *pPortName = NULL;
@@ -95,19 +104,19 @@ class State {
 class Filter {
   public:
     Filter(int argc, const char *const argv[]);
-    void SetHub(HHUB _hHub) { hHub = _hHub; }
-    State *GetState(int nPort);
-    const char *PortName(int nPort) const { return pPortName(hHub, nPort); }
-    const char *FilterName() const { return pFilterName(hHub, (HFILTER)this); }
+    State *GetState(HMASTERPORT hPort);
+
+    void SetFilterName(const char *_pName) { pName = _pName; }
+    const char *FilterName() const { return pName; }
 
     DWORD pin;
     BOOL negative;
 
   private:
-    HHUB hHub;
+    const char *pName;
 
-    typedef map<int, State*> PortsMap;
-    typedef pair<int, State*> PortPair;
+    typedef map<HMASTERPORT, State*> PortsMap;
+    typedef pair<HMASTERPORT, State*> PortPair;
 
     PortsMap portsMap;
 };
@@ -126,7 +135,7 @@ static struct {
 Filter::Filter(int argc, const char *const argv[])
   : pin(GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR)),
     negative(FALSE),
-    hHub(NULL)
+    pName(NULL)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
@@ -161,14 +170,14 @@ Filter::Filter(int argc, const char *const argv[])
   }
 }
 
-State *Filter::GetState(int nPort)
+State *Filter::GetState(HMASTERPORT hPort)
 {
-  PortsMap::iterator iPair = portsMap.find(nPort);
+  PortsMap::iterator iPair = portsMap.find(hPort);
 
   if (iPair == portsMap.end()) {
-      portsMap.insert(PortPair(nPort, NULL));
+      portsMap.insert(PortPair(hPort, NULL));
 
-      iPair = portsMap.find(nPort);
+      iPair = portsMap.find(hPort);
 
       if (iPair == portsMap.end())
         return NULL;
@@ -206,7 +215,8 @@ static void CALLBACK Help(const char *pProgPath)
   << endl
   << "Options:" << endl
   << "  --connect=[!]<state>  - <state> is cts, dsr, dcd, ring or break (dsr by" << endl
-  << "                          default)." << endl
+  << "                          default). The exclamation sign (!) can be used to" << endl
+  << "                          invert the value." << endl
   << endl
   << "IN method input data stream description:" << endl
   << "  CONNECT(TRUE/FALSE)   - will be discarded from stream." << endl
@@ -239,23 +249,23 @@ static HFILTER CALLBACK Create(
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK Init(
     HFILTER hFilter,
-    HHUB hHub)
+    HMASTERFILTER hMasterFilter)
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hHub != NULL);
+  _ASSERTE(hMasterFilter != NULL);
 
-  ((Filter *)hFilter)->SetHub(hHub);
+  ((Filter *)hFilter)->SetFilterName(pFilterName(hMasterFilter));
 
   return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 static HUB_MSG *InsertConnectState(
     Filter &filter,
-    int nFromPort,
+    HMASTERPORT hFromPort,
     HUB_MSG *pInMsg,
     BOOL pinState)
 {
-  State *pState = filter.GetState(nFromPort);
+  State *pState = filter.GetState(hFromPort);
 
   if (!pState)
     return FALSE;
@@ -271,9 +281,9 @@ static HUB_MSG *InsertConnectState(
 
 static BOOL CALLBACK InMethod(
     HFILTER hFilter,
-    int nFromPort,
+    HMASTERPORT hFromPort,
     HUB_MSG *pInMsg,
-    HUB_MSG **ppEchoMsg)
+    HUB_MSG **DEBUG_PARAM(ppEchoMsg))
 {
   _ASSERTE(hFilter != NULL);
   _ASSERTE(pInMsg != NULL);
@@ -290,7 +300,7 @@ static BOOL CALLBACK InMethod(
     DWORD fail_options = (pInMsg->u.val & ((Filter *)hFilter)->pin);
 
     if (fail_options) {
-      cerr << ((Filter *)hFilter)->PortName(nFromPort)
+      cerr << pPortName(hFromPort)
            << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
            << " option(s) 0x" << hex << fail_options << dec
            << " not accepted" << endl;
@@ -310,13 +320,13 @@ static BOOL CALLBACK InMethod(
     if ((pin & MASK2VAL(pInMsg->u.val)) == 0)
       break;
 
-    pInMsg = InsertConnectState(*((Filter *)hFilter), nFromPort, pInMsg, ((pInMsg->u.val & pin) != 0));
+    pInMsg = InsertConnectState(*((Filter *)hFilter), hFromPort, pInMsg, ((pInMsg->u.val & pin) != 0));
 
     break;
   }
   case HUB_MSG_TYPE_BREAK_STATUS:
     if (((Filter *)hFilter)->pin & GO_BREAK_STATUS)
-      pInMsg = InsertConnectState(*((Filter *)hFilter), nFromPort, pInMsg, pInMsg->u.val != 0);
+      pInMsg = InsertConnectState(*((Filter *)hFilter), hFromPort, pInMsg, pInMsg->u.val != 0);
     break;
   }
 

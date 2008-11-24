@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.10  2008/11/24 12:37:00  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.9  2008/11/21 08:16:56  vfrolov
  * Added HUB_MSG_TYPE_LOOP_TEST
  *
@@ -146,19 +149,18 @@ class Valid {
 class Filter : public Valid {
   public:
     Filter(TraceConfig &config, int argc, const char *const argv[]);
-    void SetHub(HHUB _hHub) { hHub = _hHub; pName = pFilterName(hHub, (HFILTER)this); }
-    const char *PortName(int nPort) const { return pPortName(hHub, nPort); }
+
+    void SetFilterName(const char *_pName) { pName = _pName; }
     const char *FilterName() const { return pName; }
 
     ostream *pTraceStream;
+
   private:
-    HHUB hHub;
     const char *pName;
 };
 
 Filter::Filter(TraceConfig &config, int argc, const char *const argv[])
   : pTraceStream(NULL),
-    hHub(NULL),
     pName(NULL)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
@@ -313,12 +315,12 @@ static HFILTER CALLBACK Create(
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK Init(
     HFILTER hFilter,
-    HHUB hHub)
+    HMASTERFILTER hMasterFilter)
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hHub != NULL);
+  _ASSERTE(hMasterFilter != NULL);
 
-  ((Filter *)hFilter)->SetHub(hHub);
+  ((Filter *)hFilter)->SetFilterName(pFilterName(hMasterFilter));
 
   return TRUE;
 }
@@ -429,6 +431,7 @@ static const CODE2NAME codeNameTableHubMsg[] = {
   TOCODE2NAME(HUB_MSG_TYPE_, LBR_STATUS),
   TOCODE2NAME(HUB_MSG_TYPE_, LLC_STATUS),
   TOCODE2NAME(HUB_MSG_TYPE_, LOOP_TEST),
+  TOCODE2NAME(HUB_MSG_TYPE_, ADD_XOFF_XON),
   {0, NULL}
 };
 ///////////////////////////////////////////////////////////////
@@ -615,7 +618,7 @@ static void PrintVal(ostream &tout, DWORD msgType, DWORD val)
 ///////////////////////////////////////////////////////////////
 static void PrintMsgBody(ostream &tout, HUB_MSG *pMsg)
 {
-  switch (pMsg->type & HUB_MSG_UNION_TYPE_MASK) {
+  switch (pMsg->type & HUB_MSG_UNION_TYPES_MASK) {
     case HUB_MSG_UNION_TYPE_NONE:
       break;
     case HUB_MSG_UNION_TYPE_BUF:
@@ -699,7 +702,7 @@ static void PrintMsg(ostream &tout, HUB_MSG *pMsg)
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK InMethod(
     HFILTER hFilter,
-    int nFromPort,
+    HMASTERPORT hFromPort,
     HUB_MSG *pInMsg,
     HUB_MSG **DEBUG_PARAM(ppEchoMsg))
 {
@@ -713,7 +716,7 @@ static BOOL CALLBACK InMethod(
 
   PrintTime(tout);
 
-  tout << ((Filter *)hFilter)->PortName(nFromPort) << "-("
+  tout << pPortName(hFromPort) << "-("
        << ((Filter *)hFilter)->FilterName() << ")->: ";
 
   PrintMsg(tout, pInMsg);
@@ -723,8 +726,8 @@ static BOOL CALLBACK InMethod(
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK OutMethod(
     HFILTER hFilter,
-    int nFromPort,
-    int nToPort,
+    HMASTERPORT hFromPort,
+    HMASTERPORT hToPort,
     HUB_MSG *pOutMsg)
 {
   _ASSERTE(hFilter != NULL);
@@ -735,9 +738,9 @@ static BOOL CALLBACK OutMethod(
 
   PrintTime(tout);
 
-  tout << ((Filter *)hFilter)->PortName(nToPort) << "<-("
+  tout << pPortName(hToPort) << "<-("
        << ((Filter *)hFilter)->FilterName() << ")-"
-       << ((Filter *)hFilter)->PortName(nFromPort) << ": ";
+       << pPortName(hFromPort) << ": ";
 
   PrintMsg(tout, pOutMsg);
 

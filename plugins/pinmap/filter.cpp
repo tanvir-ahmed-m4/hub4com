@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.12  2008/11/24 12:37:00  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.11  2008/11/13 07:51:34  vfrolov
  * Changed for staticaly linking
  *
@@ -128,10 +131,10 @@ class State {
 class Filter : public Valid {
   public:
     Filter(int argc, const char *const argv[]);
-    void SetHub(HHUB _hHub) { hHub = _hHub; }
-    State *GetState(int nPort);
-    const char *PortName(int nPort) const { return pPortName(hHub, nPort); }
-    const char *FilterName() const { return pFilterName(hHub, (HFILTER)this); }
+    State *GetState(HMASTERPORT hPort);
+
+    void SetFilterName(const char *_pName) { pName = _pName; }
+    const char *FilterName() const { return pName; }
 
     struct PinOuts {
       PinOuts() : mask(0), val(0) {}
@@ -145,10 +148,10 @@ class Filter : public Valid {
     WORD lmInMask;
 
   private:
-    HHUB hHub;
+    const char *pName;
 
-    typedef map<int, State*> PortsMap;
-    typedef pair<int, State*> PortPair;
+    typedef map<HMASTERPORT, State*> PortsMap;
+    typedef pair<HMASTERPORT, State*> PortPair;
 
     PortsMap portsMap;
 
@@ -158,7 +161,7 @@ class Filter : public Valid {
 Filter::Filter(int argc, const char *const argv[])
   : outMask(0),
     lmInMask(0),
-    hHub(NULL)
+    pName(NULL)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
@@ -240,14 +243,14 @@ void Filter::Parse(const char *pArg)
   }
 }
 
-State *Filter::GetState(int nPort)
+State *Filter::GetState(HMASTERPORT hPort)
 {
-  PortsMap::iterator iPair = portsMap.find(nPort);
+  PortsMap::iterator iPair = portsMap.find(hPort);
 
   if (iPair == portsMap.end()) {
-      portsMap.insert(PortPair(nPort, NULL));
+      portsMap.insert(PortPair(hPort, NULL));
 
-      iPair = portsMap.find(nPort);
+      iPair = portsMap.find(hPort);
 
       if (iPair == portsMap.end())
         return NULL;
@@ -355,12 +358,12 @@ static HFILTER CALLBACK Create(
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK Init(
     HFILTER hFilter,
-    HHUB hHub)
+    HMASTERFILTER hMasterFilter)
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hHub != NULL);
+  _ASSERTE(hMasterFilter != NULL);
 
-  ((Filter *)hFilter)->SetHub(hHub);
+  ((Filter *)hFilter)->SetFilterName(pFilterName(hMasterFilter));
 
   return TRUE;
 }
@@ -400,8 +403,8 @@ static void InsertPinState(
 
 static BOOL CALLBACK OutMethod(
     HFILTER hFilter,
-    int nFromPort,
-    int nToPort,
+    HMASTERPORT hFromPort,
+    HMASTERPORT hToPort,
     HUB_MSG *pOutMsg)
 {
   _ASSERTE(hFilter != NULL);
@@ -412,7 +415,7 @@ static BOOL CALLBACK OutMethod(
       // or'e with the required mask to set pin state
       pOutMsg->u.val |= SO_V2O_PIN_STATE(((Filter *)hFilter)->outMask);
 
-      State *pState = ((Filter *)hFilter)->GetState(nToPort);
+      State *pState = ((Filter *)hFilter)->GetState(hToPort);
 
       if (!pState)
         return FALSE;
@@ -433,9 +436,9 @@ static BOOL CALLBACK OutMethod(
       DWORD fail_options = (pOutMsg->u.val & LM2GO(((Filter *)hFilter)->lmInMask));
 
       if (fail_options) {
-        cerr << ((Filter *)hFilter)->PortName(nFromPort)
+        cerr << pPortName(hFromPort)
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
-             << " for port " << ((Filter *)hFilter)->PortName(nToPort)
+             << " for port " << pPortName(hToPort)
              << " option(s) 0x" << hex << fail_options << dec
              << " not accepted" << endl;
       }
@@ -446,7 +449,7 @@ static BOOL CALLBACK OutMethod(
       pOutMsg->u.val &= ~(VAL2MASK(((Filter *)hFilter)->outMask));
       break;
     case HUB_MSG_TYPE_MODEM_STATUS: {
-      State *pState = ((Filter *)hFilter)->GetState(nToPort);
+      State *pState = ((Filter *)hFilter)->GetState(hToPort);
 
       if (!pState)
         return FALSE;
@@ -461,7 +464,7 @@ static BOOL CALLBACK OutMethod(
     }
     case HUB_MSG_TYPE_BREAK_STATUS: {
       if (((Filter *)hFilter)->lmInMask & LM_BREAK) {
-        State *pState = ((Filter *)hFilter)->GetState(nToPort);
+        State *pState = ((Filter *)hFilter)->GetState(hToPort);
 
         if (!pState)
           return FALSE;
@@ -476,7 +479,7 @@ static BOOL CALLBACK OutMethod(
     }
     case HUB_MSG_TYPE_CONNECT: {
       if (((Filter *)hFilter)->lmInMask & LM_CONNECT) {
-        State *pState = ((Filter *)hFilter)->GetState(nToPort);
+        State *pState = ((Filter *)hFilter)->GetState(hToPort);
 
         if (!pState)
           return FALSE;

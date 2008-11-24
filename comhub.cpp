@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.12  2008/11/24 12:36:59  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.11  2008/11/21 08:16:56  vfrolov
  * Added HUB_MSG_TYPE_LOOP_TEST
  *
@@ -70,44 +73,29 @@
 #include "hubmsg.h"
 
 ///////////////////////////////////////////////////////////////
-BOOL ComHub::CreatePort(
-    const PORT_ROUTINES_A *pPortRoutines,
+void ComHub::Add()
+{
+  Port *pPort = new Port(*this, NumPorts());
+
+  if (!pPort) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
+
+  ports.push_back(pPort);
+}
+
+BOOL ComHub::InitPort(
     int n,
+    const PORT_ROUTINES_A *pPortRoutines,
     HCONFIG hConfig,
     const char *pPath)
 {
-  if (!ROUTINE_IS_VALID(pPortRoutines, pCreate)) {
-    cerr << "No create routine for port " << pPath << endl;
-    return FALSE;
-  }
-
-  HPORT hPort = pPortRoutines->pCreate(hConfig, pPath);
-
-  if (!hPort) {
-    cerr << "Can't create port " << pPath << endl;
-    return FALSE;
-  }
-
-  ports[n] = new Port(*this, n, pPortRoutines, hPort);
-
-  if (!ports[n]) {
-    cerr << "Can't create master port " << pPath << endl;
-    return FALSE;
-  }
-
-  return TRUE;
+  return ports[n]->Init(pPortRoutines, hConfig, pPath);
 }
 
 BOOL ComHub::StartAll() const
 {
-  if (pFilters && !pFilters->Init())
-    return FALSE;
-
-  for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
-    if (!(*i)->Init())
-      return FALSE;
-  }
-
   for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
     HubMsg msg;
 
@@ -188,13 +176,28 @@ BOOL ComHub::OnFakeRead(Port *pFromPort, HubMsg *pMsg) const
 
 void ComHub::OnRead(Port *pFromPort, HubMsg *pMsg) const
 {
+  OnRead(routeDataMap, pFromPort, pMsg);
+}
+
+void ComHub::AddXoffXon(Port *pFromPort, BOOL xoff) const
+{
+  HubMsg msg;
+
+  msg.type = HUB_MSG_TYPE_ADD_XOFF_XON;
+  msg.u.val = xoff;
+
+  OnRead(routeFlowControlMap, pFromPort, &msg);
+}
+
+void ComHub::OnRead(const PortMap &routeMap, Port *pFromPort, HubMsg *pMsg) const
+{
   _ASSERTE(pFromPort != NULL);
   _ASSERTE(pMsg != NULL);
 
   if (pFilters) {
     HubMsg *pEchoMsg = NULL;
 
-    if (!pFilters->InMethod(pFromPort->Num(), pMsg, &pEchoMsg)) {
+    if (!pFilters->InMethod(pFromPort, pMsg, &pEchoMsg)) {
       if (pEchoMsg) {
         delete pEchoMsg;
         pEchoMsg = NULL;
@@ -208,14 +211,14 @@ void ComHub::OnRead(Port *pFromPort, HubMsg *pMsg) const
       delete pEchoMsg;
   }
 
-  for (PortMap::const_iterator i = routeDataMap.find(pFromPort) ; i != routeDataMap.end() ; i++) {
+  for (PortMap::const_iterator i = routeMap.find(pFromPort) ; i != routeMap.end() ; i++) {
     if (i->first != pFromPort)
       break;
 
     HubMsg *pOutMsg = pMsg->Clone();
 
     if (pFilters && pOutMsg) {
-      if (!pFilters->OutMethod(pFromPort->Num(), i->second->Num(), pOutMsg)) {
+      if (!pFilters->OutMethod(pFromPort, i->second, pOutMsg)) {
         if (pOutMsg) {
           delete pOutMsg;
           pOutMsg = NULL;
@@ -231,46 +234,10 @@ void ComHub::OnRead(Port *pFromPort, HubMsg *pMsg) const
   }
 }
 
-void ComHub::AddXoff(Port *pFromPort) const
-{
-  for (PortMap::const_iterator i = routeFlowControlMap.find(pFromPort) ; i != routeFlowControlMap.end() ; i++) {
-    if (i->first != pFromPort)
-      break;
-
-    i->second->AddXoff();
-  }
-}
-
-void ComHub::AddXon(Port *pFromPort) const
-{
-  for (PortMap::const_iterator i = routeFlowControlMap.find(pFromPort) ; i != routeFlowControlMap.end() ; i++) {
-    if (i->first != pFromPort)
-      break;
-
-    i->second->AddXon();
-  }
-}
-
 void ComHub::LostReport() const
 {
   for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++)
     (*i)->LostReport();
-}
-
-void ComHub::SetDataRoute(const PortNumMap &map)
-{
-  routeDataMap.clear();
-
-  for (PortNumMap::const_iterator i = map.begin() ; i != map.end() ; i++)
-    routeDataMap.insert(pair<Port*, Port*>(ports.at(i->first), ports.at(i->second)));
-}
-
-void ComHub::SetFlowControlRoute(const PortNumMap &map)
-{
-  routeFlowControlMap.clear();
-
-  for (PortNumMap::const_iterator i = map.begin() ; i != map.end() ; i++)
-    routeFlowControlMap.insert(pair<Port*, Port*>(ports.at(i->first), ports.at(i->second)));
 }
 
 static void RouteReport(const PortMap &map, const char *pMapName)
@@ -303,10 +270,5 @@ void ComHub::RouteReport() const
 {
   ::RouteReport(routeDataMap, "data");
   ::RouteReport(routeFlowControlMap, "flow control");
-}
-
-const char *ComHub::FilterName(HFILTER hFilter) const
-{
-  return pFilters ? pFilters->FilterName(hFilter) : NULL;
 }
 ///////////////////////////////////////////////////////////////

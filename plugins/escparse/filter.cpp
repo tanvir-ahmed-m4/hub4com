@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/11/24 12:37:00  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.6  2008/11/13 07:47:48  vfrolov
  * Changed for staticaly linking
  *
@@ -316,20 +319,20 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
 class Filter : public Valid {
   public:
     Filter(int argc, const char *const argv[]);
-    void SetHub(HHUB _hHub) { hHub = _hHub; }
-    EscParse *GetEscParse(int nPort);
-    const char *PortName(int nPort) const { return pPortName(hHub, nPort); }
-    const char *FilterName() const { return pFilterName(hHub, (HFILTER)this); }
+    EscParse *GetEscParse(HMASTERPORT hPort);
+
+    void SetFilterName(const char *_pName) { pName = _pName; }
+    const char *FilterName() const { return pName; }
 
     BOOL requestEscMode;
     BYTE escapeChar;
     DWORD acceptableOptions;
 
   private:
-    HHUB hHub;
+    const char *pName;
 
-    typedef map<int, EscParse*> PortsMap;
-    typedef pair<int, EscParse*> PortPair;
+    typedef map<HMASTERPORT, EscParse*> PortsMap;
+    typedef pair<HMASTERPORT, EscParse*> PortPair;
 
     PortsMap portsMap;
 };
@@ -343,7 +346,7 @@ Filter::Filter(int argc, const char *const argv[])
       GO_BREAK_STATUS |
       GO_V2O_MODEM_STATUS(-1) |
       GO_V2O_LINE_STATUS(-1)),
-    hHub(NULL)
+    pName(NULL)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
@@ -375,14 +378,14 @@ Filter::Filter(int argc, const char *const argv[])
   }
 }
 
-EscParse *Filter::GetEscParse(int nPort)
+EscParse *Filter::GetEscParse(HMASTERPORT hPort)
 {
-  PortsMap::iterator iPair = portsMap.find(nPort);
+  PortsMap::iterator iPair = portsMap.find(hPort);
 
   if (iPair == portsMap.end()) {
-      portsMap.insert(PortPair(nPort, NULL));
+      portsMap.insert(PortPair(hPort, NULL));
 
-      iPair = portsMap.find(nPort);
+      iPair = portsMap.find(hPort);
 
       if (iPair == portsMap.end())
         return NULL;
@@ -454,19 +457,19 @@ static HFILTER CALLBACK Create(
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK Init(
     HFILTER hFilter,
-    HHUB hHub)
+    HMASTERFILTER hMasterFilter)
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hHub != NULL);
+  _ASSERTE(hMasterFilter != NULL);
 
-  ((Filter *)hFilter)->SetHub(hHub);
+  ((Filter *)hFilter)->SetFilterName(pFilterName(hMasterFilter));
 
   return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK InMethod(
     HFILTER hFilter,
-    int nFromPort,
+    HMASTERPORT hFromPort,
     HUB_MSG *pInMsg,
     HUB_MSG ** DEBUG_PARAM(ppEchoMsg))
 {
@@ -486,7 +489,7 @@ static BOOL CALLBACK InMethod(
       }
       break;
     case HUB_MSG_TYPE_GET_IN_OPTS: {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
         return FALSE;
@@ -522,7 +525,7 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_TYPE_GET_ESC_OPTS: {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
         return FALSE;
@@ -537,7 +540,7 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_TYPE_FAIL_ESC_OPTS: {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
         return FALSE;
@@ -545,7 +548,7 @@ static BOOL CALLBACK InMethod(
       DWORD fail_options = (pInMsg->u.pv.val & ESC_OPTS_MAP_GO2EO(pEscParse->Options()));
 
       if (fail_options) {
-        cerr << ((Filter *)hFilter)->PortName(nFromPort)
+        cerr << pPortName(hFromPort)
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
              << " escape mode option(s) 0x" << hex << fail_options << dec
              << " not accepted (will try non escape mode option(s))" << endl;
@@ -561,13 +564,13 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_TYPE_FAIL_IN_OPTS: {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
         return FALSE;
 
       if ((pInMsg->u.val & GO_ESCAPE_MODE) && ((Filter *)hFilter)->requestEscMode) {
-        cerr << ((Filter *)hFilter)->PortName(nFromPort)
+        cerr << pPortName(hFromPort)
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
              << " option ESCAPE_MODE not accepted" << endl;
 
@@ -585,7 +588,7 @@ static BOOL CALLBACK InMethod(
       if (pInMsg->u.buf.size == 0)
         return TRUE;
 
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
         return FALSE;
@@ -595,7 +598,7 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_TYPE_MODEM_STATUS: {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
         return FALSE;
@@ -605,7 +608,7 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_TYPE_LINE_STATUS: {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
         return FALSE;
@@ -615,7 +618,7 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_TYPE_RBR_STATUS: {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
         return FALSE;
@@ -628,7 +631,7 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_TYPE_RLC_STATUS: {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
         return FALSE;
@@ -641,7 +644,7 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_TYPE_BREAK_STATUS: {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(nFromPort);
+      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
         return FALSE;

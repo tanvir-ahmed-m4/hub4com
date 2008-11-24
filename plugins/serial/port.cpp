@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.10  2008/11/24 12:37:00  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.9  2008/11/13 07:35:10  vfrolov
  * Changed for staticaly linking
  *
@@ -286,14 +289,12 @@ static void CALLBACK SetPortName(
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK Init(
     HPORT hPort,
-    HMASTERPORT hMasterPort,
-    HHUB hHub)
+    HMASTERPORT hMasterPort)
 {
   _ASSERTE(hPort != NULL);
   _ASSERTE(hMasterPort != NULL);
-  _ASSERTE(hHub != NULL);
 
-  return ((ComPort *)hPort)->Init(hMasterPort, hHub);
+  return ((ComPort *)hPort)->Init(hMasterPort);
 }
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK Start(HPORT hPort)
@@ -323,22 +324,6 @@ static BOOL CALLBACK Write(
   return ((ComPort *)hPort)->Write(pMsg);
 }
 ///////////////////////////////////////////////////////////////
-static void CALLBACK AddXoff(
-    HPORT hPort)
-{
-  _ASSERTE(hPort != NULL);
-
-  ((ComPort *)hPort)->AddXoff(1);
-}
-///////////////////////////////////////////////////////////////
-static void CALLBACK AddXon(
-    HPORT hPort)
-{
-  _ASSERTE(hPort != NULL);
-
-  ((ComPort *)hPort)->AddXoff(-1);
-}
-///////////////////////////////////////////////////////////////
 static void CALLBACK LostReport(
     HPORT hPort)
 {
@@ -362,8 +347,6 @@ static const PORT_ROUTINES_A routines = {
   Start,
   FakeReadFilter,
   Write,
-  AddXoff,
-  AddXon,
   LostReport,
 };
 
@@ -375,8 +358,7 @@ static const PLUGIN_ROUTINES_A *const plugins[] = {
 ROUTINE_BUF_ALLOC *pBufAlloc;
 ROUTINE_BUF_FREE *pBufFree;
 ROUTINE_MSG_INSERT_NONE *pMsgInsertNone;
-ROUTINE_ON_XOFF *pOnXoff;
-ROUTINE_ON_XON *pOnXon;
+ROUTINE_ON_XOFF_XON *pOnXoffXon;
 ROUTINE_ON_READ *pOnRead;
 ///////////////////////////////////////////////////////////////
 PLUGIN_INIT_A InitA;
@@ -386,8 +368,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   if (!ROUTINE_IS_VALID(pHubRoutines, pBufAlloc) ||
       !ROUTINE_IS_VALID(pHubRoutines, pBufFree) ||
       !ROUTINE_IS_VALID(pHubRoutines, pMsgInsertNone) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pOnXoff) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pOnXon) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pOnXoffXon) ||
       !ROUTINE_IS_VALID(pHubRoutines, pOnRead))
   {
     return NULL;
@@ -396,8 +377,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   pBufAlloc = pHubRoutines->pBufAlloc;
   pBufFree = pHubRoutines->pBufFree;
   pMsgInsertNone = pHubRoutines->pMsgInsertNone;
-  pOnXoff = pHubRoutines->pOnXoff;
-  pOnXon = pHubRoutines->pOnXon;
+  pOnXoffXon = pHubRoutines->pOnXoffXon;
   pOnRead = pHubRoutines->pOnRead;
 
   return plugins;

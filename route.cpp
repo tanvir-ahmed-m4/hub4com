@@ -19,9 +19,11 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/11/24 12:36:59  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.1  2008/03/26 08:37:06  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -29,11 +31,11 @@
 #include "route.h"
 
 ///////////////////////////////////////////////////////////////
-typedef pair<int, int> PortPair;
+typedef pair<Port *, Port *> PortPair;
 ///////////////////////////////////////////////////////////////
-static PortNumMap::iterator FindPair(PortNumMap &map, const PortPair &pair)
+static PortMap::iterator FindPair(PortMap &map, const PortPair &pair)
 {
-  PortNumMap::iterator i;
+  PortMap::iterator i;
 
   for (i = map.find(pair.first) ; i != map.end() ; i++) {
     if (i->first != pair.first)
@@ -47,17 +49,17 @@ static PortNumMap::iterator FindPair(PortNumMap &map, const PortPair &pair)
 }
 
 void AddRoute(
-    PortNumMap &map,
-    int iFrom,
-    int iTo,
+    PortMap &map,
+    Port *pFrom,
+    Port *pTo,
     BOOL noRoute,
     BOOL noEcho)
 {
-  if (iFrom != iTo || !noEcho || noRoute) {
-    PortPair pair(iFrom, iTo);
+  if (pFrom != pTo || !noEcho || noRoute) {
+    PortPair pair(pFrom, pTo);
 
     for (;;) {
-      PortNumMap::iterator i = FindPair(map, pair);
+      PortMap::iterator i = FindPair(map, pair);
 
       if (i == map.end()) {
         if (!noRoute)
@@ -73,13 +75,13 @@ void AddRoute(
 }
 
 void SetFlowControlRoute(
-    PortNumMap &routeFlowControlMap,
-    PortNumMap &routeDataMap,
+    PortMap &routeFlowControlMap,
+    PortMap &routeDataMap,
     BOOL fromAnyDataReceiver)
 {
   routeFlowControlMap.clear();
 
-  for (PortNumMap::const_iterator i = routeDataMap.begin() ; i != routeDataMap.end() ; i++) {
+  for (PortMap::const_iterator i = routeDataMap.begin() ; i != routeDataMap.end() ; i++) {
     PortPair pair(i->second, i->first);
 
     if (FindPair(routeFlowControlMap, pair) == routeFlowControlMap.end()) {

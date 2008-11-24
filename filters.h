@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/11/24 12:36:59  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.6  2008/11/13 08:07:40  vfrolov
  * Changed for staticaly linking
  *
@@ -50,7 +53,8 @@ class HubMsg;
 ///////////////////////////////////////////////////////////////
 typedef vector<Filter*> FilterArray;
 typedef vector<FilterMethod*> FilterMethodArray;
-typedef map<int, FilterMethodArray*> PortFiltersMap;
+typedef map<Port *, FilterMethodArray*> PortFiltersMap;
+typedef set<Port *> SetOfPorts;
 ///////////////////////////////////////////////////////////////
 class Filters
 {
@@ -64,21 +68,19 @@ class Filters
         HCONFIG hConfig,
         const char *pArgs);
     BOOL AddFilter(
-        int iPort,
+        Port *pPort,
         const char *pGroup,
         BOOL addInMethod,
         BOOL addOutMethod,
-        const set<int> *pOutMethodSrcPorts);
+        const SetOfPorts *pOutMethodSrcPorts);
     void Report() const;
-    BOOL Init() const;
-    const char *FilterName(HFILTER hFilter) const;
     BOOL InMethod(
-        int nFromPort,
+        Port *pFromPort,
         HubMsg *pInMsg,
         HubMsg **ppEchoMsg) const;
     BOOL OutMethod(
-        int nFromPort,
-        int nToPort,
+        Port *pFromPort,
+        Port *pToPort,
         HubMsg *pOutMsg) const;
 
   private:

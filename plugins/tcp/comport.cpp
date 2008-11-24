@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.9  2008/11/24 12:37:00  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.8  2008/11/17 16:44:57  vfrolov
  * Fixed race conditions
  *
@@ -124,7 +127,6 @@ ComPort::ComPort(
     hReconnectTimer(NULL),
     name("TCP"),
     hMasterPort(NULL),
-    hHub(NULL),
     countReadOverlapped(0),
     countXoff(0),
     writeQueueLimit(256),
@@ -186,10 +188,9 @@ ComPort::ComPort(
   }
 }
 
-BOOL ComPort::Init(HMASTERPORT _hMasterPort, HHUB _hHub)
+BOOL ComPort::Init(HMASTERPORT _hMasterPort)
 {
   hMasterPort = _hMasterPort;
-  hHub = _hHub;
 
   return isValid;
 }
@@ -197,7 +198,6 @@ BOOL ComPort::Init(HMASTERPORT _hMasterPort, HHUB _hHub)
 BOOL ComPort::Start()
 {
   _ASSERTE(hMasterPort != NULL);
-  _ASSERTE(hHub != NULL);
 
   if (pListener) {
     return pListener->Start();
@@ -330,7 +330,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     }
 
     if (writeQueued <= writeQueueLimit/2 && (writeQueued + len) > writeQueueLimit/2)
-      pOnXoff(hHub, hMasterPort);
+      pOnXoffXon(hMasterPort, TRUE);
 
     writeQueued += len;
 
@@ -364,6 +364,15 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
       cerr << name << " WARNING: Requested output option(s) [0x"
            << hex << pMsg->u.val << dec
            << "] will be ignored by driver" << endl;
+    }
+  }
+  else
+  if (pMsg->type == HUB_MSG_TYPE_ADD_XOFF_XON) {
+    if (pMsg->u.val) {
+      countXoff++;
+    } else {
+      if (--countXoff == 0 && isConnected)
+        StartRead();
     }
   }
 
@@ -400,7 +409,7 @@ void ComPort::OnWrite(WriteOverlapped *pOverlapped, DWORD len, DWORD done)
     writeLost += len - done;
 
   if (writeQueued > writeQueueLimit/2 && (writeQueued - len) <= writeQueueLimit/2)
-    pOnXon(hHub, hMasterPort);
+    pOnXoffXon(hMasterPort, FALSE);
 
   writeQueued -= len;
 }
@@ -413,7 +422,7 @@ void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)
   msg.u.buf.pBuf = pBuf;
   msg.u.buf.size = done;
 
-  pOnRead(hHub, hMasterPort, &msg);
+  pOnRead(hMasterPort, &msg);
 
   if (done == 0 && isDisconnected) {
     isDisconnected = FALSE;
@@ -450,7 +459,7 @@ void ComPort::OnDisconnect()
     msg.type = HUB_MSG_TYPE_CONNECT;
     msg.u.val = FALSE;
 
-    pOnRead(hHub, hMasterPort, &msg);
+    pOnRead(hMasterPort, &msg);
   }
 
   if (pListener) {
@@ -542,15 +551,7 @@ void ComPort::OnConnect()
   msg.type = HUB_MSG_TYPE_CONNECT;
   msg.u.val = TRUE;
 
-  pOnRead(hHub, hMasterPort, &msg);
-}
-
-void ComPort::AddXoff(int count)
-{
-  countXoff += count;
-
-  if (countXoff <= 0 && isConnected)
-    StartRead();
+  pOnRead(hMasterPort, &msg);
 }
 
 void ComPort::LostReport()

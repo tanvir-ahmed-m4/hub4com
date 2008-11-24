@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/11/24 12:37:00  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.2  2008/11/13 07:49:45  vfrolov
  * Changed for staticaly linking
  *
@@ -58,19 +61,19 @@ class Valid {
 class Filter : public Valid {
   public:
     Filter(int argc, const char *const argv[]);
-    void SetHub(HHUB _hHub) { hHub = _hHub; }
-    const char *PortName(int nPort) const { return pPortName(hHub, nPort); }
-    const char *FilterName() const { return pFilterName(hHub, (HFILTER)this); }
+
+    void SetFilterName(const char *_pName) { pName = _pName; }
+    const char *FilterName() const { return pName; }
 
     BYTE lsrMask;
 
   private:
-    HHUB hHub;
+    const char *pName;
 };
 
 Filter::Filter(int argc, const char *const argv[])
   : lsrMask(LINE_STATUS_OE|LINE_STATUS_PE|LINE_STATUS_FE|LINE_STATUS_BI|LINE_STATUS_FIFOERR),
-    hHub(NULL)
+    pName(NULL)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
@@ -138,20 +141,20 @@ static HFILTER CALLBACK Create(
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK Init(
     HFILTER hFilter,
-    HHUB hHub)
+    HMASTERFILTER hMasterFilter)
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hHub != NULL);
+  _ASSERTE(hMasterFilter != NULL);
 
-  ((Filter *)hFilter)->SetHub(hHub);
+  ((Filter *)hFilter)->SetFilterName(pFilterName(hMasterFilter));
 
   return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK OutMethod(
     HFILTER hFilter,
-    int nFromPort,
-    int nToPort,
+    HMASTERPORT hFromPort,
+    HMASTERPORT hToPort,
     HUB_MSG *pOutMsg)
 {
   _ASSERTE(hFilter != NULL);
@@ -174,9 +177,9 @@ static BOOL CALLBACK OutMethod(
       DWORD fail_options = (pOutMsg->u.val & GO_V2O_LINE_STATUS(((Filter *)hFilter)->lsrMask));
 
       if (fail_options) {
-        cerr << ((Filter *)hFilter)->PortName(nFromPort)
+        cerr << pPortName(hFromPort)
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
-             << " for port " << ((Filter *)hFilter)->PortName(nToPort)
+             << " for port " << pPortName(hToPort)
              << " option(s) 0x" << hex << fail_options << dec
              << " not accepted" << endl;
       }

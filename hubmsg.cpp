@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/11/24 12:36:59  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.2  2008/11/13 08:07:40  vfrolov
  * Changed for staticaly linking
  *
@@ -76,7 +79,7 @@ HubMsg *HubMsg::Clone() const
     }
   }
 
-  if ((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_BUF) {
+  if ((type & HUB_MSG_UNION_TYPES_MASK) == HUB_MSG_UNION_TYPE_BUF) {
     BufAppend(&pNewMsg->u.buf.pBuf, 0, u.buf.pBuf, u.buf.size);
 
     if (pNewMsg->u.buf.pBuf || !u.buf.size) {
@@ -97,7 +100,7 @@ void HubMsg::Clean()
 {
   _ASSERTE(signature == MSG_SIGNATURE);
 
-  if ((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_BUF)
+  if ((type & HUB_MSG_UNION_TYPES_MASK) == HUB_MSG_UNION_TYPE_BUF)
     BufFree(u.buf.pBuf);
 
   ::memset((HUB_MSG *)this, 0, sizeof(HUB_MSG));

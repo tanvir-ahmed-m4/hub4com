@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/11/24 12:36:59  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.6  2008/11/13 08:07:40  vfrolov
  * Changed for staticaly linking
  *
@@ -45,38 +48,15 @@
 #include "port.h"
 #include "comhub.h"
 #include "filters.h"
+#include "filter.h"
 #include "bufutils.h"
 #include "hubmsg.h"
 #include "utils.h"
 
 ///////////////////////////////////////////////////////////////
-class Filter {
-  public:
-    Filter(
-        const char *pGroup,
-        const char *pName,
-        HFILTER _hFilter,
-        FILTER_INIT *_pInit,
-        FILTER_IN_METHOD *_pInMethod,
-        FILTER_OUT_METHOD *_pOutMethod)
-      : group(pGroup),
-        name(pName),
-        hFilter(_hFilter),
-        pInit(_pInit),
-        pInMethod(_pInMethod),
-        pOutMethod(_pOutMethod) {}
-
-    const string group;
-    const string name;
-    const HFILTER hFilter;
-    FILTER_INIT *const pInit;
-    FILTER_IN_METHOD *const pInMethod;
-    FILTER_OUT_METHOD *const pOutMethod;
-};
-///////////////////////////////////////////////////////////////
 class FilterMethod {
   public:
-    FilterMethod(const Filter &_filter, BOOL _isInMethod, const set<int> *_pSrcPorts)
+    FilterMethod(const Filter &_filter, BOOL _isInMethod, const SetOfPorts *_pSrcPorts)
       : filter(_filter),
         isInMethod(_isInMethod),
         pSrcPorts(_pSrcPorts) {}
@@ -88,10 +68,10 @@ class FilterMethod {
 
     const Filter &filter;
     const BOOL isInMethod;
-    const set<int> *const pSrcPorts;
+    const SetOfPorts *const pSrcPorts;
 };
 ///////////////////////////////////////////////////////////////
-typedef pair<int, FilterMethodArray*> PortFilters;
+typedef pair<Port *, FilterMethodArray*> PortFilters;
 ///////////////////////////////////////////////////////////////
 Filters::~Filters()
 {
@@ -142,7 +122,6 @@ BOOL Filters::CreateFilter(
       pFilterGroup,
       pFilterName,
       hFilter,
-      ROUTINE_GET(pFltRoutines, pInit),
       ROUTINE_GET(pFltRoutines, pInMethod),
       ROUTINE_GET(pFltRoutines, pOutMethod));
 
@@ -153,25 +132,30 @@ BOOL Filters::CreateFilter(
 
   allFilters.push_back(pFilter);
 
+  if (ROUTINE_IS_VALID(pFltRoutines, pInit)) {
+    if (!ROUTINE_GET(pFltRoutines, pInit)(hFilter, HMASTERFILTER(pFilter)))
+      return FALSE;
+  }
+
   return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 BOOL Filters::AddFilter(
-    int iPort,
+    Port *pPort,
     const char *pGroup,
     BOOL addInMethod,
     BOOL addOutMethod,
-    const set<int> *pOutMethodSrcPorts)
+    const SetOfPorts *pOutMethodSrcPorts)
 {
-  PortFiltersMap::iterator iPair = portFilters.find(iPort);
+  PortFiltersMap::iterator iPair = portFilters.find(pPort);
 
   if (iPair == portFilters.end()) {
-    portFilters.insert(PortFilters(iPort, NULL));
+    portFilters.insert(PortFilters(pPort, NULL));
 
-    iPair = portFilters.find(iPort);
+    iPair = portFilters.find(pPort);
 
     if (iPair == portFilters.end()) {
-      cerr << "Can't add filters for port " << iPort << endl;
+      cerr << "Can't add filters for port " << pPort->Name() << endl;
       return FALSE;
     }
   }
@@ -201,10 +185,10 @@ BOOL Filters::AddFilter(
       }
 
       if (addOutMethod && (*i)->pOutMethod) {
-        const set<int> *pSrcPorts;
+        const SetOfPorts *pSrcPorts;
 
         if (pOutMethodSrcPorts) {
-          pSrcPorts = new set<int>(*pOutMethodSrcPorts);
+          pSrcPorts = new SetOfPorts(*pOutMethodSrcPorts);
 
           if (!pSrcPorts) {
             cerr << "No enough memory." << endl;
@@ -246,7 +230,7 @@ void Filters::Report() const
   for (PortFiltersMap::const_iterator iPort = portFilters.begin() ; iPort != portFilters.end() ; iPort++) {
     stringstream bufs[3];
 
-    Port *pPort = hub.GetPort(iPort->first);
+    Port *pPort = iPort->first;
 
     if (pPort)
       bufs[1] << pPort->Name() << " ";
@@ -288,7 +272,7 @@ void Filters::Report() const
           bufs[2] << "{" << (*i)->filter.name << ".OUT";
           if ((*i)->pSrcPorts) {
             bufs[2] << "(";
-            for (set<int>::const_iterator iSrc = (*i)->pSrcPorts->begin() ;
+            for (SetOfPorts::const_iterator iSrc = (*i)->pSrcPorts->begin() ;
                  iSrc != (*i)->pSrcPorts->end() ; iSrc++)
             {
               if (iSrc != (*i)->pSrcPorts->begin())
@@ -334,32 +318,8 @@ void Filters::Report() const
   }
 }
 ///////////////////////////////////////////////////////////////
-BOOL Filters::Init() const
-{
-  BOOL res = TRUE;
-
-  for (FilterArray::const_iterator i = allFilters.begin() ; i != allFilters.end() ; i++) {
-    if (*i && (*i)->pInit) {
-      if (!(*i)->pInit((*i)->hFilter, (HHUB)&hub))
-        res = FALSE;
-    }
-  }
-
-  return res;
-}
-///////////////////////////////////////////////////////////////
-const char *Filters::FilterName(HFILTER hFilter) const
-{
-  for (FilterArray::const_iterator i = allFilters.begin() ; i != allFilters.end() ; i++) {
-    if (*i && (*i)->hFilter == hFilter)
-      return (*i)->name.c_str();
-  }
-
-  return NULL;
-}
-///////////////////////////////////////////////////////////////
 static BOOL InMethod(
-    int nFromPort,
+    Port *pFromPort,
     const FilterMethodArray::const_iterator &i,
     const FilterMethodArray::const_iterator &iEnd,
     HubMsg *pInMsg,
@@ -380,7 +340,7 @@ static BOOL InMethod(
 
       HUB_MSG *pEchoMsgPart = NULL;
 
-      if (!pInMethod(hFilter, nFromPort, pCurMsg, &pEchoMsgPart)) {
+      if (!pInMethod(hFilter, (HMASTERPORT)pFromPort, pCurMsg, &pEchoMsgPart)) {
         if (pEchoMsgPart)
           delete (HubMsg *)pEchoMsgPart;
         return FALSE;
@@ -399,7 +359,7 @@ static BOOL InMethod(
   const FilterMethodArray::const_iterator iNext = i + 1;
 
   if (iNext != iEnd) {
-    if (!InMethod(nFromPort, iNext, iEnd, pInMsg, ppEchoMsg))
+    if (!InMethod(pFromPort, iNext, iEnd, pInMsg, ppEchoMsg))
       return FALSE;
   }
 
@@ -419,7 +379,7 @@ static BOOL InMethod(
     for (HubMsg *pCurMsg = pNextMsg ; pCurMsg ; pCurMsg = pNextMsg) {
       pNextMsg = pNextMsg->Next();
 
-      if (!pOutMethod(hFilter, nFromPort, nFromPort, pCurMsg))
+      if (!pOutMethod(hFilter, (HMASTERPORT)pFromPort, (HMASTERPORT)pFromPort, pCurMsg))
         return FALSE;
     }
   }
@@ -428,13 +388,13 @@ static BOOL InMethod(
 }
 ///////////////////////////////////////////////////////////////
 BOOL Filters::InMethod(
-    int nFromPort,
+    Port *pFromPort,
     HubMsg *pInMsg,
     HubMsg **ppEchoMsg) const
 {
   _ASSERTE(*ppEchoMsg == NULL);
 
-  PortFiltersMap::const_iterator iPair = portFilters.find(nFromPort);
+  PortFiltersMap::const_iterator iPair = portFilters.find(pFromPort);
 
   if (iPair == portFilters.end())
     return TRUE;
@@ -447,7 +407,7 @@ BOOL Filters::InMethod(
   const FilterMethodArray::const_iterator i = pFilters->begin();
 
   if (i != pFilters->end()) {
-    if (!::InMethod(nFromPort, i, pFilters->end(), pInMsg, ppEchoMsg))
+    if (!::InMethod(pFromPort, i, pFilters->end(), pInMsg, ppEchoMsg))
       return FALSE;
   }
 
@@ -455,11 +415,11 @@ BOOL Filters::InMethod(
 }
 ///////////////////////////////////////////////////////////////
 BOOL Filters::OutMethod(
-    int nFromPort,
-    int nToPort,
+    Port *pFromPort,
+    Port *pToPort,
     HubMsg *pOutMsg) const
 {
-  PortFiltersMap::const_iterator iPair = portFilters.find(nToPort);
+  PortFiltersMap::const_iterator iPair = portFilters.find(pToPort);
 
   if (iPair == portFilters.end())
     return TRUE;
@@ -471,7 +431,7 @@ BOOL Filters::OutMethod(
 
   for (FilterMethodArray::const_reverse_iterator i = pFilters->rbegin() ; i != pFilters->rend() ; i++) {
     if (!(*i)->isInMethod && (!(*i)->pSrcPorts ||
-        (*i)->pSrcPorts->find(nFromPort) != (*i)->pSrcPorts->end()))
+        (*i)->pSrcPorts->find(pFromPort) != (*i)->pSrcPorts->end()))
     {
       FILTER_OUT_METHOD *pOutMethod = (*i)->filter.pOutMethod;
       HFILTER hFilter = (*i)->filter.hFilter;
@@ -481,7 +441,7 @@ BOOL Filters::OutMethod(
       for (HubMsg *pCurMsg = pNextMsg ; pCurMsg ; pCurMsg = pNextMsg) {
         pNextMsg = pNextMsg->Next();
 
-        if (!pOutMethod(hFilter, nFromPort, nToPort, pCurMsg))
+        if (!pOutMethod(hFilter, (HMASTERPORT)pFromPort, (HMASTERPORT)pToPort, pCurMsg))
           return FALSE;
       }
     }

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.18  2008/11/24 12:36:59  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.17  2008/11/13 08:07:40  vfrolov
  * Changed for staticaly linking
  *
@@ -179,7 +182,7 @@ static void Usage(const char *pProgPath, Plugins &plugins)
 static BOOL EnumPortList(
     ComHub &hub,
     const char *pList,
-    BOOL (*pFunc)(ComHub &hub, int iPort, PVOID p0, PVOID p1, PVOID p2),
+    BOOL (*pFunc)(ComHub &hub, Port *pPort, PVOID p0, PVOID p1, PVOID p2),
     PVOID p0 = NULL,
     PVOID p1 = NULL,
     PVOID p2 = NULL)
@@ -199,11 +202,11 @@ static BOOL EnumPortList(
 
     if (_stricmp(p, "All") == 0) {
       for (i = 0 ; i < hub.NumPorts() ; i++) {
-        if (!pFunc(hub, i, p0, p1, p2))
+        if (!pFunc(hub, hub.GetPort(i), p0, p1, p2))
           res = FALSE;
       }
     } else if (StrToInt(p, &i) && i >= 0 && i < hub.NumPorts()) {
-      if (!pFunc(hub, i, p0, p1, p2))
+      if (!pFunc(hub, hub.GetPort(i), p0, p1, p2))
         res = FALSE;
     } else {
       cerr << "Invalid port " << p << endl;
@@ -216,13 +219,13 @@ static BOOL EnumPortList(
   return res;
 }
 ///////////////////////////////////////////////////////////////
-static BOOL EchoRoute(ComHub &/*hub*/, int iPort, PVOID pMap, PVOID /*p1*/, PVOID /*p2*/)
+static BOOL EchoRoute(ComHub &/*hub*/, Port *pPort, PVOID pMap, PVOID /*p1*/, PVOID /*p2*/)
 {
-  AddRoute(*(PortNumMap *)pMap, iPort, iPort, FALSE, FALSE);
+  AddRoute(*(PortMap *)pMap, pPort, pPort, FALSE, FALSE);
   return TRUE;
 }
 
-static void EchoRoute(ComHub &hub, const char *pList, PortNumMap &map)
+static void EchoRoute(ComHub &hub, const char *pList, PortMap &map)
 {
   if (!EnumPortList(hub, pList, EchoRoute, &map)) {
     cerr << "Invalid echo route " << pList << endl;
@@ -230,15 +233,15 @@ static void EchoRoute(ComHub &hub, const char *pList, PortNumMap &map)
   }
 }
 ///////////////////////////////////////////////////////////////
-static BOOL Route(ComHub &/*hub*/, int iTo, PVOID pIFrom, PVOID pNoRoute, PVOID pMap)
+static BOOL Route(ComHub &/*hub*/, Port *pTo, PVOID pFrom, PVOID pNoRoute, PVOID pMap)
 {
-  AddRoute(*(PortNumMap *)pMap, *(int *)pIFrom, iTo, *(BOOL *)pNoRoute, TRUE);
+  AddRoute(*(PortMap *)pMap, (Port *)pFrom, pTo, *(BOOL *)pNoRoute, TRUE);
   return TRUE;
 }
 
-static BOOL RouteList(ComHub &hub, int iFrom, PVOID pListTo, PVOID pNoRoute, PVOID pMap)
+static BOOL RouteList(ComHub &hub, Port *pFrom, PVOID pListTo, PVOID pNoRoute, PVOID pMap)
 {
-  return EnumPortList(hub, (const char *)pListTo, Route, &iFrom, pNoRoute, pMap);
+  return EnumPortList(hub, (const char *)pListTo, Route, pFrom, pNoRoute, pMap);
 }
 
 static BOOL Route(
@@ -246,7 +249,7 @@ static BOOL Route(
     const char *pListFrom,
     const char *pListTo,
     BOOL noRoute,
-    PortNumMap &map)
+    PortMap &map)
 {
   return EnumPortList(hub, pListFrom, RouteList, (PVOID)pListTo, &noRoute, &map);
 }
@@ -256,7 +259,7 @@ static void Route(
     const char *pParam,
     BOOL biDirection,
     BOOL noRoute,
-    PortNumMap &map)
+    PortMap &map)
 {
   char *pTmp = _strdup(pParam);
 
@@ -337,7 +340,7 @@ static void CreateFilter(
   free(pTmp);
 }
 ///////////////////////////////////////////////////////////////
-static BOOL AddFilters(ComHub &hub, int iPort, PVOID pFilters, PVOID pListFlt, PVOID /*p2*/)
+static BOOL AddFilters(ComHub &hub, Port *pPort, PVOID pFilters, PVOID pListFlt, PVOID /*p2*/)
 {
   char *pTmpList = _strdup((const char *)pListFlt);
 
@@ -357,7 +360,7 @@ static BOOL AddFilters(ComHub &hub, int iPort, PVOID pFilters, PVOID pListFlt, P
     string filter(STRTOK_R(pFilter, "(", &pSave2));
     char *pList = STRTOK_R(NULL, ")", &pSave2);
 
-    set<int> *pSrcPorts = NULL;
+    SetOfPorts *pSrcPorts = NULL;
 
     if (pList) {
       for (char *p = STRTOK_R(pList, ",", &pSave2) ; p ; p = STRTOK_R(NULL, ",", &pSave2)) {
@@ -371,7 +374,7 @@ static BOOL AddFilters(ComHub &hub, int iPort, PVOID pFilters, PVOID pListFlt, P
           break;
         } else if (StrToInt(p, &i) && i >= 0 && i < hub.NumPorts()) {
           if (!pSrcPorts) {
-            pSrcPorts = new set<int>;
+            pSrcPorts = new SetOfPorts;
 
             if (!pSrcPorts) {
               cerr << "No enough memory." << endl;
@@ -379,7 +382,7 @@ static BOOL AddFilters(ComHub &hub, int iPort, PVOID pFilters, PVOID pListFlt, P
             }
           }
 
-          pSrcPorts->insert(i);
+          pSrcPorts->insert(hub.GetPort(i));
         } else {
           cerr << "Invalid port " << p << endl;
           exit(1);
@@ -391,16 +394,16 @@ static BOOL AddFilters(ComHub &hub, int iPort, PVOID pFilters, PVOID pListFlt, P
     string method(dot != filter.npos ? filter.substr(dot) : "");
 
     if (method == ".IN") {
-      if (!((Filters *)pFilters)->AddFilter(iPort, filter.substr(0, dot).c_str(), TRUE, FALSE, NULL))
+      if (!((Filters *)pFilters)->AddFilter(pPort, filter.substr(0, dot).c_str(), TRUE, FALSE, NULL))
         exit(1);
     }
     else
     if (method == ".OUT") {
-      if (!((Filters *)pFilters)->AddFilter(iPort, filter.substr(0, dot).c_str(), FALSE, TRUE, pSrcPorts))
+      if (!((Filters *)pFilters)->AddFilter(pPort, filter.substr(0, dot).c_str(), FALSE, TRUE, pSrcPorts))
         exit(1);
     }
     else {
-      if (!((Filters *)pFilters)->AddFilter(iPort, filter.c_str(), TRUE, TRUE, pSrcPorts))
+      if (!((Filters *)pFilters)->AddFilter(pPort, filter.c_str(), TRUE, TRUE, pSrcPorts))
         exit(1);
     }
 
@@ -458,10 +461,12 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
     exit(2);
   }
 
+  pPlugins->ConfigStart();
+
   Filters *pFilters = NULL;
 
-  PortNumMap routeDataMap;
-  PortNumMap routeFlowControlMap;
+  PortMap routeDataMap;
+  PortMap routeFlowControlMap;
 
   const char *pUseDriver = "serial";
 
@@ -480,7 +485,7 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
         exit(1);
       }
 
-      if (!hub.CreatePort(pPortRoutines, plugged++, hConfig, i->c_str()))
+      if (!hub.InitPort(plugged++, pPortRoutines, hConfig, i->c_str()))
         exit(1);
 
       continue;
@@ -558,6 +563,7 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
     exit(1);
   }
 
+  pPlugins->ConfigStop();
   delete pPlugins;
 
   if (plugged > 1 && defaultRouteData) {

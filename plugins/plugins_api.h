@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 /*******************************************************************/
-#define HUB_MSG_UNION_TYPE_MASK    0xF000
+#define HUB_MSG_UNION_TYPES_MASK   0xF000
 #define HUB_MSG_UNION_TYPE_NONE    0x0000
 #define HUB_MSG_UNION_TYPE_BUF     0x1000
 #define HUB_MSG_UNION_TYPE_VAL     0x2000
@@ -122,6 +122,7 @@ extern "C" {
 #define HUB_MSG_TYPE_LBR_STATUS    (18  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_UINT)
 #define HUB_MSG_TYPE_LLC_STATUS    (19  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_LC)
 #define HUB_MSG_TYPE_LOOP_TEST     (20  | HUB_MSG_UNION_TYPE_HVAL)
+#define HUB_MSG_TYPE_ADD_XOFF_XON  (21  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_BOOL)
 /*******************************************************************/
 typedef struct _HUB_MSG {
   WORD type;
@@ -139,9 +140,8 @@ typedef struct _HUB_MSG {
   } u;
 } HUB_MSG;
 /*******************************************************************/
-DECLARE_HANDLE(HHUB);
 DECLARE_HANDLE(HMASTERPORT);
-DECLARE_HANDLE(HFILTER);
+DECLARE_HANDLE(HMASTERFILTER);
 /*******************************************************************/
 typedef BYTE *(CALLBACK ROUTINE_BUF_ALLOC)(
         DWORD size);
@@ -171,22 +171,14 @@ typedef BOOL (CALLBACK ROUTINE_MSG_REPLACE_NONE)(
 typedef HUB_MSG *(CALLBACK ROUTINE_MSG_INSERT_NONE)(
         HUB_MSG *pMsg,
         WORD type);
-typedef int (CALLBACK ROUTINE_NUM_PORTS)(
-        HHUB hHub);
 typedef const char *(CALLBACK ROUTINE_PORT_NAME_A)(
-        HHUB hHub,
-        int n);
+        HMASTERPORT hMasterPort);
 typedef const char *(CALLBACK ROUTINE_FILTER_NAME_A)(
-        HHUB hHub,
-        HFILTER hFilter);
-typedef void (CALLBACK ROUTINE_ON_XOFF)(
-        HHUB hHub,
-        HMASTERPORT hMasterPort);
-typedef void (CALLBACK ROUTINE_ON_XON)(
-        HHUB hHub,
-        HMASTERPORT hMasterPort);
+        HMASTERFILTER hMasterFilter);
+typedef void (CALLBACK ROUTINE_ON_XOFF_XON)(
+        HMASTERPORT hMasterPort,
+        BOOL xoff);
 typedef void (CALLBACK ROUTINE_ON_READ)(
-        HHUB hHub,
         HMASTERPORT hMasterPort,
         HUB_MSG *pMsg);
 /*******************************************************************/
@@ -200,11 +192,9 @@ typedef struct _HUB_ROUTINES_A {
   ROUTINE_MSG_INSERT_VAL *pMsgInsertVal;
   ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone;
   ROUTINE_MSG_INSERT_NONE *pMsgInsertNone;
-  ROUTINE_NUM_PORTS *pNumPorts;
   ROUTINE_PORT_NAME_A *pPortName;
   ROUTINE_FILTER_NAME_A *pFilterName;
-  ROUTINE_ON_XOFF *pOnXoff;
-  ROUTINE_ON_XON *pOnXon;
+  ROUTINE_ON_XOFF_XON *pOnXoffXon;
   ROUTINE_ON_READ *pOnRead;
 } HUB_ROUTINES_A;
 /*******************************************************************/
@@ -254,22 +244,24 @@ typedef struct _PLUGIN_ROUTINES_A {
 typedef const PLUGIN_ROUTINES_A *const *(CALLBACK PLUGIN_INIT_A)(
         const HUB_ROUTINES_A *pHubRoutines);
 /*******************************************************************/
+DECLARE_HANDLE(HFILTER);
+/*******************************************************************/
 typedef HFILTER (CALLBACK FILTER_CREATE_A)(
         HCONFIG hConfig,
         int argc,
         const char *const argv[]);
 typedef BOOL (CALLBACK FILTER_INIT)(
         HFILTER hFilter,
-        HHUB hHub);
+        HMASTERFILTER hMasterFilter);
 typedef BOOL (CALLBACK FILTER_IN_METHOD)(
         HFILTER hFilter,
-        int nFromPort,
+        HMASTERPORT hFromPort,
         HUB_MSG *pInMsg,
         HUB_MSG **ppEchoMsg);
 typedef BOOL (CALLBACK FILTER_OUT_METHOD)(
         HFILTER hFilter,
-        int nFromPort,
-        int nToPort,
+        HMASTERPORT hFromPort,
+        HMASTERPORT hToPort,
         HUB_MSG *pOutMsg);
 /*******************************************************************/
 typedef struct _FILTER_ROUTINES_A {
@@ -292,8 +284,7 @@ typedef void (CALLBACK PORT_SET_NAME_A)(
         const char *pName);
 typedef BOOL (CALLBACK PORT_INIT)(
         HPORT hPort,
-        HMASTERPORT hMasterPort,
-        HHUB hHub);
+        HMASTERPORT hMasterPort);
 typedef BOOL (CALLBACK PORT_START)(
         HPORT hPort);
 typedef BOOL (CALLBACK PORT_FAKE_READ_FILTER)(
@@ -302,10 +293,6 @@ typedef BOOL (CALLBACK PORT_FAKE_READ_FILTER)(
 typedef BOOL (CALLBACK PORT_WRITE)(
         HPORT hPort,
         HUB_MSG *pMsg);
-typedef void (CALLBACK PORT_ADD_XOFF)(
-        HPORT hPort);
-typedef void (CALLBACK PORT_ADD_XON)(
-        HPORT hPort);
 typedef void (CALLBACK PORT_LOST_REPORT)(
         HPORT hPort);
 /*******************************************************************/
@@ -318,8 +305,6 @@ typedef struct _PORT_ROUTINES_A {
   PORT_START *pStart;
   PORT_FAKE_READ_FILTER *pFakeReadFilter;
   PORT_WRITE *pWrite;
-  PORT_ADD_XOFF *pAddXoff;
-  PORT_ADD_XON *pAddXon;
   PORT_LOST_REPORT *pLostReport;
 } PORT_ROUTINES_A;
 /*******************************************************************/

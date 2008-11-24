@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.11  2008/11/24 12:37:00  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.10  2008/11/13 07:35:10  vfrolov
  * Changed for staticaly linking
  *
@@ -92,14 +95,13 @@ class ComPort
       const ComParams &comParams,
       const char *pPath);
 
-    BOOL Init(HMASTERPORT _hMasterPort, HHUB _hHub);
+    BOOL Init(HMASTERPORT _hMasterPort);
     BOOL Start();
     BOOL FakeReadFilter(HUB_MSG *pInMsg);
     BOOL Write(HUB_MSG *pMsg);
     void OnWrite(WriteOverlapped *pOverlapped, DWORD len, DWORD done);
     void OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done);
     void OnCommEvent(WaitCommEventOverlapped *pOverlapped, DWORD eMask);
-    void AddXoff(int count);
     void LostReport();
 
     const string &Name() const { return name; }
@@ -113,7 +115,6 @@ class ComPort
     ComIo *pComIo;
     string name;
     HMASTERPORT hMasterPort;
-    HHUB hHub;
     int countReadOverlapped;
     int countWaitCommEventOverlapped;
     int countXoff;

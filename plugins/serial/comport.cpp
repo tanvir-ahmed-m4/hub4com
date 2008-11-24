@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.16  2008/11/24 12:37:00  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.15  2008/11/13 07:35:10  vfrolov
  * Changed for staticaly linking
  *
@@ -107,7 +110,6 @@ ComPort::ComPort(
     const ComParams &comParams,
     const char *pPath)
   : hMasterPort(NULL),
-    hHub(NULL),
     countReadOverlapped(0),
     countWaitCommEventOverlapped(0),
     countXoff(0),
@@ -137,7 +139,7 @@ ComPort::ComPort(
   }
 }
 
-BOOL ComPort::Init(HMASTERPORT _hMasterPort, HHUB _hHub)
+BOOL ComPort::Init(HMASTERPORT _hMasterPort)
 {
   if (!pComIo) {
     cerr << "ComPort::Init(): Invalid handle" << endl;
@@ -145,7 +147,6 @@ BOOL ComPort::Init(HMASTERPORT _hMasterPort, HHUB _hHub)
   }
 
   hMasterPort = _hMasterPort;
-  hHub = _hHub;
 
   return TRUE;
 }
@@ -267,7 +268,6 @@ BOOL ComPort::Start()
   //cout << name << " Start " << ::GetCurrentThreadId() << endl;
 
   _ASSERTE(hMasterPort != NULL);
-  _ASSERTE(hHub != NULL);
   _ASSERTE(pComIo != NULL);
 
   BYTE *pBuf = NULL;
@@ -280,7 +280,7 @@ BOOL ComPort::Start()
     msg.type = HUB_MSG_TYPE_GET_ESC_OPTS;
     msg.u.pv.pVal = &escapeOptions;
     msg.u.pv.val = 0;
-    pOnRead(hHub, hMasterPort, &msg);
+    pOnRead(hMasterPort, &msg);
 
     escapeOptions = pComIo->SetEscMode(escapeOptions, &pBuf, &done);
 
@@ -296,7 +296,7 @@ BOOL ComPort::Start()
       msg.type = HUB_MSG_TYPE_FAIL_ESC_OPTS;
       msg.u.pv.pVal = &intercepted_options;
       msg.u.pv.val = escapeOptions;
-      pOnRead(hHub, hMasterPort, &msg);
+      pOnRead(hMasterPort, &msg);
     }
   }
 
@@ -317,7 +317,7 @@ BOOL ComPort::Start()
 
   msg.type = HUB_MSG_TYPE_FAIL_IN_OPTS;
   msg.u.val = fail_options;
-  pOnRead(hHub, hMasterPort, &msg);
+  pOnRead(hMasterPort, &msg);
 
   if (inOptions & GO_V2O_MODEM_STATUS(
         MODEM_STATUS_CTS |
@@ -356,18 +356,18 @@ BOOL ComPort::Start()
 
   msg.type = HUB_MSG_TYPE_CONNECT;
   msg.u.val = TRUE;
-  pOnRead(hHub, hMasterPort, &msg);
+  pOnRead(hMasterPort, &msg);
 
   if (inOptions & GO_LBR_STATUS) {
     msg.type = HUB_MSG_TYPE_LBR_STATUS;
     msg.u.val = pComIo->GetBaudRate();
-    pOnRead(hHub, hMasterPort, &msg);
+    pOnRead(hMasterPort, &msg);
   }
 
   if (inOptions & GO_LLC_STATUS) {
     msg.type = HUB_MSG_TYPE_LLC_STATUS;
     msg.u.val = pComIo->GetLineControl();
-    pOnRead(hHub, hMasterPort, &msg);
+    pOnRead(hMasterPort, &msg);
   }
 
   if (inOptions & GO_RBR_STATUS) {
@@ -375,7 +375,7 @@ BOOL ComPort::Start()
 
     msg.type = HUB_MSG_TYPE_RBR_STATUS;
     msg.u.val = pComIo->GetBaudRate();
-    pOnRead(hHub, hMasterPort, &msg);
+    pOnRead(hMasterPort, &msg);
   }
 
   if (inOptions & GO_RLC_STATUS) {
@@ -383,14 +383,14 @@ BOOL ComPort::Start()
 
     msg.type = HUB_MSG_TYPE_RLC_STATUS;
     msg.u.val = pComIo->GetLineControl();
-    pOnRead(hHub, hMasterPort, &msg);
+    pOnRead(hMasterPort, &msg);
   }
 
   if (pBuf) {
     msg.type = HUB_MSG_TYPE_LINE_DATA;
     msg.u.buf.pBuf = pBuf;
     msg.u.buf.size = done;
-    pOnRead(hHub, hMasterPort, &msg);
+    pOnRead(hMasterPort, &msg);
   }
 
   CheckComEvents(DWORD(-1));
@@ -515,7 +515,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     }
 
     if (writeQueued <= writeQueueLimit/2 && (writeQueued + len) > writeQueueLimit/2)
-      pOnXoff(hHub, hMasterPort);
+      pOnXoffXon(hMasterPort, TRUE);
 
     writeQueued += len;
 
@@ -550,7 +550,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
 
         msg.type = HUB_MSG_TYPE_LBR_STATUS;
         msg.u.val = curVal;
-        pOnRead(hHub, hMasterPort, &msg);
+        pOnRead(hMasterPort, &msg);
       }
 
       if (inOptions & GO_RBR_STATUS) {
@@ -558,7 +558,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
 
         msg.type = HUB_MSG_TYPE_RBR_STATUS;
         msg.u.val = curVal;                 // suppose remote equal local
-        pOnRead(hHub, hMasterPort, &msg);
+        pOnRead(hMasterPort, &msg);
       }
     }
   }
@@ -608,7 +608,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
 
         msg.type = HUB_MSG_TYPE_LLC_STATUS;
         msg.u.val = curVal;
-        pOnRead(hHub, hMasterPort, &msg);
+        pOnRead(hMasterPort, &msg);
       }
 
       if (inOptions & GO_RLC_STATUS) {
@@ -616,7 +616,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
 
         msg.type = HUB_MSG_TYPE_RLC_STATUS;
         msg.u.val = curVal;                 // suppose remote equal local
-        pOnRead(hHub, hMasterPort, &msg);
+        pOnRead(hMasterPort, &msg);
       }
     }
   }
@@ -665,6 +665,15 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
            << "] will be ignored by driver" << endl;
     }
   }
+  else
+  if (pMsg->type == HUB_MSG_TYPE_ADD_XOFF_XON) {
+    if (pMsg->u.val) {
+      countXoff++;
+    } else {
+      if (--countXoff == 0 && pComIo)
+        StartRead();
+    }
+  }
 
   return TRUE;
 }
@@ -711,7 +720,7 @@ void ComPort::OnWrite(WriteOverlapped *pOverlapped, DWORD len, DWORD done)
     writeLost += len - done;
 
   if (writeQueued > writeQueueLimit/2 && (writeQueued - len) <= writeQueueLimit/2)
-    pOnXon(hHub, hMasterPort);
+    pOnXoffXon(hMasterPort, FALSE);
 
   writeQueued -= len;
 }
@@ -726,7 +735,7 @@ void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)
   msg.u.buf.pBuf = pBuf;
   msg.u.buf.size = done;
 
-  pOnRead(hHub, hMasterPort, &msg);
+  pOnRead(hMasterPort, &msg);
 
   if (countXoff > 0 || !pOverlapped->StartRead()) {
     delete pOverlapped;
@@ -768,7 +777,7 @@ void ComPort::CheckComEvents(DWORD eMask)
       msg.type = HUB_MSG_TYPE_MODEM_STATUS;
       msg.u.val = ((DWORD)(BYTE)stat | VAL2MASK(GO_O2V_MODEM_STATUS(inOptions)));
 
-      pOnRead(hHub, hMasterPort, &msg);
+      pOnRead(hMasterPort, &msg);
     }
   }
 
@@ -778,16 +787,6 @@ void ComPort::CheckComEvents(DWORD eMask)
     if (::ClearCommError(pComIo->Handle(), &errs, NULL))
       errors |= errs;
   }
-}
-
-void ComPort::AddXoff(int count)
-{
-  _ASSERTE(pComIo != NULL);
-
-  countXoff += count;
-
-  if (countXoff <= 0)
-    StartRead();
 }
 
 static FIELD2NAME codeNameTableCommErrors[] = {
