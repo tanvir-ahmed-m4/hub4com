@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/11/24 12:46:16  vfrolov
+ * Changed plugin API
+ *
  * Revision 1.5  2008/11/13 08:07:40  vfrolov
  * Changed for staticaly linking
  *
@@ -44,6 +47,7 @@
 #include "comhub.h"
 #include "bufutils.h"
 #include "hubmsg.h"
+#include "filter.h"
 
 ///////////////////////////////////////////////////////////////
 static BYTE * CALLBACK buf_alloc(DWORD size)
@@ -58,12 +62,12 @@ static VOID CALLBACK buf_free(BYTE *pBuf)
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK msg_replace_buf(HUB_MSG *pMsg, WORD type, const BYTE *pSrc, DWORD sizeSrc)
 {
-  _ASSERTE((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_BUF);
+  _ASSERTE((type & HUB_MSG_UNION_TYPES_MASK) == HUB_MSG_UNION_TYPE_BUF);
 
   if (!pMsg)
     return FALSE;
 
-  if ((pMsg->type & HUB_MSG_UNION_TYPE_MASK) != HUB_MSG_UNION_TYPE_BUF)
+  if ((pMsg->type & HUB_MSG_UNION_TYPES_MASK) != HUB_MSG_UNION_TYPE_BUF)
     ((HubMsg *)pMsg)->Clean();
 
   BufAppend(&pMsg->u.buf.pBuf, 0, pSrc, sizeSrc);
@@ -81,7 +85,7 @@ static BOOL CALLBACK msg_replace_buf(HUB_MSG *pMsg, WORD type, const BYTE *pSrc,
 ///////////////////////////////////////////////////////////////
 static HUB_MSG *CALLBACK msg_insert_buf(HUB_MSG *pPrevMsg, WORD type, const BYTE *pSrc, DWORD sizeSrc)
 {
-  _ASSERTE((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_BUF);
+  _ASSERTE((type & HUB_MSG_UNION_TYPES_MASK) == HUB_MSG_UNION_TYPE_BUF);
 
   if (pPrevMsg && pPrevMsg->type == type) {
     BufAppend(&pPrevMsg->u.buf.pBuf, pPrevMsg->u.buf.size, pSrc, sizeSrc);
@@ -116,7 +120,7 @@ static HUB_MSG *CALLBACK msg_insert_buf(HUB_MSG *pPrevMsg, WORD type, const BYTE
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK msg_replace_val(HUB_MSG *pMsg, WORD type, DWORD val)
 {
-  _ASSERTE((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_VAL);
+  _ASSERTE((type & HUB_MSG_UNION_TYPES_MASK) == HUB_MSG_UNION_TYPE_VAL);
 
   if (!pMsg)
     return FALSE;
@@ -131,7 +135,7 @@ static BOOL CALLBACK msg_replace_val(HUB_MSG *pMsg, WORD type, DWORD val)
 ///////////////////////////////////////////////////////////////
 static HUB_MSG *CALLBACK msg_insert_val(HUB_MSG *pPrevMsg, WORD type, DWORD val)
 {
-  _ASSERTE((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_VAL);
+  _ASSERTE((type & HUB_MSG_UNION_TYPES_MASK) == HUB_MSG_UNION_TYPE_VAL);
 
   HubMsg *pMsg = new HubMsg();
 
@@ -151,7 +155,7 @@ static HUB_MSG *CALLBACK msg_insert_val(HUB_MSG *pPrevMsg, WORD type, DWORD val)
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK msg_replace_none(HUB_MSG *pMsg, WORD type)
 {
-  _ASSERTE((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_NONE);
+  _ASSERTE((type & HUB_MSG_UNION_TYPES_MASK) == HUB_MSG_UNION_TYPE_NONE);
 
   if (!pMsg)
     return FALSE;
@@ -165,7 +169,7 @@ static BOOL CALLBACK msg_replace_none(HUB_MSG *pMsg, WORD type)
 ///////////////////////////////////////////////////////////////
 static HUB_MSG *CALLBACK msg_insert_none(HUB_MSG *pPrevMsg, WORD type)
 {
-  _ASSERTE((type & HUB_MSG_UNION_TYPE_MASK) == HUB_MSG_UNION_TYPE_NONE);
+  _ASSERTE((type & HUB_MSG_UNION_TYPES_MASK) == HUB_MSG_UNION_TYPE_NONE);
 
   HubMsg *pMsg = new HubMsg();
 
@@ -182,59 +186,32 @@ static HUB_MSG *CALLBACK msg_insert_none(HUB_MSG *pPrevMsg, WORD type)
   return pMsg;
 }
 ///////////////////////////////////////////////////////////////
-static int CALLBACK num_ports(HHUB hHub)
+static const char * CALLBACK port_name(HMASTERPORT hMasterPort)
 {
-  _ASSERTE(hHub != NULL);
-  _ASSERTE(((ComHub *)hHub)->IsValid());
-
-  return ((ComHub *)hHub)->NumPorts();
-}
-///////////////////////////////////////////////////////////////
-static const char * CALLBACK port_name(HHUB hHub, int n)
-{
-  _ASSERTE(hHub != NULL);
-  _ASSERTE(((ComHub *)hHub)->IsValid());
-
-  Port *pPort = ((ComHub *)hHub)->GetPort(n);
-
-  if (!pPort)
-    return NULL;
-
-  return pPort->Name().c_str();
-}
-///////////////////////////////////////////////////////////////
-static const char * CALLBACK filter_name(HHUB hHub, HFILTER hFilter)
-{
-  _ASSERTE(hHub != NULL);
-  _ASSERTE(((ComHub *)hHub)->IsValid());
-
-  return ((ComHub *)hHub)->FilterName(hFilter);
-}
-///////////////////////////////////////////////////////////////
-static void CALLBACK on_xoff(HHUB hHub, HMASTERPORT hMasterPort)
-{
-  _ASSERTE(hHub != NULL);
-  _ASSERTE(((ComHub *)hHub)->IsValid());
   _ASSERTE(hMasterPort != NULL);
   _ASSERTE(((Port *)hMasterPort)->IsValid());
 
-  ((ComHub *)hHub)->AddXoff((Port *)hMasterPort);
+  return ((Port *)hMasterPort)->Name().c_str();
 }
 ///////////////////////////////////////////////////////////////
-static void CALLBACK on_xon(HHUB hHub, HMASTERPORT hMasterPort)
+static const char * CALLBACK filter_name(HMASTERFILTER hMasterFilter)
 {
-  _ASSERTE(hHub != NULL);
-  _ASSERTE(((ComHub *)hHub)->IsValid());
+  _ASSERTE(hMasterFilter != NULL);
+  _ASSERTE(((Filter *)hMasterFilter)->IsValid());
+
+  return ((Filter *)hMasterFilter)->name.c_str();
+}
+///////////////////////////////////////////////////////////////
+static void CALLBACK on_xoff_xon(HMASTERPORT hMasterPort, BOOL xoff)
+{
   _ASSERTE(hMasterPort != NULL);
   _ASSERTE(((Port *)hMasterPort)->IsValid());
 
-  ((ComHub *)hHub)->AddXon((Port *)hMasterPort);
+  ((Port *)hMasterPort)->hub.AddXoffXon((Port *)hMasterPort, xoff);
 }
 ///////////////////////////////////////////////////////////////
-static void CALLBACK on_read(HHUB hHub, HMASTERPORT hMasterPort, HUB_MSG *pMsg)
+static void CALLBACK on_read(HMASTERPORT hMasterPort, HUB_MSG *pMsg)
 {
-  _ASSERTE(hHub != NULL);
-  _ASSERTE(((ComHub *)hHub)->IsValid());
   _ASSERTE(hMasterPort != NULL);
   _ASSERTE(((Port *)hMasterPort)->IsValid());
 
@@ -243,7 +220,7 @@ static void CALLBACK on_read(HHUB hHub, HMASTERPORT hMasterPort, HUB_MSG *pMsg)
   *(HUB_MSG *)&msg = *pMsg;
   ::memset(pMsg, 0, sizeof(*pMsg));
 
-  ((ComHub *)hHub)->OnRead((Port *)hMasterPort, &msg);
+  ((Port *)hMasterPort)->hub.OnRead((Port *)hMasterPort, &msg);
 }
 ///////////////////////////////////////////////////////////////
 HUB_ROUTINES_A hubRoutines = {
@@ -256,11 +233,9 @@ HUB_ROUTINES_A hubRoutines = {
   msg_insert_val,
   msg_replace_none,
   msg_insert_none,
-  num_ports,
   port_name,
   filter_name,
-  on_xoff,
-  on_xon,
+  on_xoff_xon,
   on_read,
 };
 ///////////////////////////////////////////////////////////////
