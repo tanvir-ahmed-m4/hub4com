@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/11/25 16:40:40  vfrolov
+ * Added assert for port handle
+ *
  * Revision 1.4  2008/11/24 12:36:59  vfrolov
  * Changed plugin API
  *
@@ -102,11 +105,12 @@ static HFILTER CALLBACK Create(
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK InMethod(
     HFILTER DEBUG_PARAM(hFilter),
-    HMASTERPORT /*nFromPort*/,
+    HMASTERPORT DEBUG_PARAM(hFromPort),
     HUB_MSG *pInMsg,
     HUB_MSG **ppEchoMsg)
 {
   _ASSERTE(hFilter != NULL);
+  _ASSERTE(hFromPort != NULL);
   _ASSERTE(pInMsg != NULL);
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);

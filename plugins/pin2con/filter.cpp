@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.13  2008/11/25 16:40:40  vfrolov
+ * Added assert for port handle
+ *
  * Revision 1.12  2008/11/24 12:37:00  vfrolov
  * Changed plugin API
  *
@@ -286,6 +289,7 @@ static BOOL CALLBACK InMethod(
     HUB_MSG **DEBUG_PARAM(ppEchoMsg))
 {
   _ASSERTE(hFilter != NULL);
+  _ASSERTE(hFromPort != NULL);
   _ASSERTE(pInMsg != NULL);
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
