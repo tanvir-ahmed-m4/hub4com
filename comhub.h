@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.11  2008/11/26 15:55:24  vfrolov
+ * Changed port number to unsigned
+ *
  * Revision 1.10  2008/11/24 16:30:56  vfrolov
  * Removed pOnXoffXon
  *
@@ -93,7 +96,7 @@ class ComHub
     void SetDataRoute(const PortMap &map) { routeDataMap = map; }
     void SetFlowControlRoute(const PortMap &map) { routeFlowControlMap = map; }
     void RouteReport() const;
-    int NumPorts() const { return (int)ports.size(); }
+    unsigned NumPorts() const { return (unsigned)ports.size(); }
 
     Filters *SetFilters(Filters *_pFilters) {
       Filters *pFiltersOld = pFilters;
@@ -101,8 +104,8 @@ class ComHub
       return pFiltersOld;
     }
 
-    Port *ComHub::GetPort(int n) const {
-      _ASSERTE(n >= 0 && n < NumPorts());
+    Port *ComHub::GetPort(unsigned n) const {
+      _ASSERTE(n < NumPorts());
       return ports.at(n);
     }
 

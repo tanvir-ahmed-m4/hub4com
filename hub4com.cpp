@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.19  2008/11/26 15:55:24  vfrolov
+ * Changed port number to unsigned
+ *
  * Revision 1.18  2008/11/24 12:36:59  vfrolov
  * Changed plugin API
  *
@@ -201,14 +204,17 @@ static BOOL EnumPortList(
     int i;
 
     if (_stricmp(p, "All") == 0) {
-      for (i = 0 ; i < hub.NumPorts() ; i++) {
+      for (i = 0 ; (unsigned)i < hub.NumPorts() ; i++) {
         if (!pFunc(hub, hub.GetPort(i), p0, p1, p2))
           res = FALSE;
       }
-    } else if (StrToInt(p, &i) && i >= 0 && i < hub.NumPorts()) {
+    }
+    else
+    if (StrToInt(p, &i) && i >= 0 && (unsigned)i < hub.NumPorts()) {
       if (!pFunc(hub, hub.GetPort(i), p0, p1, p2))
         res = FALSE;
-    } else {
+    }
+    else {
       cerr << "Invalid port " << p << endl;
       res = FALSE;
     }
@@ -372,7 +378,9 @@ static BOOL AddFilters(ComHub &hub, Port *pPort, PVOID pFilters, PVOID pListFlt,
             pSrcPorts = NULL;
           }
           break;
-        } else if (StrToInt(p, &i) && i >= 0 && i < hub.NumPorts()) {
+        }
+        else
+        if (StrToInt(p, &i) && i >= 0 && (unsigned)i < hub.NumPorts()) {
           if (!pSrcPorts) {
             pSrcPorts = new SetOfPorts;
 
@@ -383,7 +391,8 @@ static BOOL AddFilters(ComHub &hub, Port *pPort, PVOID pFilters, PVOID pListFlt,
           }
 
           pSrcPorts->insert(hub.GetPort(i));
-        } else {
+        }
+        else {
           cerr << "Invalid port " << p << endl;
           exit(1);
         }
