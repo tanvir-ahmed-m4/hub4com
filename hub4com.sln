@@ -27,6 +27,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-linectl", "plugins\l
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-lsrmap", "plugins\lsrmap\lsrmap.vcproj", "{9089D426-5B23-4F82-B32E-33D56AF225DC}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "port-connector", "plugins\connector\connector.vcproj", "{630AEA21-57A9-4803-BA9A-F85DCB73CD5D}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-tag", "plugins\tag\tag.vcproj", "{523E524B-786C-45AB-A393-5135706449BC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -85,6 +89,14 @@ Global
 		{9089D426-5B23-4F82-B32E-33D56AF225DC}.Debug|Win32.Build.0 = Debug|Win32
 		{9089D426-5B23-4F82-B32E-33D56AF225DC}.Release|Win32.ActiveCfg = Release|Win32
 		{9089D426-5B23-4F82-B32E-33D56AF225DC}.Release|Win32.Build.0 = Release|Win32
+		{630AEA21-57A9-4803-BA9A-F85DCB73CD5D}.Debug|Win32.ActiveCfg = Debug|Win32
+		{630AEA21-57A9-4803-BA9A-F85DCB73CD5D}.Debug|Win32.Build.0 = Debug|Win32
+		{630AEA21-57A9-4803-BA9A-F85DCB73CD5D}.Release|Win32.ActiveCfg = Release|Win32
+		{630AEA21-57A9-4803-BA9A-F85DCB73CD5D}.Release|Win32.Build.0 = Release|Win32
+		{523E524B-786C-45AB-A393-5135706449BC}.Debug|Win32.ActiveCfg = Debug|Win32
+		{523E524B-786C-45AB-A393-5135706449BC}.Debug|Win32.Build.0 = Debug|Win32
+		{523E524B-786C-45AB-A393-5135706449BC}.Release|Win32.ActiveCfg = Release|Win32
+		{523E524B-786C-45AB-A393-5135706449BC}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
