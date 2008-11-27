@@ -149,6 +149,11 @@ typedef BYTE *(CALLBACK ROUTINE_BUF_ALLOC)(
         DWORD size);
 typedef VOID (CALLBACK ROUTINE_BUF_FREE)(
         BYTE *pBuf);
+typedef VOID (CALLBACK ROUTINE_BUF_APPEND)(
+        BYTE **ppBuf,
+        DWORD offset,
+        const BYTE *pSrc,
+        DWORD sizeSrc);
 typedef BOOL (CALLBACK ROUTINE_MSG_REPLACE_BUF)(
         HUB_MSG *pMsg,
         WORD type,
@@ -185,6 +190,7 @@ typedef struct _HUB_ROUTINES_A {
   size_t size;
   ROUTINE_BUF_ALLOC *pBufAlloc;
   ROUTINE_BUF_FREE *pBufFree;
+  ROUTINE_BUF_APPEND *pBufAppend;
   ROUTINE_MSG_REPLACE_BUF *pMsgReplaceBuf;
   ROUTINE_MSG_INSERT_BUF *pMsgInsertBuf;
   ROUTINE_MSG_REPLACE_VAL *pMsgReplaceVal;
