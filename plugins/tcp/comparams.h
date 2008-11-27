@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/11/27 13:46:29  vfrolov
+ * Added --write-limit option
+ *
  * Revision 1.2  2008/10/06 12:15:14  vfrolov
  * Added --reconnect option
  *
@@ -43,6 +46,12 @@ class ComParams
     void SetReconnectTime(int _reconnectTime) { reconnectTime = _reconnectTime; }
     int GetReconnectTime() const { return reconnectTime; }
 
+    BOOL SetWriteQueueLimit(const char *pWriteQueueLimit);
+    static string WriteQueueLimitStr(long writeQueueLimit);
+    string WriteQueueLimitStr() const { return WriteQueueLimitStr(writeQueueLimit); }
+    static const char *WriteQueueLimitLst();
+    long WriteQueueLimit() const { return writeQueueLimit; }
+
     enum {
       rtDefault = -1,
       rtDisable = -2,
@@ -51,6 +60,7 @@ class ComParams
   private:
     char *pIF;
     int reconnectTime;
+    long writeQueueLimit;
 };
 ///////////////////////////////////////////////////////////////
 

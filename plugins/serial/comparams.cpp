@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/11/27 13:44:52  vfrolov
+ * Added --write-limit option
+ *
  * Revision 1.5  2008/11/13 07:35:10  vfrolov
  * Changed for staticaly linking
  *
@@ -65,7 +68,8 @@ ComParams::ComParams()
     outX(0),
     inX(0),
     inDsr(0),
-    intervalTimeout(0)
+    intervalTimeout(0),
+    writeQueueLimit(256)
 {
 }
 
@@ -134,6 +138,16 @@ BOOL ComParams::SetIntervalTimeout(const char *pIntervalTimeout)
   if (isdigit(*pIntervalTimeout)) {
     intervalTimeout = atol(pIntervalTimeout);
     return TRUE;
+  }
+
+  return FALSE;
+}
+
+BOOL ComParams::SetWriteQueueLimit(const char *pWriteQueueLimit)
+{
+  if (isdigit(*pWriteQueueLimit)) {
+    writeQueueLimit = atol(pWriteQueueLimit);
+    return writeQueueLimit > 0;
   }
 
   return FALSE;
@@ -215,6 +229,17 @@ string ComParams::IntervalTimeoutStr(long intervalTimeout)
   return "0";
 }
 
+string ComParams::WriteQueueLimitStr(long writeQueueLimit)
+{
+  if (writeQueueLimit > 0) {
+    stringstream buf;
+    buf << writeQueueLimit;
+    return buf.str();
+  }
+
+  return "?";
+}
+
 string ComParams::FlagStr(int flag)
 {
   switch (flag) {
@@ -248,6 +273,11 @@ const char *ComParams::StopBitsLst()
 const char *ComParams::IntervalTimeoutLst()
 {
   return "a positive number or 0 milliseconds";
+}
+
+const char *ComParams::WriteQueueLimitLst()
+{
+  return "a positive number";
 }
 
 const char *ComParams::FlagLst()

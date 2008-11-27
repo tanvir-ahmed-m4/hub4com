@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.12  2008/11/27 13:44:52  vfrolov
+ * Added --write-limit option
+ *
  * Revision 1.11  2008/11/24 16:30:56  vfrolov
  * Removed pOnXoffXon
  *
@@ -127,6 +130,9 @@ static void CALLBACK Help(const char *pProgPath)
   << "                             " << ComParams::InDsrLst() << "." << endl
   << "  --ito=<t>                - set read interval timeout to <t> (" << ComParams().IntervalTimeoutStr() << " by default)," << endl
   << "                             where <t> is " << ComParams::IntervalTimeoutLst() << "." << endl
+  << "  --write-limit=<s>        - set write queue limit to <s> (" << ComParams().WriteQueueLimitStr() << " by default)," << endl
+  << "                             where <s> is " << ComParams::WriteQueueLimitLst() << ". The queue will be" << endl
+  << "                             purged with data lost on overruning." << endl
   << endl
   << "  The value c[urrent] above means to use current COM port settings." << endl
   << endl
@@ -186,61 +192,67 @@ static BOOL CALLBACK Config(
 
   if ((pParam = GetParam(pArg, "--baud=")) != NULL) {
     if (!comParams.SetBaudRate(pParam)) {
-      cerr << "Unknown baud rate value in " << pArg << endl;
+      cerr << "Invalid baud rate value in " << pArg << endl;
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--data=")) != NULL) {
     if (!comParams.SetByteSize(pParam)) {
-      cerr << "Unknown data bits value in " << pArg << endl;
+      cerr << "Invalid data bits value in " << pArg << endl;
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--parity=")) != NULL) {
     if (!comParams.SetParity(pParam)) {
-      cerr << "Unknown parity value in " << pArg << endl;
+      cerr << "Invalid parity value in " << pArg << endl;
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--stop=")) != NULL) {
     if (!comParams.SetStopBits(pParam)) {
-      cerr << "Unknown stop bits value in " << pArg << endl;
+      cerr << "Invalid stop bits value in " << pArg << endl;
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--octs=")) != NULL) {
     if (!comParams.SetOutCts(pParam)) {
-      cerr << "Unknown CTS handshaking on output value in " << pArg << endl;
+      cerr << "Invalid CTS handshaking on output value in " << pArg << endl;
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--odsr=")) != NULL) {
     if (!comParams.SetOutDsr(pParam)) {
-      cerr << "Unknown DSR handshaking on output value in " << pArg << endl;
+      cerr << "Invalid DSR handshaking on output value in " << pArg << endl;
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--ox=")) != NULL) {
     if (!comParams.SetOutX(pParam)) {
-      cerr << "Unknown XON/XOFF handshaking on output value in " << pArg << endl;
+      cerr << "Invalid XON/XOFF handshaking on output value in " << pArg << endl;
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--ix=")) != NULL) {
     if (!comParams.SetInX(pParam)) {
-      cerr << "Unknown XON/XOFF handshaking on input value in " << pArg << endl;
+      cerr << "Invalid XON/XOFF handshaking on input value in " << pArg << endl;
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--idsr=")) != NULL) {
     if (!comParams.SetInDsr(pParam)) {
-      cerr << "Unknown DSR sensitivity value in " << pArg << endl;
+      cerr << "Invalid DSR sensitivity value in " << pArg << endl;
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--ito=")) != NULL) {
     if (!comParams.SetIntervalTimeout(pParam)) {
-      cerr << "Unknown read interval timeout value in " << pArg << endl;
+      cerr << "Invalid read interval timeout value in " << pArg << endl;
+      exit(1);
+    }
+  } else
+  if ((pParam = GetParam(pArg, "--write-limit=")) != NULL) {
+    if (!comParams.SetWriteQueueLimit(pParam)) {
+      cerr << "Invalid write limit value in " << pArg << endl;
       exit(1);
     }
   } else {

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.11  2008/11/27 13:46:29  vfrolov
+ * Added --write-limit option
+ *
  * Revision 1.10  2008/11/24 16:30:56  vfrolov
  * Removed pOnXoffXon
  *
@@ -132,7 +135,7 @@ ComPort::ComPort(
     hMasterPort(NULL),
     countReadOverlapped(0),
     countXoff(0),
-    writeQueueLimit(256),
+    writeQueueLimit(comParams.WriteQueueLimit()),
     writeQueued(0),
     writeSuspended(FALSE),
     writeLost(0),

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.18  2008/11/27 13:44:52  vfrolov
+ * Added --write-limit option
+ *
  * Revision 1.17  2008/11/24 16:30:56  vfrolov
  * Removed pOnXoffXon
  *
@@ -120,7 +123,7 @@ ComPort::ComPort(
     intercepted_options(0),
     inOptions(0),
     outOptions(0),
-    writeQueueLimit(256),
+    writeQueueLimit(comParams.WriteQueueLimit()),
     writeQueued(0),
     writeSuspended(FALSE),
     writeLost(0),
@@ -727,7 +730,7 @@ BOOL ComPort::StartWaitCommEvent()
 
 void ComPort::OnWrite(WriteOverlapped *pOverlapped, DWORD len, DWORD done)
 {
-  //cout << name << " OnWrite " << ::GetCurrentThreadId() << endl;
+  //cout << name << " OnWrite " << ::GetCurrentThreadId() << " len=" << len << " done=" << done << " queued=" << writeQueued << endl;
 
   delete pOverlapped;
 
