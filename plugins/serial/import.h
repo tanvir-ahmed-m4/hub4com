@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/11/27 16:25:08  vfrolov
+ * Improved write buffering
+ *
  * Revision 1.5  2008/11/24 16:30:56  vfrolov
  * Removed pOnXoffXon
  *
@@ -42,6 +45,7 @@
 ///////////////////////////////////////////////////////////////
 extern ROUTINE_BUF_ALLOC *pBufAlloc;
 extern ROUTINE_BUF_FREE *pBufFree;
+extern ROUTINE_BUF_APPEND *pBufAppend;
 extern ROUTINE_MSG_INSERT_NONE *pMsgInsertNone;
 extern ROUTINE_ON_READ *pOnRead;
 ///////////////////////////////////////////////////////////////

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.13  2008/11/27 16:25:08  vfrolov
+ * Improved write buffering
+ *
  * Revision 1.12  2008/11/24 16:30:56  vfrolov
  * Removed pOnXoffXon
  *
@@ -118,10 +121,14 @@ class ComPort
     ComIo *pComIo;
     string name;
     HMASTERPORT hMasterPort;
+    int countWriteOverlapped;
     int countReadOverlapped;
     int countWaitCommEventOverlapped;
     int countXoff;
     BOOL filterX;
+
+    BYTE *pWriteBuf;
+    DWORD lenWriteBuf;
 
     DWORD intercepted_options;
     DWORD inOptions;

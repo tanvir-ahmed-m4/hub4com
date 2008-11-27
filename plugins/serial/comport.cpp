@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.19  2008/11/27 16:25:08  vfrolov
+ * Improved write buffering
+ *
  * Revision 1.18  2008/11/27 13:44:52  vfrolov
  * Added --write-limit option
  *
@@ -116,10 +119,13 @@ ComPort::ComPort(
     const ComParams &comParams,
     const char *pPath)
   : hMasterPort(NULL),
+    countWriteOverlapped(0),
     countReadOverlapped(0),
     countWaitCommEventOverlapped(0),
     countXoff(0),
     filterX(FALSE),
+    pWriteBuf(NULL),
+    lenWriteBuf(0),
     intercepted_options(0),
     inOptions(0),
     outOptions(0),
@@ -504,24 +510,47 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
       return FALSE;
     }
 
-    WriteOverlapped *pOverlapped;
-
-    pOverlapped = new WriteOverlapped(*pComIo, pBuf, len);
-
-    if (!pOverlapped) {
-      writeLost += len;
-      return FALSE;
-    }
-
-    pMsg->type = HUB_MSG_TYPE_EMPTY;
-
-    if (writeQueued > writeQueueLimit)
+    if (writeQueued > writeQueueLimit) {
       pComIo->PurgeWrite();
 
-    if (!pOverlapped->StartWrite()) {
-      writeLost += len;
-      delete pOverlapped;
-      return FALSE;
+      if (lenWriteBuf) {
+        _ASSERTE(pWriteBuf != NULL);
+
+        writeLost += lenWriteBuf;
+        writeQueued -= lenWriteBuf;
+        lenWriteBuf = 0;
+        pBufFree(pWriteBuf);
+        pWriteBuf = NULL;
+      }
+    }
+
+    if (countWriteOverlapped < 3) {
+      _ASSERTE(pWriteBuf == NULL);
+      _ASSERTE(lenWriteBuf == 0);
+
+      WriteOverlapped *pOverlapped;
+
+      pOverlapped = new WriteOverlapped(*pComIo, pBuf, len);
+
+      if (!pOverlapped) {
+        writeLost += len;
+        return FALSE;
+      }
+
+      pMsg->type = HUB_MSG_TYPE_EMPTY;
+
+      if (!pOverlapped->StartWrite()) {
+        writeLost += len;
+        delete pOverlapped;
+        return FALSE;
+      }
+
+      countWriteOverlapped++;
+    } else {
+      _ASSERTE((pWriteBuf == NULL && lenWriteBuf == 0) || (pWriteBuf != NULL && lenWriteBuf != 0));
+
+      pBufAppend(&pWriteBuf, lenWriteBuf, pBuf, len);
+      lenWriteBuf += len;
     }
 
     writeQueued += len;
@@ -732,12 +761,39 @@ void ComPort::OnWrite(WriteOverlapped *pOverlapped, DWORD len, DWORD done)
 {
   //cout << name << " OnWrite " << ::GetCurrentThreadId() << " len=" << len << " done=" << done << " queued=" << writeQueued << endl;
 
+  countWriteOverlapped--;
   delete pOverlapped;
 
   if (len > done)
     writeLost += len - done;
 
   writeQueued -= len;
+
+  _ASSERTE(pComIo != NULL);
+
+  if (lenWriteBuf) {
+    _ASSERTE(pWriteBuf != NULL);
+
+    pOverlapped = new WriteOverlapped(*pComIo, pWriteBuf, lenWriteBuf);
+
+    if (pOverlapped) {
+      if (pOverlapped->StartWrite()) {
+        countWriteOverlapped++;
+      } else {
+        delete pOverlapped;
+
+        writeLost += lenWriteBuf;
+        writeQueued -= lenWriteBuf;
+      }
+    } else {
+        writeLost += lenWriteBuf;
+        writeQueued -= lenWriteBuf;
+        pBufFree(pWriteBuf);
+    }
+
+    lenWriteBuf = 0;
+    pWriteBuf = NULL;
+  }
 
   if (writeQueued <= writeQueueLimitSendXon && writeSuspended) {
     writeSuspended = FALSE;
