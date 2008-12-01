@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.20  2008/12/01 17:14:52  vfrolov
+ * Implemented --fc-route and --no-default-fc-route options
+ *
  * Revision 1.19  2008/11/26 15:55:24  vfrolov
  * Changed port number to unsigned
  *
@@ -124,6 +127,14 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "                             back to itself via all attached filters." << endl
   << "  --no-route=<LstR>:<LstL> - do not send data received from any port listed in" << endl
   << "                             <LstR> to the ports listed in <LstL>." << endl
+  << "  --fc-route=<LstR>:<LstL> - enable flow control route from any port listed in" << endl
+  << "                             <LstR> to all ports listed in <LstL>." << endl
+  << "  --no-default-fc-route=<LstR>:<LstL>" << endl
+  << "                             disable default flow control route from any port" << endl
+  << "                             listed in <LstR> to all ports listed in <LstL>" << endl
+  << "                             (default flow control route enabled from P1 to P2" << endl
+  << "                             if enabled data route from P1 to P2 and from P2 to" << endl
+  << "                             P1)." << endl
   << endl
   << "  If no any route option specified, then the options --route=0:All --route=1:0" << endl
   << "  used by default (route data from first port to all ports and from second" << endl
@@ -182,13 +193,17 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   ;
 }
 ///////////////////////////////////////////////////////////////
+DECLARE_HANDLE(HPRM0);
+DECLARE_HANDLE(HPRM1);
+DECLARE_HANDLE(HPRM2);
+
 static BOOL EnumPortList(
     ComHub &hub,
     const char *pList,
-    BOOL (*pFunc)(ComHub &hub, Port *pPort, PVOID p0, PVOID p1, PVOID p2),
-    PVOID p0 = NULL,
-    PVOID p1 = NULL,
-    PVOID p2 = NULL)
+    BOOL (*pFunc)(ComHub &hub, Port *pPort, HPRM0 p0, HPRM1 p1, HPRM2 p2),
+    HPRM0 p0 = NULL,
+    HPRM1 p1 = NULL,
+    HPRM2 p2 = NULL)
 {
   char *pTmpList = _strdup(pList);
 
@@ -225,7 +240,7 @@ static BOOL EnumPortList(
   return res;
 }
 ///////////////////////////////////////////////////////////////
-static BOOL EchoRoute(ComHub &/*hub*/, Port *pPort, PVOID pMap, PVOID /*p1*/, PVOID /*p2*/)
+static BOOL EchoRoute(ComHub &/*hub*/, Port *pPort, HPRM0 pMap, HPRM1 /*p1*/, HPRM2 /*p2*/)
 {
   AddRoute(*(PortMap *)pMap, pPort, pPort, FALSE, FALSE);
   return TRUE;
@@ -233,31 +248,38 @@ static BOOL EchoRoute(ComHub &/*hub*/, Port *pPort, PVOID pMap, PVOID /*p1*/, PV
 
 static void EchoRoute(ComHub &hub, const char *pList, PortMap &map)
 {
-  if (!EnumPortList(hub, pList, EchoRoute, &map)) {
+  if (!EnumPortList(hub, pList, EchoRoute, (HPRM0)&map)) {
     cerr << "Invalid echo route " << pList << endl;
     exit(1);
   }
 }
 ///////////////////////////////////////////////////////////////
-static BOOL Route(ComHub &/*hub*/, Port *pTo, PVOID pFrom, PVOID pNoRoute, PVOID pMap)
+struct RouteParams {
+  RouteParams(BOOL _noRoute, BOOL _noEcho) : noRoute(_noRoute), noEcho(_noEcho) {}
+
+  BOOL noRoute;
+  BOOL noEcho;
+};
+
+static BOOL Route(ComHub &/*hub*/, Port *pTo, HPRM0 pFrom, HPRM1 pParams, HPRM2 pMap)
 {
-  AddRoute(*(PortMap *)pMap, (Port *)pFrom, pTo, *(BOOL *)pNoRoute, TRUE);
+  AddRoute(*(PortMap *)pMap, (Port *)pFrom, pTo, ((RouteParams *)pParams)->noRoute, ((RouteParams *)pParams)->noEcho);
   return TRUE;
 }
 
-static BOOL RouteList(ComHub &hub, Port *pFrom, PVOID pListTo, PVOID pNoRoute, PVOID pMap)
+static BOOL RouteList(ComHub &hub, Port *pFrom, HPRM0 pListTo, HPRM1 pParams, HPRM2 pMap)
 {
-  return EnumPortList(hub, (const char *)pListTo, Route, pFrom, pNoRoute, pMap);
+  return EnumPortList(hub, (const char *)pListTo, Route, (HPRM0)pFrom, (HPRM1)pParams, (HPRM2)pMap);
 }
 
 static BOOL Route(
     ComHub &hub,
     const char *pListFrom,
     const char *pListTo,
-    BOOL noRoute,
+    const RouteParams *pRouteParams,
     PortMap &map)
 {
-  return EnumPortList(hub, pListFrom, RouteList, (PVOID)pListTo, &noRoute, &map);
+  return EnumPortList(hub, pListFrom, RouteList, (HPRM0)pListTo, (HPRM1)pRouteParams, (HPRM2)&map);
 }
 ///////////////////////////////////////////////////////////////
 static void Route(
@@ -265,6 +287,7 @@ static void Route(
     const char *pParam,
     BOOL biDirection,
     BOOL noRoute,
+    BOOL noEcho,
     PortMap &map)
 {
   char *pTmp = _strdup(pParam);
@@ -277,10 +300,11 @@ static void Route(
   char *pSave;
   const char *pListR = STRTOK_R(pTmp, ":", &pSave);
   const char *pListL = STRTOK_R(NULL, ":", &pSave);
+  const RouteParams routeParams(noRoute, noEcho);
 
   if (!pListR || !pListL ||
-      !Route(hub, pListR, pListL, noRoute, map) ||
-      (biDirection && !Route(hub, pListL, pListR, noRoute, map)))
+      !Route(hub, pListR, pListL, &routeParams, map) ||
+      (biDirection && !Route(hub, pListL, pListR, &routeParams, map)))
   {
     cerr << "Invalid route " << pParam << endl;
     exit(1);
@@ -346,7 +370,7 @@ static void CreateFilter(
   free(pTmp);
 }
 ///////////////////////////////////////////////////////////////
-static BOOL AddFilters(ComHub &hub, Port *pPort, PVOID pFilters, PVOID pListFlt, PVOID /*p2*/)
+static BOOL AddFilters(ComHub &hub, Port *pPort, HPRM0 pFilters, HPRM1 pListFlt, HPRM2 /*p2*/)
 {
   char *pTmpList = _strdup((const char *)pListFlt);
 
@@ -443,7 +467,7 @@ static void AddFilters(ComHub &hub, Filters &filters, const char *pParam)
     exit(1);
   }
 
-  if (!EnumPortList(hub, pList, AddFilters, &filters, (PVOID)pListFlt)) {
+  if (!EnumPortList(hub, pList, AddFilters, (HPRM0)&filters, (HPRM1)pListFlt)) {
     cerr << "Can't add filters " << pListFlt << " to ports " << pList << endl;
     exit(1);
   }
@@ -461,7 +485,6 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
   }
 
   BOOL defaultRouteData = TRUE;
-  BOOL defaultRouteFlowControl = TRUE;
   int plugged = 0;
   Plugins *pPlugins = new Plugins();
 
@@ -476,6 +499,7 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
 
   PortMap routeDataMap;
   PortMap routeFlowControlMap;
+  PortMap noDefaultRouteFlowControlMap;
 
   const char *pUseDriver = "serial";
 
@@ -524,19 +548,27 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
     } else
     if ((pParam = GetParam(pArg, "route=")) != NULL) {
       defaultRouteData = FALSE;
-      Route(hub, pParam, FALSE, FALSE, routeDataMap);
+      Route(hub, pParam, FALSE, FALSE, TRUE, routeDataMap);
     } else
     if ((pParam = GetParam(pArg, "bi-route=")) != NULL) {
       defaultRouteData = FALSE;
-      Route(hub, pParam, TRUE, FALSE, routeDataMap);
+      Route(hub, pParam, TRUE, FALSE, TRUE, routeDataMap);
     } else
     if ((pParam = GetParam(pArg, "no-route=")) != NULL) {
       defaultRouteData = FALSE;
-      Route(hub, pParam, FALSE, TRUE, routeDataMap);
+      Route(hub, pParam, FALSE, TRUE, TRUE, routeDataMap);
     } else
     if ((pParam = GetParam(pArg, "echo-route=")) != NULL) {
       defaultRouteData = FALSE;
       EchoRoute(hub, pParam, routeDataMap);
+    } else
+    if ((pParam = GetParam(pArg, "fc-route=")) != NULL) {
+      defaultRouteData = FALSE;
+      Route(hub, pParam, FALSE, FALSE, FALSE, routeFlowControlMap);
+    } else
+    if ((pParam = GetParam(pArg, "no-default-fc-route=")) != NULL) {
+      defaultRouteData = FALSE;
+      Route(hub, pParam, FALSE, FALSE, FALSE, noDefaultRouteFlowControlMap);
     } else
     if ((pParam = GetParam(pArg, "create-filter=")) != NULL) {
       if (!pFilters)
@@ -576,14 +608,15 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
   delete pPlugins;
 
   if (plugged > 1 && defaultRouteData) {
-    Route(hub, "0:All", FALSE, FALSE, routeDataMap);
-    Route(hub, "1:0", FALSE, FALSE, routeDataMap);
+    Route(hub, "0:All", FALSE, FALSE, TRUE, routeDataMap);
+    Route(hub, "1:0", FALSE, FALSE, TRUE, routeDataMap);
   }
 
-  if (defaultRouteFlowControl) {
-    SetFlowControlRoute(routeFlowControlMap, routeDataMap, FALSE);
-  } else {
-  }
+  PortMap defaultRouteFlowControlMap;
+
+  SetFlowControlRoute(defaultRouteFlowControlMap, routeDataMap, FALSE);
+  AddRoute(defaultRouteFlowControlMap, noDefaultRouteFlowControlMap, TRUE);
+  AddRoute(routeFlowControlMap, defaultRouteFlowControlMap, FALSE);
 
   hub.SetFlowControlRoute(routeFlowControlMap);
   hub.SetDataRoute(routeDataMap);

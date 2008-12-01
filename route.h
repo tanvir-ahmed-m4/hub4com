@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/12/01 17:14:52  vfrolov
+ * Implemented --fc-route and --no-default-fc-route options
+ *
  * Revision 1.2  2008/11/24 12:36:59  vfrolov
  * Changed plugin API
  *
@@ -41,6 +44,10 @@ void AddRoute(
     Port *pTo,
     BOOL noRoute,
     BOOL noEcho);
+void AddRoute(
+    PortMap &map,
+    PortMap &noMap,
+    BOOL noRoute);
 void SetFlowControlRoute(
     PortMap &routeFlowControlMap,
     PortMap &routeDataMap,
