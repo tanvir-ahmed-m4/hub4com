@@ -332,6 +332,10 @@
 					RelativePath=".\examples\com2tcp.bat"
 					>
 				</File>
+				<File
+					RelativePath=".\examples\multiplexer.bat"
+					>
+				</File>
 			</Filter>
 		</Filter>
 	</Files>
