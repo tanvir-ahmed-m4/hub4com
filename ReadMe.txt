@@ -21,7 +21,7 @@ BUILDING
 
 Start Microsoft Visual C++ 2005 with hub4com.sln file.
 Set Active Configuration to hub4com - Win32 Release.
-Build hub4com.exe.
+Build solution (hub4com.exe and plugins\*.dll).
 
 TESTING
 =======
@@ -114,7 +114,7 @@ it like a virtual serial port on the second computer.
   1. With the com0com's Setup Command Prompt create COM5<->CNCB0 virtual
      COM port pair (see com0com's ReadMe.txt for more info). For example:
 
-       command> install 0 PortName=COM5 -
+       command> install 0 PortName=COM5,EmuBR=yes -
 
   2. Start the com2tcp-rfc2217.bat on CNCB0 port. For example:
 
@@ -166,3 +166,40 @@ with address your.computer.addr.
 
        cvs -d:pserver:anonymous@your.computer.addr:/cvsroot/com0com login
        cvs -z3 -d:pserver:anonymous@172.16.36.111:/cvsroot/com0com co -P hub4com
+
+
+Multiplexing
+------------
+
+You have a client computer that has a serial port COM1 and a server
+computer that has four serial ports COM1, COM2, COM3 and COM4. Both
+computers linked each other by null-modem cable between their COM1 ports.
+There are not any other connections between the computers. You'd like to
+use COM2, COM3 and COM4 of the server computer like if they exist on the
+client computer:
+
+--------------------------------------            --------------------
+|                    Client computer |            | Server computer  |
+|                                    |            |                  |
+| app1 -- COM2 (virtual) --          | null-modem |          -- COM2 ---
+|                          \         |   cable    |         /        |
+| app2 -- COM3 (virtual) --->-- COM1 -------------- COM1 --<--- COM3 ---
+|                          /         |            |         \        |
+| app3 -- COM4 (virtual) --          |            |          -- COM4 ---
+--------------------------------------            --------------------
+
+  1. With the com0com's Setup Command Prompt on both computers create
+     COM2<->CNCB0, COM3<->CNCB1 and COM4<->CNCB2 virtual serial port
+     pairs (see com0com's ReadMe.txt for more info). For example:
+
+       command> install 0 PortName=COM2,EmuBR=yes -
+       command> install 1 PortName=COM3,EmuBR=yes -
+       command> install 2 PortName=COM4,EmuBR=yes -
+
+  2. Start the multiplexer.bat on the Server computer:
+
+       multiplexer --baud 115200 COM1 --mode server CNCB1 CNCB2 CNCB3
+
+  3. Start the multiplexer.bat on the Client computer:
+
+       multiplexer --baud 115200 COM1 CNCB1 CNCB2 CNCB3
