@@ -19,9 +19,11 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/12/01 17:09:34  vfrolov
+ * Improved write buffering
+ *
  * Revision 1.1  2008/03/27 17:18:52  vfrolov
  * Initial revision
- *
  *
  */
 
@@ -34,11 +36,8 @@
 #include <windows.h>
 #include <crtdbg.h>
 
-#include <string>
-#include <vector>
 #include <queue>
 #include <iostream>
-#include <fstream>
 #include <sstream>
 
 using namespace std;

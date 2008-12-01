@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/12/01 17:09:34  vfrolov
+ * Improved write buffering
+ *
  * Revision 1.6  2008/11/17 16:44:57  vfrolov
  * Fixed race conditions
  *
@@ -204,18 +207,6 @@ void Close(SOCKET hSock)
     cout << "Close(" << hex << hSock << dec << ") - OK" << endl;
 }
 ///////////////////////////////////////////////////////////////
-WriteOverlapped::WriteOverlapped(ComPort &_port, BYTE *_pBuf, DWORD _len)
-  : port(_port),
-    pBuf(_pBuf),
-    len(_len)
-{
-}
-
-WriteOverlapped::~WriteOverlapped()
-{
-  pBufFree(pBuf);
-}
-
 VOID CALLBACK WriteOverlapped::OnWrite(
     DWORD err,
     DWORD done,
@@ -223,23 +214,41 @@ VOID CALLBACK WriteOverlapped::OnWrite(
 {
   WriteOverlapped *pOver = (WriteOverlapped *)pOverlapped;
 
+  pOver->BufFree();
+
   if (err != ERROR_SUCCESS && err != ERROR_OPERATION_ABORTED)
     TraceError(err, "WriteOverlapped::OnWrite: %s", pOver->port.Name().c_str());
 
   pOver->port.OnWrite(pOver, pOver->len, done);
 }
 
-BOOL WriteOverlapped::StartWrite()
+void WriteOverlapped::BufFree()
 {
+  _ASSERTE(pBuf != NULL);
+
+  pBufFree(pBuf);
+
+#ifdef _DEBUG
+  pBuf = NULL;
+#endif
+}
+
+BOOL WriteOverlapped::StartWrite(BYTE *_pBuf, DWORD _len)
+{
+  _ASSERTE(pBuf == NULL);
+
   ::memset((OVERLAPPED *)this, 0, sizeof(OVERLAPPED));
 
-  if (!pBuf)
-    return FALSE;
+  _ASSERTE(_pBuf != NULL);
+  _ASSERTE(_len != 0);
 
-  if (!::WriteFileEx(port.Handle(), pBuf, len, this, OnWrite)) {
+  if (!::WriteFileEx(port.Handle(), _pBuf, _len, this, OnWrite)) {
     TraceError(GetLastError(), "WriteOverlapped::StartWrite(): WriteFileEx(%x) %s", port.Handle(), port.Name().c_str());
     return FALSE;
   }
+
+  pBuf = _pBuf;
+  len = _len;
 
   return TRUE;
 }

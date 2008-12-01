@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.11  2008/12/01 17:09:34  vfrolov
+ * Improved write buffering
+ *
  * Revision 1.10  2008/11/27 13:46:29  vfrolov
  * Added --write-limit option
  *
@@ -310,6 +313,7 @@ static const PLUGIN_ROUTINES_A *const plugins[] = {
 ///////////////////////////////////////////////////////////////
 ROUTINE_BUF_ALLOC *pBufAlloc;
 ROUTINE_BUF_FREE *pBufFree;
+ROUTINE_BUF_APPEND *pBufAppend;
 ROUTINE_ON_READ *pOnRead;
 ///////////////////////////////////////////////////////////////
 PLUGIN_INIT_A InitA;
@@ -318,6 +322,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 {
   if (!ROUTINE_IS_VALID(pHubRoutines, pBufAlloc) ||
       !ROUTINE_IS_VALID(pHubRoutines, pBufFree) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pBufAppend) ||
       !ROUTINE_IS_VALID(pHubRoutines, pOnRead))
   {
     return NULL;
@@ -325,6 +330,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 
   pBufAlloc = pHubRoutines->pBufAlloc;
   pBufFree = pHubRoutines->pBufFree;
+  pBufAppend = pHubRoutines->pBufAppend;
   pOnRead = pHubRoutines->pOnRead;
 
   WSADATA wsaData;

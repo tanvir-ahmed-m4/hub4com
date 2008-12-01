@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.13  2008/12/01 17:06:29  vfrolov
+ * Improved write buffering
+ *
  * Revision 1.12  2008/11/13 07:35:10  vfrolov
  * Changed for staticaly linking
  *
@@ -646,18 +649,6 @@ DWORD ComIo::SetEscMode(DWORD escOptions, BYTE **ppBuf, DWORD *pDone)
   return escOptions & ~ESC_OPTS_V2O_ESCCHAR(-1);
 }
 ///////////////////////////////////////////////////////////////
-WriteOverlapped::WriteOverlapped(ComIo &_comIo, BYTE *_pBuf, DWORD _len)
-  : comIo(_comIo),
-    pBuf(_pBuf),
-    len(_len)
-{
-}
-
-WriteOverlapped::~WriteOverlapped()
-{
-  pBufFree(pBuf);
-}
-
 VOID CALLBACK WriteOverlapped::OnWrite(
     DWORD err,
     DWORD done,
@@ -665,21 +656,43 @@ VOID CALLBACK WriteOverlapped::OnWrite(
 {
   WriteOverlapped *pOver = (WriteOverlapped *)pOverlapped;
 
-  if (err != ERROR_SUCCESS && err != ERROR_OPERATION_ABORTED)
-    TraceError(err, "WriteOverlapped::OnWrite: %s", pOver->comIo.port.Name().c_str());
+  pOver->BufFree();
 
-  pOver->comIo.port.OnWrite(pOver, pOver->len, done);
+  if (err != ERROR_SUCCESS && err != ERROR_OPERATION_ABORTED)
+    TraceError(err, "WriteOverlapped::OnWrite: %s", pOver->pComIo->port.Name().c_str());
+
+  pOver->pComIo->port.OnWrite(pOver, pOver->len, done);
 }
 
-BOOL WriteOverlapped::StartWrite()
+void WriteOverlapped::BufFree()
 {
+  _ASSERTE(pBuf != NULL);
+
+  pBufFree(pBuf);
+
+#ifdef _DEBUG
+  pBuf = NULL;
+#endif
+}
+
+BOOL WriteOverlapped::StartWrite(ComIo *_pComIo, BYTE *_pBuf, DWORD _len)
+{
+  _ASSERTE(pBuf == NULL);
+
   ::memset((OVERLAPPED *)this, 0, sizeof(OVERLAPPED));
 
-  if (!pBuf)
-    return FALSE;
+  _ASSERTE(_pComIo != NULL);
+  _ASSERTE(_pBuf != NULL);
+  _ASSERTE(_len != 0);
 
-  if (!::WriteFileEx(comIo.Handle(), pBuf, len, this, OnWrite))
+  if (!::WriteFileEx(_pComIo->Handle(), _pBuf, _len, this, OnWrite)) {
+    TraceError(GetLastError(), "WriteOverlapped::StartWrite(): WriteFileEx(%x) %s", _pComIo->Handle(), _pComIo->port.Name().c_str());
     return FALSE;
+  }
+
+  pComIo = _pComIo;
+  pBuf = _pBuf;
+  len = _len;
 
   return TRUE;
 }

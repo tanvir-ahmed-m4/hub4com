@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/12/01 17:09:34  vfrolov
+ * Improved write buffering
+ *
  * Revision 1.4  2008/11/17 16:44:57  vfrolov
  * Fixed race conditions
  *
@@ -68,15 +71,25 @@ class ReadOverlapped : private OVERLAPPED
 class WriteOverlapped : private OVERLAPPED
 {
   public:
-    WriteOverlapped(ComPort &_port, BYTE *_pBuf, DWORD _len);
-    ~WriteOverlapped();
-    BOOL StartWrite();
+    WriteOverlapped(ComPort &_port) : port(_port) {
+#ifdef _DEBUG
+      pBuf = NULL;
+#endif
+    }
+#ifdef _DEBUG
+    ~WriteOverlapped() {
+      _ASSERTE(pBuf == NULL);
+    }
+#endif
+
+    BOOL StartWrite(BYTE *_pBuf, DWORD _len);
 
   private:
     static VOID CALLBACK OnWrite(
       DWORD err,
       DWORD done,
       LPOVERLAPPED pOverlapped);
+    void BufFree();
 
     ComPort &port;
     BYTE *pBuf;

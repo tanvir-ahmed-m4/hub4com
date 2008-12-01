@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.20  2008/12/01 17:06:29  vfrolov
+ * Improved write buffering
+ *
  * Revision 1.19  2008/11/27 16:25:08  vfrolov
  * Improved write buffering
  *
@@ -119,13 +122,10 @@ ComPort::ComPort(
     const ComParams &comParams,
     const char *pPath)
   : hMasterPort(NULL),
-    countWriteOverlapped(0),
     countReadOverlapped(0),
     countWaitCommEventOverlapped(0),
     countXoff(0),
     filterX(FALSE),
-    pWriteBuf(NULL),
-    lenWriteBuf(0),
     intercepted_options(0),
     inOptions(0),
     outOptions(0),
@@ -134,7 +134,9 @@ ComPort::ComPort(
     writeSuspended(FALSE),
     writeLost(0),
     writeLostTotal(0),
-    errors(0)
+    errors(0),
+    pWriteBuf(NULL),
+    lenWriteBuf(0)
 {
   writeQueueLimitSendXoff = (writeQueueLimit*2)/3;
   writeQueueLimitSendXon = writeQueueLimit/3;
@@ -152,6 +154,17 @@ ComPort::ComPort(
   if (!pComIo->Open(pPath, comParams)) {
     delete pComIo;
     pComIo = NULL;
+  }
+
+  for (int i = 0 ; i < 3 ; i++) {
+    WriteOverlapped *pOverlapped = new WriteOverlapped();
+
+    if (!pOverlapped) {
+      cerr << "No enough memory." << endl;
+      exit(2);
+    }
+
+    writeOverlappedBuf.push(pOverlapped);
   }
 }
 
@@ -472,6 +485,33 @@ BOOL ComPort::FakeReadFilter(HUB_MSG *pInMsg)
   return pInMsg != NULL;
 }
 
+void ComPort::FlowControlUpdate()
+{
+  if (writeSuspended) {
+    if (writeQueued <= writeQueueLimitSendXon) {
+      writeSuspended = FALSE;
+
+      HUB_MSG msg;
+
+      msg.type = HUB_MSG_TYPE_ADD_XOFF_XON;
+      msg.u.val = FALSE;
+
+      pOnRead(hMasterPort, &msg);
+    }
+  } else {
+    if (writeQueued > writeQueueLimitSendXoff) {
+      writeSuspended = TRUE;
+
+      HUB_MSG msg;
+
+      msg.type = HUB_MSG_TYPE_ADD_XOFF_XON;
+      msg.u.val = TRUE;
+
+      pOnRead(hMasterPort, &msg);
+    }
+  }
+}
+
 BOOL ComPort::Write(HUB_MSG *pMsg)
 {
   _ASSERTE(pMsg != NULL);
@@ -524,28 +564,22 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
       }
     }
 
-    if (countWriteOverlapped < 3) {
+    if (writeOverlappedBuf.size()) {
       _ASSERTE(pWriteBuf == NULL);
       _ASSERTE(lenWriteBuf == 0);
 
-      WriteOverlapped *pOverlapped;
+      WriteOverlapped *pOverlapped = writeOverlappedBuf.front();
 
-      pOverlapped = new WriteOverlapped(*pComIo, pBuf, len);
+      _ASSERTE(pOverlapped != NULL);
 
-      if (!pOverlapped) {
+      if (!pOverlapped->StartWrite(pComIo, pBuf, len)) {
         writeLost += len;
+        FlowControlUpdate();
         return FALSE;
       }
 
-      pMsg->type = HUB_MSG_TYPE_EMPTY;
-
-      if (!pOverlapped->StartWrite()) {
-        writeLost += len;
-        delete pOverlapped;
-        return FALSE;
-      }
-
-      countWriteOverlapped++;
+      writeOverlappedBuf.pop();
+      pMsg->type = HUB_MSG_TYPE_EMPTY;  // detach pBuf
     } else {
       _ASSERTE((pWriteBuf == NULL && lenWriteBuf == 0) || (pWriteBuf != NULL && lenWriteBuf != 0));
 
@@ -554,17 +588,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     }
 
     writeQueued += len;
-
-    if (writeQueued > writeQueueLimitSendXoff && !writeSuspended) {
-      writeSuspended = TRUE;
-
-      HUB_MSG msg;
-
-      msg.type = HUB_MSG_TYPE_ADD_XOFF_XON;
-      msg.u.val = TRUE;
-
-      pOnRead(hMasterPort, &msg);
-    }
+    FlowControlUpdate();
 
     //cout << name << " Started Write " << len << " " << writeQueued << endl;
   }
@@ -761,50 +785,31 @@ void ComPort::OnWrite(WriteOverlapped *pOverlapped, DWORD len, DWORD done)
 {
   //cout << name << " OnWrite " << ::GetCurrentThreadId() << " len=" << len << " done=" << done << " queued=" << writeQueued << endl;
 
-  countWriteOverlapped--;
-  delete pOverlapped;
-
   if (len > done)
     writeLost += len - done;
 
   writeQueued -= len;
 
   _ASSERTE(pComIo != NULL);
+  _ASSERTE(pWriteBuf != NULL || lenWriteBuf == 0);
+  _ASSERTE(pWriteBuf == NULL || lenWriteBuf != 0);
 
   if (lenWriteBuf) {
-    _ASSERTE(pWriteBuf != NULL);
+    if (!pOverlapped->StartWrite(pComIo, pWriteBuf, lenWriteBuf)) {
+      writeOverlappedBuf.push(pOverlapped);
 
-    pOverlapped = new WriteOverlapped(*pComIo, pWriteBuf, lenWriteBuf);
-
-    if (pOverlapped) {
-      if (pOverlapped->StartWrite()) {
-        countWriteOverlapped++;
-      } else {
-        delete pOverlapped;
-
-        writeLost += lenWriteBuf;
-        writeQueued -= lenWriteBuf;
-      }
-    } else {
-        writeLost += lenWriteBuf;
-        writeQueued -= lenWriteBuf;
-        pBufFree(pWriteBuf);
+      writeLost += lenWriteBuf;
+      writeQueued -= lenWriteBuf;
+      pBufFree(pWriteBuf);
     }
 
     lenWriteBuf = 0;
     pWriteBuf = NULL;
+  } else {
+    writeOverlappedBuf.push(pOverlapped);
   }
 
-  if (writeQueued <= writeQueueLimitSendXon && writeSuspended) {
-    writeSuspended = FALSE;
-
-    HUB_MSG msg;
-
-    msg.type = HUB_MSG_TYPE_ADD_XOFF_XON;
-    msg.u.val = FALSE;
-
-    pOnRead(hMasterPort, &msg);
-  }
+  FlowControlUpdate();
 }
 
 void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)

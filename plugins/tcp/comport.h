@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2008/12/01 17:09:34  vfrolov
+ * Improved write buffering
+ *
  * Revision 1.7  2008/11/24 16:30:56  vfrolov
  * Removed pOnXoffXon
  *
@@ -71,15 +74,6 @@ class Listener : public queue<ComPort *>
     SOCKET hSockListen;
 };
 ///////////////////////////////////////////////////////////////
-struct Buf {
-  Buf(BYTE *_pBuf, DWORD _len) : pBuf(_pBuf), len(_len) {}
-
-  BYTE *pBuf;
-  DWORD len;
-};
-
-typedef vector<Buf> Bufs;
-///////////////////////////////////////////////////////////////
 class ComPort
 {
   public:
@@ -104,6 +98,7 @@ class ComPort
     void StartConnect();
 
   private:
+    void FlowControlUpdate();
     BOOL StartRead();
     BOOL StartWaitEvent(SOCKET hSockWait);
     void OnConnect();
@@ -138,7 +133,9 @@ class ComPort
     DWORD writeLost;
     DWORD writeLostTotal;
 
-    Bufs bufs;
+    queue<WriteOverlapped *> writeOverlappedBuf;
+    BYTE *pWriteBuf;
+    DWORD lenWriteBuf;
 };
 ///////////////////////////////////////////////////////////////
 

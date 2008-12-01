@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.10  2008/12/01 17:06:29  vfrolov
+ * Improved write buffering
+ *
  * Revision 1.9  2008/11/13 07:35:10  vfrolov
  * Changed for staticaly linking
  *
@@ -138,17 +141,23 @@ class ReadOverlapped : private OVERLAPPED
 class WriteOverlapped : private OVERLAPPED
 {
   public:
-    WriteOverlapped(ComIo &_comIo, BYTE *_pBuf, DWORD _len);
-    ~WriteOverlapped();
-    BOOL StartWrite();
+#ifdef _DEBUG
+    WriteOverlapped() : pBuf(NULL) {}
+    ~WriteOverlapped() {
+      _ASSERTE(pBuf == NULL);
+    }
+#endif
+
+    BOOL StartWrite(ComIo *_pComIo, BYTE *_pBuf, DWORD _len);
 
   private:
     static VOID CALLBACK OnWrite(
       DWORD err,
       DWORD done,
       LPOVERLAPPED pOverlapped);
+    void BufFree();
 
-    ComIo &comIo;
+    ComIo *pComIo;
     BYTE *pBuf;
     DWORD len;
 };

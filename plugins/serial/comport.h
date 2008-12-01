@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.14  2008/12/01 17:06:29  vfrolov
+ * Improved write buffering
+ *
  * Revision 1.13  2008/11/27 16:25:08  vfrolov
  * Improved write buffering
  *
@@ -114,6 +117,7 @@ class ComPort
     void Name(const char *pName) { name = pName; }
 
   private:
+    void FlowControlUpdate();
     BOOL StartRead();
     BOOL StartWaitCommEvent();
     void CheckComEvents(DWORD eMask);
@@ -121,14 +125,10 @@ class ComPort
     ComIo *pComIo;
     string name;
     HMASTERPORT hMasterPort;
-    int countWriteOverlapped;
     int countReadOverlapped;
     int countWaitCommEventOverlapped;
     int countXoff;
     BOOL filterX;
-
-    BYTE *pWriteBuf;
-    DWORD lenWriteBuf;
 
     DWORD intercepted_options;
     DWORD inOptions;
@@ -142,6 +142,10 @@ class ComPort
     DWORD writeLost;
     DWORD writeLostTotal;
     DWORD errors;
+
+    queue<WriteOverlapped *> writeOverlappedBuf;
+    BYTE *pWriteBuf;
+    DWORD lenWriteBuf;
 };
 ///////////////////////////////////////////////////////////////
 
