@@ -8,6 +8,7 @@ SETLOCAL
   PATH %~dp0;%PATH%
 
   SET PERMANENT=*
+  SET TC=:
 
   :BEGIN_PARSE_OPTIONS
     SET OPTION=%1
@@ -15,6 +16,11 @@ SETLOCAL
     SHIFT /1
 
     IF /I "%OPTION%"=="--help" GOTO USAGE
+
+    IF /I "%OPTION%" NEQ "--trace" GOTO END_OPTION_TRACE
+      SET TC=
+      GOTO BEGIN_PARSE_OPTIONS
+    :END_OPTION_TRACE
 
     IF /I "%OPTION%" NEQ "--interface" GOTO END_OPTION_INTERFACE
       SET OPTIONS=%OPTIONS% --interface=%1
@@ -89,8 +95,6 @@ SETLOCAL
 
   :END_SET_LC_MODE_OPTIONS
 
-  SET TC=:
-
   %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,com,COM
   SET OPTIONS=%OPTIONS% --create-filter=escparse,com,parse
   %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,com,ExM
@@ -133,6 +137,7 @@ ECHO                             ^<state^> is cts, dsr, dcd, ring or break. The
 ECHO                             exclamation sign ^(^!^) can be used to invert the
 ECHO                             action. By default the connection will be permanent
 ECHO                             as it's possible.
+ECHO     --trace               - enable trace output.
 ECHO     --help                - show this help.
 ECHO.
 ECHO TCP client mode options:

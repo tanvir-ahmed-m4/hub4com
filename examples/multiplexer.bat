@@ -12,6 +12,7 @@ SETLOCAL
   SET PORT_NUM=0
   SET TAG=0
   SET LINK_TYPE=SERIAL
+  SET TRACE_COMMENT=#
 
   :BEGIN_PARSE_OPTIONS
     IF "%1"=="" GOTO END_PARSE_OPTIONS
@@ -20,6 +21,11 @@ SETLOCAL
     SHIFT /1
 
     IF /I "%OPTION%" == "--help" GOTO USAGE
+
+    IF /I "%OPTION%" NEQ "--trace" GOTO END_OPTION_TRACE
+      SET TRACE_COMMENT=
+      GOTO BEGIN_PARSE_OPTIONS
+    :END_OPTION_TRACE
 
     IF /I "%OPTION%" NEQ "--mode" GOTO END_OPTION_MODE
       SET ARG=%1
@@ -75,19 +81,19 @@ SETLOCAL
 
     IF "%MODE%" NEQ "C" GOTO END_MODE_CLIENT
       IF "%CLIENT_OPTIONS%" NEQ "" GOTO END_MODE_CLIENT
-      SET CLIENT_OPTIONS=--load=\"%~f0\",BEGIN_CLIENT_FILTERS,END_CLIENT_FILTERS
+      SET CLIENT_OPTIONS=--load=\"%~f0\",BEGIN_CLIENT_FILTERS,END_CLIENT_FILTERS:%TRACE_COMMENT%
     :END_MODE_CLIENT
 
     IF "%MODE%" NEQ "S" GOTO END_MODE_SERVER
       IF "%SERVER_OPTIONS%" NEQ "" GOTO END_MODE_SERVER
-      SET SERVER_OPTIONS=--load=\"%~f0\",BEGIN_SERVER_FILTERS,END_SERVER_FILTERS
+      SET SERVER_OPTIONS=--load=\"%~f0\",BEGIN_SERVER_FILTERS,END_SERVER_FILTERS:%TRACE_COMMENT%
     :END_MODE_SERVER
 
     SET /A MUXA_PORT_NUM=%PORT_NUM%
     SET /A MUXB_PORT_NUM=%PORT_NUM%+1
     SET /A SUBPORT_NUM=%PORT_NUM%+2
 
-    SET OPTIONS=%OPTIONS% --load=\"%~f0\",BEGIN_ADD_SUBPORT,END_ADD_SUBPORT:%OPTION%,%MODE%,%TAG%,%MUXA_PORT_NUM%,%MUXB_PORT_NUM%,%SUBPORT_NUM%
+    SET OPTIONS=%OPTIONS% --load=\"%~f0\",BEGIN_ADD_SUBPORT,END_ADD_SUBPORT:%OPTION%,%MODE%,%TAG%,%MUXA_PORT_NUM%,%MUXB_PORT_NUM%,%SUBPORT_NUM%,%TRACE_COMMENT%
 
     SET /A PORT_NUM=%PORT_NUM%+3
     SET /A TAG=%TAG%+1
@@ -114,6 +120,7 @@ ECHO Usage:
 ECHO     %0 [options] ^<linkport^> [options] ^<subport1^> [[options] ^<subport2^> ...]
 ECHO.
 ECHO Options:
+ECHO     --trace               - enable trace output.
 ECHO     --help                - show this help.
 ECHO.
 ECHO Linkport options:
@@ -144,21 +151,31 @@ ECHO     com0com driver.
 GOTO END
 ################################################################
 BEGIN_CLIENT_FILTERS
+  %%1%% --create-filter=trace,serialC,COM
   --create-filter=escparse,serialC,parse
+  %%1%% --create-filter=trace,serialC,ExM
   --create-filter=pinmap,serialC,pinmap:--rts=cts --dtr=dsr
   --create-filter=linectl,serialC,lc:--br=local --lc=local
+  %%1%% --create-filter=trace,serialC,CxB
 
+  %%1%% --create-filter=trace,telnetC,muxB
   --create-filter=telnet,telnetC,telnet:--comport=client
+  %%1%% --create-filter=trace,telnetC,TxM
   --create-filter=pinmap,telnetC,pinmap:--rts=cts --dtr=dsr --break=break
   --create-filter=linectl,telnetC,lc:--br=remote --lc=remote
 END_CLIENT_FILTERS
 ################################################################
 BEGIN_SERVER_FILTERS
+  %%1%% --create-filter=trace,serialC,COM
   --create-filter=escparse,serialS,parse
+  %%1%% --create-filter=trace,serialC,ExM
   --create-filter=pinmap,serialS,pinmap:--rts=cts --dtr=dsr --break=break
   --create-filter=linectl,serialS,lc:--br=remote --lc=remote
+  %%1%% --create-filter=trace,serialC,CxB
 
+  %%1%% --create-filter=trace,telnetC,muxB
   --create-filter=telnet,telnetS,telnet:--comport=server --suppress-echo=yes
+  %%1%% --create-filter=trace,telnetC,BxM
   --create-filter=lsrmap,telnetS,lsrmap
   --create-filter=pinmap,telnetS,pinmap:--cts=cts --dsr=dsr --dcd=dcd --ring=ring
   --create-filter=linectl,telnetS,lc:--br=local --lc=local
@@ -182,7 +199,9 @@ BEGIN_ADD_SUBPORT
 
   %%1%%-muxA
 
+  %%7%% --create-filter=trace,tag%%3%%,muxA
   --create-filter=tag,tag%%3%%:--tag=%%3%%
+  %%7%% --create-filter=trace,tag%%3%%,TxL
   --add-filters=%%4%%:tag%%3%%
   --bi-route=0:%%4%%
   --no-default-fc-route=%%4%%:0
