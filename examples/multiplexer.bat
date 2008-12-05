@@ -15,9 +15,9 @@ SETLOCAL
   SET TRACE_COMMENT=#
 
   :BEGIN_PARSE_OPTIONS
-    IF "%1"=="" GOTO END_PARSE_OPTIONS
+    IF "%~1" == "" GOTO END_PARSE_OPTIONS
 
-    SET OPTION=%1
+    SET OPTION=%~1
     SHIFT /1
 
     IF /I "%OPTION%" == "--help" GOTO USAGE
@@ -28,7 +28,7 @@ SETLOCAL
     :END_OPTION_TRACE
 
     IF /I "%OPTION%" NEQ "--mode" GOTO END_OPTION_MODE
-      SET ARG=%1
+      SET ARG=%~1
       SHIFT /1
 
       IF /I "%ARG:~0,1%" NEQ "c" GOTO END_OPTION_MODE_CLIENT
@@ -48,7 +48,7 @@ SETLOCAL
     IF /I "%OPTION%" == "--stop"   GOTO BEGIN_OPTION_LC
     GOTO END_OPTION_LC
     :BEGIN_OPTION_LC
-      SET VAL=%1
+      SET VAL=%~1
       SHIFT /1
       IF /I "%VAL:~0,1%"=="d" SET VAL=c
       SET OPTIONS=%OPTIONS% %OPTION%=%VAL%
@@ -56,15 +56,37 @@ SETLOCAL
     :END_OPTION_LC
 
     IF /I "%OPTION%" NEQ "--link-type" GOTO END_OPTION_LINK_TYPE
-      SET LINK_TYPE=%1
+      SET LINK_TYPE=%~1
       SHIFT /1
       GOTO BEGIN_PARSE_OPTIONS
     :END_OPTION_LINK_TYPE
+
+    IF /I "%OPTION%" NEQ "--secret" GOTO END_OPTION_SECRET
+      SET SECRET=%~1
+      SHIFT /1
+      GOTO BEGIN_PARSE_OPTIONS
+    :END_OPTION_SECRET
 
     IF "%OPTION:~0,2%" == "--" GOTO USAGE
 
     IF %PORT_NUM% GTR 0 GOTO END_LINKPORT
       SET /A PORT_NUM=%PORT_NUM%+1
+
+      IF "%TRACE_COMMENT%" NEQ "" GOTO END_LINKPORT_TRACE
+        SET LINKPORT_FILTERS=%LINKPORT_FILTERS% --create-filter=trace,linkport,COM
+      :END_LINKPORT_TRACE
+
+      IF "%SECRET%" == "" GOTO END_LINKPORT_SECRET
+        SET LINKPORT_FILTERS=%LINKPORT_FILTERS% --create-filter=crypt,linkport,crypt:"--secret=\"%SECRET%\""
+
+        IF "%TRACE_COMMENT%" NEQ "" GOTO END_LINKPORT_TRACE_RAW
+          SET LINKPORT_FILTERS=%LINKPORT_FILTERS% --create-filter=trace,linkport,RAW
+        :END_LINKPORT_TRACE_RAW
+      :END_LINKPORT_SECRET
+
+      IF "%LINKPORT_FILTERS%" == "" GOTO END_LINKPORT_FILTERS
+        SET LINKPORT_FILTERS=%LINKPORT_FILTERS% --add-filters=0:linkport
+      :END_LINKPORT_FILTERS
 
       IF /I "%LINK_TYPE%" NEQ "serial" GOTO END_LINK_TYPE_SERIAL
         SET OPTIONS=%OPTIONS% \\.\%OPTION%
@@ -72,7 +94,7 @@ SETLOCAL
       :END_LINK_TYPE_SERIAL
 
       IF /I "%LINK_TYPE%" NEQ "tcp" GOTO END_LINK_TYPE_TCP
-        SET OPTIONS=%OPTIONS% --use-driver=tcp %OPTION% --use-driver=serial
+        SET OPTIONS=%OPTIONS% --use-driver=tcp *%OPTION% --use-driver=serial
         GOTO BEGIN_PARSE_OPTIONS
       :END_LINK_TYPE_TCP
 
@@ -108,7 +130,7 @@ SETLOCAL
   SET TC=:
 
   @ECHO ON
-    "%HUB4COM%" %CLIENT_OPTIONS% %SERVER_OPTIONS% --write-limit=%LINKPORT_WRITE_LIMIT% %OPTIONS%
+    "%HUB4COM%" %LINKPORT_FILTERS% %CLIENT_OPTIONS% %SERVER_OPTIONS% --write-limit=%LINKPORT_WRITE_LIMIT% %OPTIONS%
   @ECHO OFF
 ENDLOCAL
 
@@ -126,6 +148,7 @@ ECHO.
 ECHO Linkport options:
 ECHO     --link-type ^<t^>       - for subsequent port set type ^<t^> (default is
 ECHO                             serial), where ^<t^> is serial or tcp.
+ECHO     --secret=^<secret^>     - encrypt data with key created from ^<secret^>.
 ECHO.
 ECHO Subports options:
 ECHO     --mode ^<m^>            - for subsequent ports set mode to ^<m^> (default is
