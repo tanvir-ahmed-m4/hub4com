@@ -314,6 +314,10 @@
 			Name="Other Files"
 			>
 			<File
+				RelativePath=".\Building.txt"
+				>
+			</File>
+			<File
 				RelativePath=".\ReadMe.txt"
 				>
 			</File>
