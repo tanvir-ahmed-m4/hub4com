@@ -1,27 +1,25 @@
-               ===========================
-               HUB for COM ports (hub4com)
-               ===========================
+               ================================
+               HUB for communications (hub4com)
+               ================================
 
 INTRODUCTION
 ============
 
-The HUB for COM ports (hub4com) is a Windows application and is a part
-of the com0com project.
+The HUB for communications (hub4com) is a Windows application and is a part of
+the com0com project.
 
-It allows to send data received from one COM port to a number of COM
-ports and vice versa. In conjunction with the com0com driver the hub4com
-makes it possible to handle data from a single serial device by a number
-of different applications. For example, several applications can share
-data from one GPS device.
+It allows to receive data and signals from one port, modify and send it to a
+number of ports and vice versa.
+
+In conjunction with the com0com driver the hub4com allows to
+  - handle data and signals from a single real serial device by a number of
+    different applications. For example, several applications can share data
+    from one GPS device;
+  - use real serial ports of remote computer like if they exist on the local
+    computer.
 
 The homepage for com0com project is http://com0com.sourceforge.net/.
 
-BUILDING
-========
-
-Start Microsoft Visual C++ 2005 with hub4com.sln file.
-Set Active Configuration to hub4com - Win32 Release.
-Build solution (hub4com.exe and plugins\*.dll).
 
 TESTING
 =======
@@ -90,11 +88,11 @@ BTW: com2tcp.bat is a wrapper to hub4com.exe. It works very similar to
      com2tcp's options.
 
 
-RFC 2217 COM port server
-------------------------
+RFC 2217 server (TCP to COM port redirector)
+--------------------------------------------
 
-You have a phisical COM1 port and you'd like to share it through the
-network by the RFC 2217 "Telnet Com Port Control Option" protocol.
+You have a server computer with phisical COM1 port and you'd like to share it
+through the network by the RFC 2217 "Telnet Com Port Control Option" protocol:
 
   1. Start the com2tcp-rfc2217.bat on COM1 port. For example:
 
@@ -104,12 +102,12 @@ network by the RFC 2217 "Telnet Com Port Control Option" protocol.
   redirect them to COM1 port.
 
 
-COM port to TCP redirector (RFC 2217)
--------------------------------------
+RFC 2217 client (COM port to TCP redirector)
+--------------------------------------------
 
-On the first computer your.comport.server you have a phisical serial port
-shared through the network by the RFC 2217 protocol and you'd like to use
-it like a virtual serial port on the second computer.
+You have a server computer your.comport.server with phisical serial port
+shared through the network by the RFC 2217 protocol (see above example) and
+you'd like to use it on the client computer like a virtual serial port.
 
   1. With the com0com's Setup Command Prompt create COM5<->CNCB0 virtual
      COM port pair (see com0com's ReadMe.txt for more info). For example:
@@ -187,8 +185,10 @@ client computer:
 |                          /         |            |         \        |
 | app3 -- COM4 (virtual) --          |            |          -- COM4 ---
 --------------------------------------            --------------------
+                             |<--------multiplexed------->|
+                         |<-------------RFC 2217------------->|
 
-  1. With the com0com's Setup Command Prompt on both computers create
+  1. With the com0com's Setup Command Prompt on client computer create
      COM2<->CNCB0, COM3<->CNCB1 and COM4<->CNCB2 virtual serial port
      pairs (see com0com's ReadMe.txt for more info). For example:
 
@@ -203,3 +203,64 @@ client computer:
   3. Start the multiplexer.bat on the Client computer:
 
        multiplexer --baud 115200 COM1 CNCB1 CNCB2 CNCB3
+
+
+Encryption
+----------
+
+You have a server computer that has three serial ports COM2, COM3 and COM4.
+You'd like to use COM2, COM3 and COM4 of the server computer like if they
+exist on the client computer and use the server computer's TCP/IP port
+serial.server.addr:5555 for this. Additionally you'd like to encrypt TCP/IP
+traffic to protect the private data from others:
+
+--------------------------------               ------------------------
+|              Client computer |               | Server computer      |
+|                              |               | (serial.server.addr) |
+|                              |               |                      |
+| app1 -- COM2 (virtual) --    |               |            -- COM2 -----
+|                          \   |               | port      /          |
+| app2 -- COM3 (virtual) --->-------TCP/IP-----> 5555-----<--- COM3 -----
+|                          /   |               |           \          |
+| app3 -- COM4 (virtual) --    |               |            -- COM4 -----
+--------------------------------               ------------------------
+                               |<--encrypted-->|
+                             |<---multiplexed----------->|
+                         |<--------RFC 2217----------------->|
+
+  1. With the com0com's Setup Command Prompt on client computer create
+     COM2<->CNCB0, COM3<->CNCB1 and COM4<->CNCB2 virtual serial port
+     pairs (see com0com's ReadMe.txt for more info). For example:
+
+       command> install 0 PortName=COM2,EmuBR=yes -
+       command> install 1 PortName=COM3,EmuBR=yes -
+       command> install 2 PortName=COM4,EmuBR=yes -
+
+  2. Start the multiplexer.bat on the Server computer:
+
+       multiplexer --secret "any secret phrase" --link-type tcp 5555 --mode server CNCB1 CNCB2 CNCB3
+
+  3. Start the multiplexer.bat on the Client computer:
+
+       multiplexer --secret "any secret phrase" --link-type tcp serial.server.addr:5555 CNCB1 CNCB2 CNCB3
+
+
+FAQs & HOWTOs
+=============
+
+Q. The com2tcp.bat, com2tcp-rfc2217.bat and multiplexer.bat are a wrappers to
+   the hub4com.exe. How to convert wrapper's command line to a file with
+   arguments for hub4com.exe?
+A. The file can be created by seting OPTIONS variable, for example:
+
+   1. Convert multiplexer.bat's command line to the my.txt file:
+
+      SET OPTIONS=--create-filter=trace,_CUT_THIS_LINE_
+      multiplexer --baud 115200 COM1 CNCB1 CNCB2 CNCB3 > my.txt
+
+   2. Cut line "--create-filter=trace,_CUT_THIS_LINE_" from my.txt file.
+   
+   Now the folloving two command lines are equal:
+
+     multiplexer --baud 115200 COM1 CNCB1 CNCB2 CNCB3
+     hub4com --load=my.txt,_BEGIN_,_END_
