@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.12  2008/12/05 14:23:19  vfrolov
+ * Output config in loadable format
+ *
  * Revision 1.11  2008/11/25 16:40:40  vfrolov
  * Added assert for port handle
  *
@@ -261,7 +264,8 @@ static HCONFIG CALLBACK ConfigStart()
                << "  {" << GetCommandLine() << "}" << endl;
 
   PrintTime(pConfig->buf);
-  pConfig->buf << "Config: {";
+  pConfig->buf << "Config:";
+  pConfig->buf << endl << "_BEGIN_";
 
   return (HCONFIG)pConfig;
 }
@@ -272,7 +276,7 @@ static BOOL CALLBACK Config(
 {
   _ASSERTE(hConfig != NULL);
 
-  ((TraceConfig *)hConfig)->buf << endl << "  {" << pArg << "}";
+  ((TraceConfig *)hConfig)->buf << endl << "  " << pArg;
 
   const char *pParam;
 
@@ -290,7 +294,7 @@ static void CALLBACK ConfigStop(
 {
   _ASSERTE(hConfig != NULL);
 
-  ((TraceConfig *)hConfig)->buf << endl << "}" << endl;
+  ((TraceConfig *)hConfig)->buf << endl << "_END_" << endl;
   ((TraceConfig *)hConfig)->PrintToAllTraceStreams(((TraceConfig *)hConfig)->buf.str().c_str());
 
   delete (TraceConfig *)hConfig;
