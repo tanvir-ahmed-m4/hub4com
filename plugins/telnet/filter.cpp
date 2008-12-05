@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.10  2008/12/05 14:12:04  vfrolov
+ * Fixed return values
+ *
  * Revision 1.9  2008/11/25 16:40:40  vfrolov
  * Added assert for port handle
  *
@@ -123,7 +126,7 @@ class Filter : public Valid {
     Filter(int argc, const char *const argv[]);
     State *GetState(HMASTERPORT hPort);
     TelnetProtocol *CreateProtocol(State *pState, const char *pName);
-    void DelProtocol(State *pState);
+    BOOL DelProtocol(State *pState);
 
     void SetFilterName(const char *_pName) { pName = _pName; }
     const char *FilterName() const { return pName; }
@@ -320,11 +323,16 @@ TelnetProtocol *Filter::CreateProtocol(State *pState, const char *pName)
   return pTelnetProtocol;
 }
 
-void Filter::DelProtocol(State *pState)
+BOOL Filter::DelProtocol(State *pState)
 {
   _ASSERTE(pState->pTelnetProtocol != NULL);
 
+  if (!pState->pTelnetProtocol)
+    return FALSE;
+
   pState->SetProtocol(NULL);
+
+  return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 static PLUGIN_TYPE CALLBACK GetPluginType()
@@ -361,7 +369,7 @@ static void CALLBACK Help(const char *pProgPath)
   << "                             default)." << endl
   << endl
   << "IN method input data stream description:" << endl
-  << "  LINE_DATA - telnet protocol data." << endl
+  << "  LINE_DATA - telnet protocol data (will be discarded if engine not started)." << endl
   << "  CONNECT(TRUE) - start telnet protocol engine." << endl
   << "  CONNECT(FALSE) - stop telnet protocol engine." << endl
   << endl
@@ -387,7 +395,7 @@ static void CALLBACK Help(const char *pProgPath)
   << "  LINE_DATA - telnet protocol data." << endl
   << endl
   << "OUT method input data stream description:" << endl
-  << "  LINE_DATA - raw data." << endl
+  << "  LINE_DATA - raw data  (will be discarded if engine not started)." << endl
   << "  ADD_XOFF_XON - flow control." << endl
   << "  " << endl
   << "  RFC 2217 client mode:" << endl
@@ -497,7 +505,7 @@ static BOOL CALLBACK InMethod(
       TelnetProtocol *pTelnetProtocol = ((Filter *)hFilter)->GetProtocol(hFromPort);
 
       if (!pTelnetProtocol)
-        break;
+        return FALSE;
 
       if (!pTelnetProtocol->Decode(pInMsg))
         return FALSE;
@@ -530,7 +538,9 @@ static BOOL CALLBACK InMethod(
           }
         }
 
-        ((Filter *)hFilter)->DelProtocol(pState);
+        if (!((Filter *)hFilter)->DelProtocol(pState))
+          return FALSE;
+
         break;
       }
 
@@ -745,7 +755,7 @@ static BOOL CALLBACK OutMethod(
       State *pState = ((Filter *)hFilter)->GetState(hToPort);
 
       if (!pState)
-        return FALSE;
+        break;
 
       if (pState->pComPort) {
         pState->pComPort->AddXoffXon(pOutMsg->u.val);
@@ -764,7 +774,7 @@ static BOOL CALLBACK OutMethod(
       TelnetProtocol *pTelnetProtocol = ((Filter *)hFilter)->GetProtocol(hToPort);
 
       if (!pTelnetProtocol)
-        break;
+        return FALSE;
 
       if (!pTelnetProtocol->Encode(pOutMsg))
         return FALSE;
