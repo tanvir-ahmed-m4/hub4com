@@ -14,11 +14,11 @@ SETLOCAL
   SET RECONNECT=1000
 
   :BEGIN_PARSE_OPTIONS
-    SET OPTION=%1
-    IF NOT "%OPTION:~0,2%"=="--" GOTO END_PARSE_OPTIONS
+    SET OPTION=%~1
+    IF NOT "%OPTION:~0,2%" == "--" GOTO END_PARSE_OPTIONS
     SHIFT /1
 
-    IF /I "%OPTION%"=="--help" GOTO USAGE
+    IF /I "%OPTION%" == "--help" GOTO USAGE
 
     IF /I "%OPTION%" NEQ "--telnet" GOTO END_OPTION_TELNET
       SET CF_TELNET=--create-filter=telnet
@@ -27,13 +27,13 @@ SETLOCAL
     :END_OPTION_TELNET
 
     IF /I "%OPTION%" NEQ "--terminal" GOTO END_OPTION_TERMINAL
-      SET CF_TELNET_OPTIONS=--terminal=\"%1\"
+      SET CF_TELNET_OPTIONS="--terminal=\"%~1\""
       SHIFT /1
       GOTO BEGIN_PARSE_OPTIONS
     :END_OPTION_TERMINAL
 
     IF /I "%OPTION%" NEQ "--awak-seq" GOTO END_OPTION_AWAK_SEQ
-      SET CF_AWAK_SEQ=--create-filter=awakseq:--awak-seq=\"%1\"
+      SET CF_AWAK_SEQ="--create-filter=awakseq:--awak-seq=\"%~1\""
       SET AF_AWAK_SEQ=--add-filters=0:awakseq
       SET RECONNECT=d
       SHIFT /1
@@ -55,20 +55,20 @@ SETLOCAL
     :END_OPTION_CONNECT_DTR
 
     IF /I "%OPTION%" NEQ "--interface" GOTO END_OPTION_INTERFACE
-      SET OPTIONS=%OPTIONS% --interface=%1
+      SET OPTIONS=%OPTIONS% --interface=%~1
       SHIFT /1
       GOTO BEGIN_PARSE_OPTIONS
     :END_OPTION_INTERFACE
 
-    IF /I "%OPTION%"=="--baud"   GOTO BEGIN_OPTION_LC
-    IF /I "%OPTION%"=="--data"   GOTO BEGIN_OPTION_LC
-    IF /I "%OPTION%"=="--parity" GOTO BEGIN_OPTION_LC
-    IF /I "%OPTION%"=="--stop"   GOTO BEGIN_OPTION_LC
+    IF /I "%OPTION%" == "--baud"   GOTO BEGIN_OPTION_LC
+    IF /I "%OPTION%" == "--data"   GOTO BEGIN_OPTION_LC
+    IF /I "%OPTION%" == "--parity" GOTO BEGIN_OPTION_LC
+    IF /I "%OPTION%" == "--stop"   GOTO BEGIN_OPTION_LC
     GOTO END_OPTION_LC
     :BEGIN_OPTION_LC
-      SET VAL=%1
+      SET VAL=%~1
       SHIFT /1
-      IF /I "%VAL:~0,1%"=="d" SET VAL=c
+      IF /I "%VAL:~0,1%" == "d" SET VAL=c
       SET OPTIONS=%OPTIONS% %OPTION%=%VAL%
       GOTO BEGIN_PARSE_OPTIONS
     :END_OPTION_LC
@@ -77,23 +77,23 @@ SETLOCAL
   :END_PARSE_OPTIONS
 
   :BEGIN_PARSE_ARGS
-    IF "%1"=="" GOTO USAGE
-    SET COMPORT=%1
+    IF "%~1" == "" GOTO USAGE
+    SET COMPORT=%~1
     SHIFT /1
 
-    IF "%1"=="" GOTO USAGE
-    SET TCP=%PERMANENT%%1
+    IF "%~1" == "" GOTO USAGE
+    SET TCP=%PERMANENT%%~1
     SHIFT /1
 
-    IF "%1"=="" GOTO END_PARSE_ARGS
-    SET TCP=%TCP%:%1
+    IF "%~1" == "" GOTO END_PARSE_ARGS
+    SET TCP=%TCP%:%~1
     SHIFT /1
 
-    IF NOT "%1"=="" GOTO USAGE
+    IF NOT "%~1" == "" GOTO USAGE
   :END_PARSE_ARGS
 
-  IF "%CF_TELNET_OPTIONS%"=="" GOTO END_ADD_CF_TELNET_OPTIONS
-  IF "%CF_TELNET%"=="" GOTO END_ADD_CF_TELNET_OPTIONS
+  IF "%CF_TELNET_OPTIONS%" == "" GOTO END_ADD_CF_TELNET_OPTIONS
+  IF "%CF_TELNET%" == "" GOTO END_ADD_CF_TELNET_OPTIONS
     SET CF_TELNET=%CF_TELNET%:%CF_TELNET_OPTIONS%
   :END_ADD_CF_TELNET_OPTIONS
 

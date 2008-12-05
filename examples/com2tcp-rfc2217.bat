@@ -11,11 +11,11 @@ SETLOCAL
   SET TC=:
 
   :BEGIN_PARSE_OPTIONS
-    SET OPTION=%1
-    IF NOT "%OPTION:~0,2%"=="--" GOTO END_PARSE_OPTIONS
+    SET OPTION=%~1
+    IF NOT "%OPTION:~0,2%" == "--" GOTO END_PARSE_OPTIONS
     SHIFT /1
 
-    IF /I "%OPTION%"=="--help" GOTO USAGE
+    IF /I "%OPTION%" == "--help" GOTO USAGE
 
     IF /I "%OPTION%" NEQ "--trace" GOTO END_OPTION_TRACE
       SET TC=
@@ -23,13 +23,13 @@ SETLOCAL
     :END_OPTION_TRACE
 
     IF /I "%OPTION%" NEQ "--interface" GOTO END_OPTION_INTERFACE
-      SET OPTIONS=%OPTIONS% --interface=%1
+      SET OPTIONS=%OPTIONS% --interface=%~1
       SHIFT /1
       GOTO BEGIN_PARSE_OPTIONS
     :END_OPTION_INTERFACE
 
     IF /I "%OPTION%" NEQ "--rfc2217-mode" GOTO END_OPTION_RFC2217_MODE
-      SET ARG=%1
+      SET ARG=%~1
       SHIFT /1
 
       IF /I "%ARG:~0,1%" NEQ "c" GOTO END_OPTION_RFC2217_MODE_CLIENT
@@ -44,7 +44,7 @@ SETLOCAL
     :END_OPTION_RFC2217_MODE
 
     IF /I "%OPTION%" NEQ "--connect" GOTO END_OPTION_CONNECT
-      SET COM_PIN2CON=--create-filter=pin2con,com,connect:%1
+      SET COM_PIN2CON=--create-filter=pin2con,com,connect:%~1
       SET PERMANENT=
       SHIFT /1
       GOTO BEGIN_PARSE_OPTIONS
@@ -54,23 +54,23 @@ SETLOCAL
   :END_PARSE_OPTIONS
 
   :BEGIN_PARSE_ARGS
-    IF "%1"=="" GOTO USAGE
-    SET COMPORT=%1
+    IF "%~1" == "" GOTO USAGE
+    SET COMPORT=%~1
     SHIFT /1
 
-    IF "%1"=="" GOTO USAGE
-    SET TCP=%1
+    IF "%~1" == "" GOTO USAGE
+    SET TCP=%~1
     SHIFT /1
 
-    IF "%1"=="" GOTO END_PARSE_ARGS
-    SET TCP=%TCP%:%1
+    IF "%~1" == "" GOTO END_PARSE_ARGS
+    SET TCP=%TCP%:%~1
     SHIFT /1
 
     IF /I "%LC_CLIENT_MODE%"=="no" GOTO END_SET_LC_CLIENT_MODE
       SET LC_CLIENT_MODE=yes
     :END_SET_LC_CLIENT_MODE
 
-    IF NOT "%1"=="" GOTO USAGE
+    IF NOT "%~1" == "" GOTO USAGE
   :END_PARSE_ARGS
 
   IF /I "%LC_CLIENT_MODE%"=="yes" GOTO SET_LC_CLIENT_MODE_OPTIONS
