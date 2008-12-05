@@ -31,6 +31,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "port-connector", "plugins\c
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-tag", "plugins\tag\tag.vcproj", "{523E524B-786C-45AB-A393-5135706449BC}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "filter-crypt", "plugins\crypt\crypt.vcproj", "{FEB9BD18-B0EA-460F-8404-C97BD2623227}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -97,6 +99,10 @@ Global
 		{523E524B-786C-45AB-A393-5135706449BC}.Debug|Win32.Build.0 = Debug|Win32
 		{523E524B-786C-45AB-A393-5135706449BC}.Release|Win32.ActiveCfg = Release|Win32
 		{523E524B-786C-45AB-A393-5135706449BC}.Release|Win32.Build.0 = Release|Win32
+		{FEB9BD18-B0EA-460F-8404-C97BD2623227}.Debug|Win32.ActiveCfg = Debug|Win32
+		{FEB9BD18-B0EA-460F-8404-C97BD2623227}.Debug|Win32.Build.0 = Debug|Win32
+		{FEB9BD18-B0EA-460F-8404-C97BD2623227}.Release|Win32.ActiveCfg = Release|Win32
+		{FEB9BD18-B0EA-460F-8404-C97BD2623227}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
