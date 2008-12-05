@@ -1,0 +1,21 @@
+               ================================
+               HUB for communications (hub4com)
+               ================================
+
+PREREQUISITES
+=============
+
+You will need the following to build hub4com from source code:
+
+1.  Microsoft Visual C++ 2005 Express Edition (MSVC).
+2.  Microsoft Windows Platform Software Development Kit (SDK).
+
+
+BUILDING
+========
+
+1.  Start Microsoft Visual C++ 2005 with hub4com.sln file.
+2.  Set Active Configuration to hub4com - Win32 Release.
+3.  Build solution (hub4com.exe and plugins\*.dll).
+
+    It will create hub4com.exe and plugins\*.dll files.
