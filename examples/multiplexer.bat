@@ -189,16 +189,16 @@ BEGIN_CLIENT_FILTERS
 END_CLIENT_FILTERS
 ################################################################
 BEGIN_SERVER_FILTERS
-  %%1%% --create-filter=trace,serialC,COM
+  %%1%% --create-filter=trace,serialS,COM
   --create-filter=escparse,serialS,parse
-  %%1%% --create-filter=trace,serialC,ExM
+  %%1%% --create-filter=trace,serialS,ExM
   --create-filter=pinmap,serialS,pinmap:--rts=cts --dtr=dsr --break=break
   --create-filter=linectl,serialS,lc:--br=remote --lc=remote
-  %%1%% --create-filter=trace,serialC,CxB
+  %%1%% --create-filter=trace,serialS,CxB
 
-  %%1%% --create-filter=trace,telnetC,muxB
+  %%1%% --create-filter=trace,telnetS,muxB
   --create-filter=telnet,telnetS,telnet:--comport=server --suppress-echo=yes
-  %%1%% --create-filter=trace,telnetC,BxM
+  %%1%% --create-filter=trace,telnetS,BxM
   --create-filter=lsrmap,telnetS,lsrmap
   --create-filter=pinmap,telnetS,pinmap:--cts=cts --dsr=dsr --dcd=dcd --ring=ring
   --create-filter=linectl,telnetS,lc:--br=local --lc=local
