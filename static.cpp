@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/12/11 13:25:20  vfrolov
+ * Added FilterCrypt, FilterPurge, FilterTag, PortConnector
+ *
  * Revision 1.1  2008/11/13 08:03:24  vfrolov
  * Initial revision
  *
@@ -39,6 +42,7 @@
 #endif
 ///////////////////////////////////////////////////////////////
 INIT_DECLARE(FilterAwakSeq)
+INIT_DECLARE(FilterCrypt)
 INIT_DECLARE(FilterEcho)
 INIT_DECLARE(FilterEscInsert)
 INIT_DECLARE(FilterEscParse)
@@ -46,13 +50,17 @@ INIT_DECLARE(FilterLineCtl)
 INIT_DECLARE(FilterLsrMap)
 INIT_DECLARE(FilterPin2Con)
 INIT_DECLARE(FilterPinMap)
+INIT_DECLARE(FilterPurge)
+INIT_DECLARE(FilterTag)
 INIT_DECLARE(FilterTelnet)
 INIT_DECLARE(FilterTrace)
+INIT_DECLARE(PortConnector)
 INIT_DECLARE(PortSerial)
 INIT_DECLARE(PortTcp)
 ///////////////////////////////////////////////////////////////
 static PLUGIN_INIT_A *const list[] = {
   INIT_INSERT(FilterAwakSeq)
+  INIT_INSERT(FilterCrypt)
   INIT_INSERT(FilterEcho)
   INIT_INSERT(FilterEscInsert)
   INIT_INSERT(FilterEscParse)
@@ -60,8 +68,11 @@ static PLUGIN_INIT_A *const list[] = {
   INIT_INSERT(FilterLsrMap)
   INIT_INSERT(FilterPin2Con)
   INIT_INSERT(FilterPinMap)
+  INIT_INSERT(FilterPurge)
+  INIT_INSERT(FilterTag)
   INIT_INSERT(FilterTelnet)
   INIT_INSERT(FilterTrace)
+  INIT_INSERT(PortConnector)
   INIT_INSERT(PortSerial)
   INIT_INSERT(PortTcp)
   NULL,
