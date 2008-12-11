@@ -97,6 +97,7 @@ extern "C" {
 #define   GO_RBR_STATUS            ((DWORD)1 << 16)
 #define   GO_RLC_STATUS            ((DWORD)1 << 17)
 #define   GO_BREAK_STATUS          ((DWORD)1 << 18)
+#define   GO_PURGE_TX_IN           ((DWORD)1 << 19)
 #define   GO_ESCAPE_MODE           ((DWORD)1 << 24)
 #define   GO_LBR_STATUS            ((DWORD)1 << 25)
 #define   GO_LLC_STATUS            ((DWORD)1 << 26)
@@ -107,6 +108,7 @@ extern "C" {
 #define   SO_V2O_LINE_STATUS(v)    ((DWORD)(BYTE)(v) << 16)
 #define   SO_SET_BR                ((DWORD)1 << 24)
 #define   SO_SET_LC                ((DWORD)1 << 25)
+#define   SO_PURGE_TX              ((DWORD)1 << 26)
 #define HUB_MSG_TYPE_FAIL_IN_OPTS  (8   | HUB_MSG_UNION_TYPE_VAL)
 #define HUB_MSG_TYPE_RBR_STATUS    (9   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_UINT)
 #define HUB_MSG_TYPE_RLC_STATUS    (10  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_LC)
@@ -125,6 +127,8 @@ extern "C" {
 #define HUB_MSG_TYPE_LLC_STATUS    (19  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_LC)
 #define HUB_MSG_TYPE_LOOP_TEST     (20  | HUB_MSG_UNION_TYPE_HVAL)
 #define HUB_MSG_TYPE_ADD_XOFF_XON  (21  | HUB_MSG_ROUTE_FLOW_CONTROL | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_BOOL)
+#define HUB_MSG_TYPE_PURGE_TX_IN   (22  | HUB_MSG_UNION_TYPE_NONE)
+#define HUB_MSG_TYPE_PURGE_TX      (23  | HUB_MSG_UNION_TYPE_NONE)
 /*******************************************************************/
 typedef struct _HUB_MSG {
   WORD type;

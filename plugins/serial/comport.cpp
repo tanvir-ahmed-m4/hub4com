@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.21  2008/12/11 13:07:54  vfrolov
+ * Added PURGE_TX
+ *
  * Revision 1.20  2008/12/01 17:06:29  vfrolov
  * Improved write buffering
  *
@@ -512,11 +515,32 @@ void ComPort::FlowControlUpdate()
   }
 }
 
+void ComPort::PurgeWrite(BOOL withLost)
+{
+  pComIo->PurgeWrite();
+
+  if (lenWriteBuf) {
+    _ASSERTE(pWriteBuf != NULL);
+
+    if (withLost)
+      writeLost += lenWriteBuf;
+
+    writeQueued -= lenWriteBuf;
+    lenWriteBuf = 0;
+    pBufFree(pWriteBuf);
+    pWriteBuf = NULL;
+  }
+
+  if (!withLost)
+    writeLost -= writeQueued;  // compensate
+}
+
 BOOL ComPort::Write(HUB_MSG *pMsg)
 {
   _ASSERTE(pMsg != NULL);
 
-  if (pMsg->type == HUB_MSG_TYPE_LINE_DATA) {
+  switch (pMsg->type) {
+  case HUB_MSG_TYPE_LINE_DATA: {
     BYTE *pBuf = pMsg->u.buf.pBuf;
     DWORD len = pMsg->u.buf.size;
 
@@ -550,19 +574,8 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
       return FALSE;
     }
 
-    if (writeQueued > writeQueueLimit) {
-      pComIo->PurgeWrite();
-
-      if (lenWriteBuf) {
-        _ASSERTE(pWriteBuf != NULL);
-
-        writeLost += lenWriteBuf;
-        writeQueued -= lenWriteBuf;
-        lenWriteBuf = 0;
-        pBufFree(pWriteBuf);
-        pWriteBuf = NULL;
-      }
-    }
+    if (writeQueued > writeQueueLimit)
+      PurgeWrite(TRUE);
 
     if (writeOverlappedBuf.size()) {
       _ASSERTE(pWriteBuf == NULL);
@@ -591,16 +604,15 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     FlowControlUpdate();
 
     //cout << name << " Started Write " << len << " " << writeQueued << endl;
+    break;
   }
-  else
-  if (pMsg->type == HUB_MSG_TYPE_SET_PIN_STATE) {
+  case HUB_MSG_TYPE_SET_PIN_STATE:
     if (!pComIo)
       return FALSE;
 
     pComIo->SetPinState((WORD)pMsg->u.val, MASK2VAL(pMsg->u.val) & SO_O2V_PIN_STATE(outOptions));
-  }
-  else
-  if (pMsg->type == HUB_MSG_TYPE_SET_BR) {
+    break;
+  case HUB_MSG_TYPE_SET_BR: {
     if (!pComIo)
       return FALSE;
 
@@ -632,9 +644,9 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
         pOnRead(hMasterPort, &msg);
       }
     }
+    break;
   }
-  else
-  if (pMsg->type == HUB_MSG_TYPE_SET_LC) {
+  case HUB_MSG_TYPE_SET_LC: {
     if (!pComIo)
       return FALSE;
 
@@ -690,9 +702,16 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
         pOnRead(hMasterPort, &msg);
       }
     }
+    break;
   }
-  else
-  if (pMsg->type == HUB_MSG_TYPE_SET_OUT_OPTS) {
+  case HUB_MSG_TYPE_PURGE_TX:
+    if (!pComIo)
+      return FALSE;
+
+    PurgeWrite(FALSE);
+    FlowControlUpdate();
+    break;
+  case HUB_MSG_TYPE_SET_OUT_OPTS:
     if (!pComIo)
       return FALSE;
 
@@ -726,7 +745,8 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     outOptions |= (
         SO_V2O_PIN_STATE(PIN_STATE_BREAK) |
         SO_SET_BR |
-        SO_SET_LC);
+        SO_SET_LC |
+        SO_PURGE_TX);
 
     pMsg->u.val &= ~outOptions;
 
@@ -735,15 +755,15 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
            << hex << pMsg->u.val << dec
            << "] will be ignored by driver" << endl;
     }
-  }
-  else
-  if (pMsg->type == HUB_MSG_TYPE_ADD_XOFF_XON) {
+    break;
+  case HUB_MSG_TYPE_ADD_XOFF_XON:
     if (pMsg->u.val) {
       countXoff++;
     } else {
       if (--countXoff == 0 && pComIo)
         StartRead();
     }
+    break;
   }
 
   return TRUE;

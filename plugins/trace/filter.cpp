@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.13  2008/12/11 13:10:23  vfrolov
+ * Added PURGE_TX
+ *
  * Revision 1.12  2008/12/05 14:23:19  vfrolov
  * Output config in loadable format
  *
@@ -439,6 +442,8 @@ static const CODE2NAME codeNameTableHubMsg[] = {
   TOCODE2NAME(HUB_MSG_TYPE_, LLC_STATUS),
   TOCODE2NAME(HUB_MSG_TYPE_, LOOP_TEST),
   TOCODE2NAME(HUB_MSG_TYPE_, ADD_XOFF_XON),
+  TOCODE2NAME(HUB_MSG_TYPE_, PURGE_TX_IN),
+  TOCODE2NAME(HUB_MSG_TYPE_, PURGE_TX),
   {0, NULL}
 };
 ///////////////////////////////////////////////////////////////
