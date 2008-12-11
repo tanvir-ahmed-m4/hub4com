@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/12/11 13:13:40  vfrolov
+ * Implemented PURGE-DATA (RFC 2217)
+ *
  * Revision 1.2  2008/11/24 16:39:58  vfrolov
  * Implemented FLOWCONTROL-SUSPEND and FLOWCONTROL-RESUME commands (RFC 2217)
  *
@@ -49,6 +52,8 @@ class TelnetOptionComPort : public TelnetOption
     virtual void SetMCR(BYTE mcr, BYTE mask) = 0;
     virtual void SetBreak(BOOL on) = 0;
 
+    virtual void PurgeTx() = 0;
+
   protected:
     void OnSuspendResume(BOOL suspend, HUB_MSG **ppMsg);
 
@@ -75,6 +80,8 @@ class TelnetOptionComPortClient : public TelnetOptionComPort
     virtual void SetMCR(BYTE mcr, BYTE mask);
     virtual void SetBreak(BOOL on);
 
+    virtual void PurgeTx();
+
   protected:
     virtual BOOL OnSubNegotiation(const BYTE_vector &params, HUB_MSG **ppMsg);
 };
@@ -92,6 +99,8 @@ class TelnetOptionComPortServer : public TelnetOptionComPort
 
     virtual void SetMCR(BYTE _mcr, BYTE mask);
     virtual void SetBreak(BOOL on);
+
+    virtual void PurgeTx() { _ASSERTE(FALSE); return; }
 
   protected:
     virtual BOOL OnSubNegotiation(const BYTE_vector &params, HUB_MSG **ppMsg);

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2008/12/11 13:13:40  vfrolov
+ * Implemented PURGE-DATA (RFC 2217)
+ *
  * Revision 1.3  2008/11/13 07:44:12  vfrolov
  * Changed for staticaly linking
  *
@@ -38,6 +41,7 @@ extern ROUTINE_MSG_INSERT_VAL *pMsgInsertVal;
 extern ROUTINE_MSG_REPLACE_BUF *pMsgReplaceBuf;
 extern ROUTINE_MSG_INSERT_BUF *pMsgInsertBuf;
 extern ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone;
+extern ROUTINE_MSG_INSERT_NONE *pMsgInsertNone;
 ///////////////////////////////////////////////////////////////
 
 #endif  // _IMPORT_H
