@@ -66,14 +66,14 @@ SETLOCAL
     SET TCP=%TCP%:%~1
     SHIFT /1
 
-    IF /I "%LC_CLIENT_MODE%"=="no" GOTO END_SET_LC_CLIENT_MODE
+    IF /I "%LC_CLIENT_MODE%" == "no" GOTO END_SET_LC_CLIENT_MODE
       SET LC_CLIENT_MODE=yes
     :END_SET_LC_CLIENT_MODE
 
     IF NOT "%~1" == "" GOTO USAGE
   :END_PARSE_ARGS
 
-  IF /I "%LC_CLIENT_MODE%"=="yes" GOTO SET_LC_CLIENT_MODE_OPTIONS
+  IF /I "%LC_CLIENT_MODE%" == "yes" GOTO SET_LC_CLIENT_MODE_OPTIONS
 
     SET TCP_TELNET_OPTIONS=:"--comport=server --suppress-echo=yes"
     SET TCP_LSRMAP=--create-filter=lsrmap,tcp,lsrmap
@@ -82,6 +82,7 @@ SETLOCAL
 
     SET COM_PINMAP_OPTIONS=:"--rts=cts --dtr=dsr --break=break"
     SET COM_LC_OPTIONS=:"--br=remote --lc=remote"
+    SET COM_PURGE=--create-filter=purge,com,purge
 
     GOTO END_SET_LC_MODE_OPTIONS
   :SET_LC_CLIENT_MODE_OPTIONS
@@ -89,6 +90,7 @@ SETLOCAL
     SET TCP_TELNET_OPTIONS=:"--comport=client"
     SET TCP_PINMAP_OPTIONS=:"--rts=cts --dtr=dsr --break=break"
     SET TCP_LC_OPTIONS=:"--br=remote --lc=remote"
+    :SET TCP_PURGE=--create-filter=purge,tcp,purge
 
     SET COM_PINMAP_OPTIONS=:"--rts=cts --dtr=dsr"
     SET COM_LC_OPTIONS=:"--br=local --lc=local"
@@ -98,6 +100,7 @@ SETLOCAL
   %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,com,COM
   SET OPTIONS=%OPTIONS% --create-filter=escparse,com,parse
   %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,com,ExM
+  SET OPTIONS=%OPTIONS% %COM_PURGE%
   SET OPTIONS=%OPTIONS% %COM_PIN2CON%
   SET OPTIONS=%OPTIONS% --create-filter=pinmap,com,pinmap%COM_PINMAP_OPTIONS%
   SET OPTIONS=%OPTIONS% --create-filter=linectl,com,lc%COM_LC_OPTIONS%
@@ -108,6 +111,7 @@ SETLOCAL
   %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,tcp,TCP
   SET OPTIONS=%OPTIONS% --create-filter=telnet,tcp,telnet%TCP_TELNET_OPTIONS%
   %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,tcp,TxM
+  SET OPTIONS=%OPTIONS% %TCP_PURGE%
   SET OPTIONS=%OPTIONS% %TCP_LSRMAP%
   SET OPTIONS=%OPTIONS% --create-filter=pinmap,tcp,pinmap%TCP_PINMAP_OPTIONS%
   SET OPTIONS=%OPTIONS% --create-filter=linectl,tcp,lc%TCP_LC_OPTIONS%

@@ -184,6 +184,7 @@ BEGIN_CLIENT_FILTERS
   %%1%% --create-filter=trace,telnetC,muxB
   --create-filter=telnet,telnetC,telnet:--comport=client
   %%1%% --create-filter=trace,telnetC,TxM
+  #--create-filter=purge,telnetC,purge
   --create-filter=pinmap,telnetC,pinmap:--rts=cts --dtr=dsr --break=break
   --create-filter=linectl,telnetC,lc:--br=remote --lc=remote
 END_CLIENT_FILTERS
@@ -192,6 +193,7 @@ BEGIN_SERVER_FILTERS
   %%1%% --create-filter=trace,serialS,COM
   --create-filter=escparse,serialS,parse
   %%1%% --create-filter=trace,serialS,ExM
+  --create-filter=purge,serialS,purge
   --create-filter=pinmap,serialS,pinmap:--rts=cts --dtr=dsr --break=break
   --create-filter=linectl,serialS,lc:--br=remote --lc=remote
   %%1%% --create-filter=trace,serialS,CxB
