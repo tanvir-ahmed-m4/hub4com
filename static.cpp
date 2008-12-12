@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/12/12 08:04:48  vfrolov
+ * Simplified adding new plugins
+ *
  * Revision 1.2  2008/12/11 13:25:20  vfrolov
  * Added FilterCrypt, FilterPurge, FilterTag, PortConnector
  *
@@ -41,40 +44,28 @@
   #define INIT_INSERT(ns)
 #endif
 ///////////////////////////////////////////////////////////////
-INIT_DECLARE(FilterAwakSeq)
-INIT_DECLARE(FilterCrypt)
-INIT_DECLARE(FilterEcho)
-INIT_DECLARE(FilterEscInsert)
-INIT_DECLARE(FilterEscParse)
-INIT_DECLARE(FilterLineCtl)
-INIT_DECLARE(FilterLsrMap)
-INIT_DECLARE(FilterPin2Con)
-INIT_DECLARE(FilterPinMap)
-INIT_DECLARE(FilterPurge)
-INIT_DECLARE(FilterTag)
-INIT_DECLARE(FilterTelnet)
-INIT_DECLARE(FilterTrace)
-INIT_DECLARE(PortConnector)
-INIT_DECLARE(PortSerial)
-INIT_DECLARE(PortTcp)
+#define NAMESPACES(pattern)     \
+  pattern(FilterAwakSeq)        \
+  pattern(FilterCrypt)          \
+  pattern(FilterEcho)           \
+  pattern(FilterEscInsert)      \
+  pattern(FilterEscParse)       \
+  pattern(FilterLineCtl)        \
+  pattern(FilterLsrMap)         \
+  pattern(FilterPin2Con)        \
+  pattern(FilterPinMap)         \
+  pattern(FilterPurge)          \
+  pattern(FilterTag)            \
+  pattern(FilterTelnet)         \
+  pattern(FilterTrace)          \
+  pattern(PortConnector)        \
+  pattern(PortSerial)           \
+  pattern(PortTcp)              \
+///////////////////////////////////////////////////////////////
+NAMESPACES(INIT_DECLARE)
 ///////////////////////////////////////////////////////////////
 static PLUGIN_INIT_A *const list[] = {
-  INIT_INSERT(FilterAwakSeq)
-  INIT_INSERT(FilterCrypt)
-  INIT_INSERT(FilterEcho)
-  INIT_INSERT(FilterEscInsert)
-  INIT_INSERT(FilterEscParse)
-  INIT_INSERT(FilterLineCtl)
-  INIT_INSERT(FilterLsrMap)
-  INIT_INSERT(FilterPin2Con)
-  INIT_INSERT(FilterPinMap)
-  INIT_INSERT(FilterPurge)
-  INIT_INSERT(FilterTag)
-  INIT_INSERT(FilterTelnet)
-  INIT_INSERT(FilterTrace)
-  INIT_INSERT(PortConnector)
-  INIT_INSERT(PortSerial)
-  INIT_INSERT(PortTcp)
+  NAMESPACES(INIT_INSERT)
   NULL,
 };
 ///////////////////////////////////////////////////////////////
