@@ -19,6 +19,12 @@
  *
  *
  * $Log$
+ * Revision 1.14  2008/12/17 11:52:35  vfrolov
+ * Replaced ComIo::dcb by serialBaudRate, serialLineControl,
+ * serialHandFlow and serialChars
+ * Replaced ComPort::filterX by ComIo::FilterX()
+ * Replaced SetManual*() by PinStateControlMask()
+ *
  * Revision 1.13  2008/12/01 17:06:29  vfrolov
  * Improved write buffering
  *
@@ -229,6 +235,46 @@ static BOOL SetModemControl(HANDLE handle, BYTE control, BYTE mask)
   return TRUE;
 }
 ///////////////////////////////////////////////////////////////
+#define IOCTL_SERIAL_GET_HANDFLOW       CTL_CODE(FILE_DEVICE_SERIAL_PORT,24,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERIAL_SET_HANDFLOW       CTL_CODE(FILE_DEVICE_SERIAL_PORT,25,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+static BOOL GetHandFlow(HANDLE handle, SERIAL_HANDFLOW &serialHandFlow)
+{
+  DWORD returned;
+
+  if (!DeviceIoControl(handle,
+                       IOCTL_SERIAL_GET_HANDFLOW,
+                       NULL, 0,
+                       &serialHandFlow, sizeof(serialHandFlow), &returned,
+                       NULL))
+  {
+    TraceError(GetLastError(), "IOCTL_SERIAL_GET_HANDFLOW");
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+static void SetHandFlow(HANDLE handle, SERIAL_HANDFLOW &serialHandFlow)
+{
+  DWORD returned;
+
+  if (!DeviceIoControl(handle,
+                       IOCTL_SERIAL_SET_HANDFLOW,
+                       &serialHandFlow, sizeof(serialHandFlow),
+                       NULL, 0, &returned,
+                       NULL))
+  {
+    TraceError(GetLastError(), "IOCTL_SERIAL_SET_HANDFLOW");
+  }
+
+  GetHandFlow(handle, serialHandFlow);
+}
+///////////////////////////////////////////////////////////////
+static BOOL GetChars(HANDLE handle, SERIAL_CHARS &serialChars);
+static BOOL GetBaudRate(HANDLE handle, SERIAL_BAUD_RATE &serialBaudRate);
+static BOOL GetLineControl(HANDLE handle, SERIAL_LINE_CONTROL &serialLineControl);
+
 BOOL ComIo::Open(const char *pPath, const ComParams &comParams)
 {
   handle = CreateFile(
@@ -244,6 +290,8 @@ BOOL ComIo::Open(const char *pPath, const ComParams &comParams)
     TraceError(GetLastError(), "ComIo::Open(): CreateFile(\"%s\")", pPath);
     return FALSE;
   }
+
+  DCB dcb;
 
   if (!myGetCommState(handle, &dcb)) {
     Close();
@@ -285,7 +333,12 @@ BOOL ComIo::Open(const char *pPath, const ComParams &comParams)
   dcb.fAbortOnError = FALSE;
   dcb.fErrorChar = FALSE;
 
-  if (!mySetCommState(handle, &dcb)) {
+  if (!mySetCommState(handle, &dcb) ||
+      !GetBaudRate(handle, serialBaudRate) ||
+      !GetLineControl(handle, serialLineControl) ||
+      !GetChars(handle, serialChars) ||
+      !GetHandFlow(handle, serialHandFlow))
+  {
     Close();
     return FALSE;
   }
@@ -317,15 +370,15 @@ BOOL ComIo::Open(const char *pPath, const ComParams &comParams)
 
   cout
       << "Open("
-      << "\"" << pPath << "\", baud=" << ComParams::BaudRateStr(dcb.BaudRate)
-      << ", data=" << ComParams::ByteSizeStr(dcb.ByteSize)
-      << ", parity=" << ComParams::ParityStr(dcb.Parity)
-      << ", stop=" << ComParams::StopBitsStr(dcb.StopBits)
-      << ", octs=" << ComParams::OutCtsStr(dcb.fOutxCtsFlow)
-      << ", odsr=" << ComParams::OutDsrStr(dcb.fOutxDsrFlow)
-      << ", ox=" << ComParams::OutXStr(dcb.fOutX)
-      << ", ix=" << ComParams::InXStr(dcb.fInX)
-      << ", idsr=" << ComParams::InDsrStr(dcb.fDsrSensitivity)
+      << "\"" << pPath << "\", baud=" << ComParams::BaudRateStr(serialBaudRate.BaudRate)
+      << ", data=" << ComParams::ByteSizeStr(serialLineControl.WordLength)
+      << ", parity=" << ComParams::ParityStr(serialLineControl.Parity)
+      << ", stop=" << ComParams::StopBitsStr(serialLineControl.StopBits)
+      << ", octs=" << ComParams::OutCtsStr((serialHandFlow.ControlHandShake & SERIAL_CTS_HANDSHAKE) != 0)
+      << ", odsr=" << ComParams::OutDsrStr((serialHandFlow.ControlHandShake & SERIAL_DSR_HANDSHAKE) != 0)
+      << ", ox=" << ComParams::OutXStr((serialHandFlow.FlowReplace & SERIAL_AUTO_TRANSMIT) != 0)
+      << ", ix=" << ComParams::InXStr((serialHandFlow.FlowReplace & SERIAL_AUTO_RECEIVE) != 0)
+      << ", idsr=" << ComParams::InDsrStr((serialHandFlow.ControlHandShake & SERIAL_DSR_SENSITIVITY) != 0)
       << ", ito=" << ComParams::IntervalTimeoutStr(timeouts.ReadIntervalTimeout)
       << ") - OK" << endl;
 
@@ -342,28 +395,6 @@ void ComIo::Close()
   }
 }
 ///////////////////////////////////////////////////////////////
-BOOL ComIo::SetManualRtsControl()
-{
-  if (dcb.fRtsControl == RTS_CONTROL_DISABLE)
-    return TRUE;
-
-  dcb.fRtsControl = RTS_CONTROL_DISABLE;
-  mySetCommState(handle, &dcb);
-
-  return (dcb.fRtsControl == RTS_CONTROL_DISABLE);
-}
-///////////////////////////////////////////////////////////////
-BOOL ComIo::SetManualDtrControl()
-{
-  if (dcb.fDtrControl == DTR_CONTROL_DISABLE)
-    return TRUE;
-
-  dcb.fDtrControl = DTR_CONTROL_DISABLE;
-  mySetCommState(handle, &dcb);
-
-  return (dcb.fDtrControl == DTR_CONTROL_DISABLE);
-}
-///////////////////////////////////////////////////////////////
 BOOL ComIo::SetComEvents(DWORD *pEvents)
 {
   if (!::SetCommMask(handle, *pEvents)) {
@@ -377,25 +408,49 @@ BOOL ComIo::SetComEvents(DWORD *pEvents)
 ///////////////////////////////////////////////////////////////
 void ComIo::SetPinState(WORD value, WORD mask)
 {
+  if (((mask & PIN_STATE_RTS) != 0 && !IsManualRts(serialHandFlow)) ||
+      ((mask & PIN_STATE_DTR) != 0 && !IsManualDtr(serialHandFlow)))
+  {
+    if (mask & PIN_STATE_RTS)
+      SetHandFlowRts(serialHandFlow, (value & PIN_STATE_RTS) ? SERIAL_RTS_CONTROL : 0);
+
+    if (mask & PIN_STATE_DTR)
+      SetHandFlowDtr(serialHandFlow, (value & PIN_STATE_DTR) ? SERIAL_DTR_CONTROL : 0);
+
+    SetHandFlow(handle, serialHandFlow);
+
+    mask &= ~(PIN_STATE_RTS|PIN_STATE_DTR);
+  }
+
   if (mask & SPS_V2P_MCR(-1)) {
     if (hasExtendedModemControl) {
-      if (!SetModemControl(handle, SPS_P2V_MCR(value), SPS_P2V_MCR(mask)))
+      if (!SetModemControl(handle, SPS_P2V_MCR(value), SPS_P2V_MCR(mask))) {
         cerr << port.Name() << " WARNING: can't change MCR state" << endl;
+        mask &= ~SPS_V2P_MCR(-1);
+      }
     } else {
       _ASSERTE((mask & SPS_V2P_MCR(-1) & ~(PIN_STATE_RTS|PIN_STATE_DTR)) == 0);
 
       if (mask & PIN_STATE_RTS) {
-        if (!CommFunction(handle, (value & PIN_STATE_RTS) ? SETRTS : CLRRTS))
+        if (!CommFunction(handle, (value & PIN_STATE_RTS) ? SETRTS : CLRRTS)) {
           cerr << port.Name() << " WARNING: can't change RTS state" << endl;
+          mask &= ~PIN_STATE_RTS;
+        }
       }
       if (mask & PIN_STATE_DTR) {
-        if (!CommFunction(handle, (value & PIN_STATE_DTR) ? SETDTR : CLRDTR))
+        if (!CommFunction(handle, (value & PIN_STATE_DTR) ? SETDTR : CLRDTR)) {
           cerr << port.Name() << " WARNING: can't change DTR state" << endl;
+          mask &= ~PIN_STATE_DTR;
+        }
       }
     }
-  }
 
-  _ASSERTE((mask & ~SPS_V2P_MCR(-1) & ~(PIN_STATE_BREAK)) == 0);
+    if (mask & PIN_STATE_RTS)
+      SetHandFlowRts(serialHandFlow, (value & PIN_STATE_RTS) ? SERIAL_RTS_CONTROL : 0);
+
+    if (mask & PIN_STATE_DTR)
+      SetHandFlowDtr(serialHandFlow, (value & PIN_STATE_DTR) ? SERIAL_DTR_CONTROL : 0);
+  }
 
   if (mask & PIN_STATE_BREAK) {
     if (!CommFunction(handle, (value & PIN_STATE_BREAK) ? SETBREAK : CLRBREAK))
@@ -403,31 +458,31 @@ void ComIo::SetPinState(WORD value, WORD mask)
   }
 }
 ///////////////////////////////////////////////////////////////
+#define IOCTL_SERIAL_GET_CHARS          CTL_CODE(FILE_DEVICE_SERIAL_PORT,22,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+static BOOL GetChars(HANDLE handle, SERIAL_CHARS &serialChars)
+{
+  DWORD returned;
+
+  if (!DeviceIoControl(handle,
+                       IOCTL_SERIAL_GET_CHARS,
+                       NULL, 0,
+                       &serialChars, sizeof(serialChars), &returned,
+                       NULL))
+  {
+    TraceError(GetLastError(), "IOCTL_SERIAL_GET_CHARS");
+    return FALSE;
+  }
+
+  return TRUE;
+}
+///////////////////////////////////////////////////////////////
 #define IOCTL_SERIAL_SET_BAUD_RATE      CTL_CODE(FILE_DEVICE_SERIAL_PORT, 1,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_SERIAL_GET_BAUD_RATE      CTL_CODE(FILE_DEVICE_SERIAL_PORT,20,METHOD_BUFFERED,FILE_ANY_ACCESS)
 
-struct SERIAL_BAUD_RATE {
-  ULONG BaudRate;
-};
-
-DWORD ComIo::SetBaudRate(DWORD baudRate)
+static BOOL GetBaudRate(HANDLE handle, SERIAL_BAUD_RATE &serialBaudRate)
 {
-  if (GetBaudRate() == baudRate)
-    return baudRate;
-
   DWORD returned;
-  SERIAL_BAUD_RATE serialBaudRate;
-
-  serialBaudRate.BaudRate = baudRate;
-
-  if (!DeviceIoControl(handle,
-                       IOCTL_SERIAL_SET_BAUD_RATE,
-                       &serialBaudRate, sizeof(serialBaudRate),
-                       NULL, 0, &returned,
-                       NULL))
-  {
-    TraceError(GetLastError(), "IOCTL_SERIAL_SET_BAUD_RATE");
-  }
 
   if (!DeviceIoControl(handle,
                        IOCTL_SERIAL_GET_BAUD_RATE,
@@ -436,57 +491,43 @@ DWORD ComIo::SetBaudRate(DWORD baudRate)
                        NULL))
   {
     TraceError(GetLastError(), "IOCTL_SERIAL_GET_BAUD_RATE");
-  } else {
-    dcb.BaudRate = serialBaudRate.BaudRate;
+    return FALSE;
   }
 
-  return GetBaudRate();
+  return TRUE;
+}
+
+DWORD ComIo::SetBaudRate(DWORD baudRate)
+{
+  if (BaudRate() == baudRate)
+    return baudRate;
+
+  DWORD returned;
+  SERIAL_BAUD_RATE newSerialBaudRate;
+
+  newSerialBaudRate.BaudRate = baudRate;
+
+  if (!DeviceIoControl(handle,
+                       IOCTL_SERIAL_SET_BAUD_RATE,
+                       &newSerialBaudRate, sizeof(newSerialBaudRate),
+                       NULL, 0, &returned,
+                       NULL))
+  {
+    TraceError(GetLastError(), "IOCTL_SERIAL_SET_BAUD_RATE");
+  }
+
+  if (GetBaudRate(handle, newSerialBaudRate))
+    serialBaudRate = newSerialBaudRate;
+
+  return BaudRate();
 }
 ///////////////////////////////////////////////////////////////
 #define IOCTL_SERIAL_SET_LINE_CONTROL   CTL_CODE(FILE_DEVICE_SERIAL_PORT, 3,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_SERIAL_GET_LINE_CONTROL   CTL_CODE(FILE_DEVICE_SERIAL_PORT,21,METHOD_BUFFERED,FILE_ANY_ACCESS)
 
-struct SERIAL_LINE_CONTROL {
-  UCHAR StopBits;
-  UCHAR Parity;
-  UCHAR WordLength;
-};
-
-DWORD ComIo::SetLineControl(DWORD lineControl)
+static BOOL GetLineControl(HANDLE handle, SERIAL_LINE_CONTROL &serialLineControl)
 {
-  _ASSERTE((lineControl & ~(VAL2LC_BYTESIZE(-1)|LC_MASK_BYTESIZE
-                           |VAL2LC_PARITY(-1)|LC_MASK_PARITY
-                           |VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS)) == 0);
-
-  if (GetLineControl() == lineControl)
-    return lineControl;
-
   DWORD returned;
-  SERIAL_LINE_CONTROL serialLineControl;
-
-  if (lineControl & LC_MASK_BYTESIZE)
-    serialLineControl.WordLength = LC2VAL_BYTESIZE(lineControl);
-  else
-    serialLineControl.WordLength = dcb.ByteSize;
-
-  if (lineControl & LC_MASK_PARITY)
-    serialLineControl.Parity = LC2VAL_PARITY(lineControl);
-  else
-    serialLineControl.Parity = dcb.Parity;
-
-  if (lineControl & LC_MASK_STOPBITS)
-    serialLineControl.StopBits = LC2VAL_STOPBITS(lineControl);
-  else
-    serialLineControl.StopBits = dcb.StopBits;
-
-  if (!DeviceIoControl(handle,
-                       IOCTL_SERIAL_SET_LINE_CONTROL,
-                       &serialLineControl, sizeof(serialLineControl),
-                       NULL, 0, &returned,
-                       NULL))
-  {
-    TraceError(GetLastError(), "IOCTL_SERIAL_SET_LINE_CONTROL");
-  }
 
   if (!DeviceIoControl(handle,
                        IOCTL_SERIAL_GET_LINE_CONTROL,
@@ -495,13 +536,52 @@ DWORD ComIo::SetLineControl(DWORD lineControl)
                        NULL))
   {
     TraceError(GetLastError(), "IOCTL_SERIAL_GET_LINE_CONTROL");
-  } else {
-    dcb.ByteSize = serialLineControl.WordLength;
-    dcb.Parity = serialLineControl.Parity;
-    dcb.StopBits = serialLineControl.StopBits;
+    return FALSE;
   }
 
-  return GetLineControl();
+  return TRUE;
+}
+
+DWORD ComIo::SetLineControl(DWORD lineControl)
+{
+  _ASSERTE((lineControl & ~(VAL2LC_BYTESIZE(-1)|LC_MASK_BYTESIZE
+                           |VAL2LC_PARITY(-1)|LC_MASK_PARITY
+                           |VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS)) == 0);
+
+  if (LineControl() == lineControl)
+    return lineControl;
+
+  DWORD returned;
+  SERIAL_LINE_CONTROL newSerialLineControl = serialLineControl;
+
+  if (lineControl & LC_MASK_BYTESIZE)
+    newSerialLineControl.WordLength = LC2VAL_BYTESIZE(lineControl);
+  else
+    newSerialLineControl.WordLength = serialLineControl.WordLength;
+
+  if (lineControl & LC_MASK_PARITY)
+    newSerialLineControl.Parity = LC2VAL_PARITY(lineControl);
+  else
+    newSerialLineControl.Parity = serialLineControl.Parity;
+
+  if (lineControl & LC_MASK_STOPBITS)
+    newSerialLineControl.StopBits = LC2VAL_STOPBITS(lineControl);
+  else
+    newSerialLineControl.StopBits = serialLineControl.StopBits;
+
+  if (!DeviceIoControl(handle,
+                       IOCTL_SERIAL_SET_LINE_CONTROL,
+                       &newSerialLineControl, sizeof(newSerialLineControl),
+                       NULL, 0, &returned,
+                       NULL))
+  {
+    TraceError(GetLastError(), "IOCTL_SERIAL_SET_LINE_CONTROL");
+  }
+
+  if (GetLineControl(handle, newSerialLineControl))
+    serialLineControl = newSerialLineControl;
+
+  return LineControl();
 }
 ///////////////////////////////////////////////////////////////
 static ULONG GetEscCaps(HANDLE handle)

@@ -19,6 +19,12 @@
  *
  *
  * $Log$
+ * Revision 1.11  2008/12/17 11:52:35  vfrolov
+ * Replaced ComIo::dcb by serialBaudRate, serialLineControl,
+ * serialHandFlow and serialChars
+ * Replaced ComPort::filterX by ComIo::FilterX()
+ * Replaced SetManual*() by PinStateControlMask()
+ *
  * Revision 1.10  2008/12/01 17:06:29  vfrolov
  * Improved write buffering
  *
@@ -81,6 +87,87 @@
 class ComPort;
 class ComParams;
 ///////////////////////////////////////////////////////////////
+struct SERIAL_BAUD_RATE {
+  ULONG BaudRate;
+};
+///////////////////////////////////////////////////////////////
+struct SERIAL_LINE_CONTROL {
+  UCHAR StopBits;
+  UCHAR Parity;
+  UCHAR WordLength;
+};
+///////////////////////////////////////////////////////////////
+struct SERIAL_HANDFLOW {
+  ULONG ControlHandShake;
+
+#define SERIAL_DTR_MASK           ((ULONG)0x03)
+#define SERIAL_DTR_CONTROL        ((ULONG)0x01)
+#define SERIAL_DTR_HANDSHAKE      ((ULONG)0x02)
+
+#define SERIAL_CTS_HANDSHAKE      ((ULONG)0x08)
+#define SERIAL_DSR_HANDSHAKE      ((ULONG)0x10)
+#define SERIAL_DCD_HANDSHAKE      ((ULONG)0x20)
+#define SERIAL_DSR_SENSITIVITY    ((ULONG)0x40)
+#define SERIAL_ERROR_ABORT        ((ULONG)0x80000000)
+
+  ULONG FlowReplace;
+
+#define SERIAL_AUTO_TRANSMIT      ((ULONG)0x01)
+#define SERIAL_AUTO_RECEIVE       ((ULONG)0x02)
+#define SERIAL_ERROR_CHAR         ((ULONG)0x04)
+#define SERIAL_NULL_STRIPPING     ((ULONG)0x08)
+#define SERIAL_BREAK_CHAR         ((ULONG)0x10)
+
+#define SERIAL_RTS_MASK           ((ULONG)0xc0)
+#define SERIAL_RTS_CONTROL        ((ULONG)0x40)
+#define SERIAL_RTS_HANDSHAKE      ((ULONG)0x80)
+#define SERIAL_TRANSMIT_TOGGLE    ((ULONG)0xc0)
+
+#define SERIAL_XOFF_CONTINUE      ((ULONG)0x80000000)
+
+  LONG XonLimit;
+  LONG XoffLimit;
+};
+
+inline BOOL IsManualDtr(const SERIAL_HANDFLOW &serialHandFlow)
+{
+  ULONG val = serialHandFlow.ControlHandShake & SERIAL_DTR_MASK;
+
+  return (val == 0 || val == SERIAL_DTR_CONTROL);
+}
+
+inline void SetHandFlowDtr(SERIAL_HANDFLOW &serialHandFlow, ULONG val)
+{
+  _ASSERTE((val & ~SERIAL_DTR_MASK) == 0);
+
+  serialHandFlow.ControlHandShake &= ~SERIAL_DTR_MASK;
+  serialHandFlow.ControlHandShake |= val;
+}
+
+inline BOOL IsManualRts(const SERIAL_HANDFLOW &serialHandFlow)
+{
+  ULONG val = serialHandFlow.FlowReplace & SERIAL_RTS_MASK;
+
+  return (val == 0 || val == SERIAL_RTS_CONTROL);
+}
+
+inline void SetHandFlowRts(SERIAL_HANDFLOW &serialHandFlow, ULONG val)
+{
+  _ASSERTE((val & ~SERIAL_RTS_MASK) == 0);
+
+  serialHandFlow.FlowReplace &= ~SERIAL_RTS_MASK;
+  serialHandFlow.FlowReplace |= val;
+}
+///////////////////////////////////////////////////////////////
+struct SERIAL_CHARS {
+  UCHAR EofChar;
+  UCHAR ErrorChar;
+  UCHAR BreakChar;
+  UCHAR EventChar;
+  UCHAR XonChar;
+  UCHAR XoffChar;
+};
+///////////////////////////////////////////////////////////////
 class ComIo
 {
   public:
@@ -90,10 +177,22 @@ class ComIo
     BOOL Open(const char *pPath, const ComParams &comParams);
     void Close();
 
-    BOOL SetManualRtsControl();
-    BOOL SetManualDtrControl();
-    BOOL SetManualOut1Control() { return hasExtendedModemControl; }
-    BOOL SetManualOut2Control() { return hasExtendedModemControl; }
+    WORD PinStateControlMask() const {
+      return PIN_STATE_RTS|
+             PIN_STATE_DTR|
+             (hasExtendedModemControl ? PIN_STATE_OUT1|PIN_STATE_OUT2 : 0);
+    }
+
+    BOOL FilterX(BYTE &xOn, BYTE &xOff) const {
+      if ((serialHandFlow.FlowReplace & SERIAL_AUTO_RECEIVE) == 0)
+        return FALSE;
+
+      xOn = serialChars.XonChar;
+      xOff = serialChars.XoffChar;
+
+      return TRUE;
+    }
+
     BOOL SetComEvents(DWORD *pEvents);
     void SetPinState(WORD value, WORD mask);
     DWORD SetBaudRate(DWORD baudRate);
@@ -102,13 +201,13 @@ class ComIo
     void PurgeWrite() { ::PurgeComm(handle, PURGE_TXABORT|PURGE_TXCLEAR); }
 
     HANDLE Handle() const { return handle; }
-    DWORD GetBaudRate() const { return dcb.BaudRate; }
-    DWORD GetLineControl() const {
-      return (VAL2LC_BYTESIZE(dcb.ByteSize)
+    DWORD BaudRate() const { return serialBaudRate.BaudRate; }
+    DWORD LineControl() const {
+      return (VAL2LC_BYTESIZE(serialLineControl.WordLength)
              |LC_MASK_BYTESIZE
-             |VAL2LC_PARITY(dcb.Parity)
+             |VAL2LC_PARITY(serialLineControl.Parity)
              |LC_MASK_PARITY
-             |VAL2LC_STOPBITS(dcb.StopBits)
+             |VAL2LC_STOPBITS(serialLineControl.StopBits)
              |LC_MASK_STOPBITS);
     }
 
@@ -118,7 +217,10 @@ class ComIo
   private:
     HANDLE handle;
     BOOL hasExtendedModemControl;
-    DCB dcb;
+    SERIAL_BAUD_RATE serialBaudRate;
+    SERIAL_LINE_CONTROL serialLineControl;
+    SERIAL_HANDFLOW serialHandFlow;
+    SERIAL_CHARS serialChars;
 };
 ///////////////////////////////////////////////////////////////
 class ReadOverlapped : private OVERLAPPED

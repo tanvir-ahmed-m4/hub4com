@@ -19,6 +19,12 @@
  *
  *
  * $Log$
+ * Revision 1.22  2008/12/17 11:52:35  vfrolov
+ * Replaced ComIo::dcb by serialBaudRate, serialLineControl,
+ * serialHandFlow and serialChars
+ * Replaced ComPort::filterX by ComIo::FilterX()
+ * Replaced SetManual*() by PinStateControlMask()
+ *
  * Revision 1.21  2008/12/11 13:07:54  vfrolov
  * Added PURGE_TX
  *
@@ -128,7 +134,6 @@ ComPort::ComPort(
     countReadOverlapped(0),
     countWaitCommEventOverlapped(0),
     countXoff(0),
-    filterX(FALSE),
     intercepted_options(0),
     inOptions(0),
     outOptions(0),
@@ -144,7 +149,6 @@ ComPort::ComPort(
   writeQueueLimitSendXoff = (writeQueueLimit*2)/3;
   writeQueueLimitSendXon = writeQueueLimit/3;
 
-  filterX = comParams.InX();
   string path(pPath);
   name = path.substr(path.rfind('\\') + 1);
   pComIo = new ComIo(*this);
@@ -392,13 +396,13 @@ BOOL ComPort::Start()
 
   if (inOptions & GO_LBR_STATUS) {
     msg.type = HUB_MSG_TYPE_LBR_STATUS;
-    msg.u.val = pComIo->GetBaudRate();
+    msg.u.val = pComIo->BaudRate();
     pOnRead(hMasterPort, &msg);
   }
 
   if (inOptions & GO_LLC_STATUS) {
     msg.type = HUB_MSG_TYPE_LLC_STATUS;
-    msg.u.val = pComIo->GetLineControl();
+    msg.u.val = pComIo->LineControl();
     pOnRead(hMasterPort, &msg);
   }
 
@@ -406,7 +410,7 @@ BOOL ComPort::Start()
     cerr << name << " WARNING: Suppose remote baud rate is equal local settings" << endl;
 
     msg.type = HUB_MSG_TYPE_RBR_STATUS;
-    msg.u.val = pComIo->GetBaudRate();
+    msg.u.val = pComIo->BaudRate();
     pOnRead(hMasterPort, &msg);
   }
 
@@ -414,7 +418,7 @@ BOOL ComPort::Start()
     cerr << name << " WARNING: Suppose remote byte size, parity and stop bits are equal local settings" << endl;
 
     msg.type = HUB_MSG_TYPE_RLC_STATUS;
-    msg.u.val = pComIo->GetLineControl();
+    msg.u.val = pComIo->LineControl();
     pOnRead(hMasterPort, &msg);
   }
 
@@ -552,15 +556,25 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
       return FALSE;
     }
 
-    if (filterX) {
+    if (!pComIo) {
+      writeLost += len;
+      return FALSE;
+    }
+
+    BYTE xOn;
+    BYTE xOff;
+
+    if (pComIo->FilterX(xOn, xOff)) {
       BYTE *pSrc = pBuf;
       BYTE *pDst = pBuf;
 
       for (DWORD i = 0 ; i < len ; i++) {
-        if (*pSrc == 0x11 || *pSrc == 0x13)
+        if (*pSrc == xOn || *pSrc == xOff) {
           pSrc++;
-        else
+          writeLost++;
+        } else {
           *pDst++ = *pSrc++;
+        }
       }
 
       len = DWORD(pDst - pBuf);
@@ -568,11 +582,6 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
 
     if (!len)
       return TRUE;
-
-    if (!pComIo) {
-      writeLost += len;
-      return FALSE;
-    }
 
     if (writeQueued > writeQueueLimit)
       PurgeWrite(TRUE);
@@ -607,16 +616,20 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     break;
   }
   case HUB_MSG_TYPE_SET_PIN_STATE:
+    _ASSERTE((~SO_O2V_PIN_STATE(outOptions) & MASK2VAL(pMsg->u.val)) == 0);
+
     if (!pComIo)
       return FALSE;
 
-    pComIo->SetPinState((WORD)pMsg->u.val, MASK2VAL(pMsg->u.val) & SO_O2V_PIN_STATE(outOptions));
+    pComIo->SetPinState((WORD)pMsg->u.val, MASK2VAL(pMsg->u.val));
     break;
   case HUB_MSG_TYPE_SET_BR: {
+    _ASSERTE(outOptions & SO_SET_BR);
+
     if (!pComIo)
       return FALSE;
 
-    DWORD oldVal = pComIo->GetBaudRate();
+    DWORD oldVal = pComIo->BaudRate();
     DWORD curVal = pComIo->SetBaudRate(pMsg->u.val);
 
     if (curVal != pMsg->u.val) {
@@ -647,10 +660,12 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     break;
   }
   case HUB_MSG_TYPE_SET_LC: {
+    _ASSERTE(outOptions & SO_SET_LC);
+
     if (!pComIo)
       return FALSE;
 
-    DWORD oldVal = pComIo->GetLineControl();
+    DWORD oldVal = pComIo->LineControl();
     DWORD curVal = pComIo->SetLineControl(pMsg->u.val);
 
     DWORD mask = (pMsg->u.val & (LC_MASK_BYTESIZE|LC_MASK_PARITY|LC_MASK_STOPBITS));
@@ -705,38 +720,42 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     break;
   }
   case HUB_MSG_TYPE_PURGE_TX:
+    _ASSERTE(outOptions & SO_PURGE_TX);
+
     if (!pComIo)
       return FALSE;
 
     PurgeWrite(FALSE);
     FlowControlUpdate();
     break;
-  case HUB_MSG_TYPE_SET_OUT_OPTS:
+  case HUB_MSG_TYPE_SET_OUT_OPTS: {
     if (!pComIo)
       return FALSE;
 
     pMsg->u.val &= ~outOptions;
 
+    WORD controlMask = pComIo->PinStateControlMask();
+
     if (pMsg->u.val & SO_V2O_PIN_STATE(PIN_STATE_RTS)) {
-      if (pComIo->SetManualRtsControl())
+      if (controlMask & PIN_STATE_RTS)
         outOptions |= SO_V2O_PIN_STATE(PIN_STATE_RTS);
       else
         cerr << name << " WARNING: can't set manual RTS state mode" << endl;
     }
     if (pMsg->u.val & SO_V2O_PIN_STATE(PIN_STATE_DTR)) {
-      if (pComIo->SetManualDtrControl())
+      if (controlMask & PIN_STATE_DTR)
         outOptions |= SO_V2O_PIN_STATE(PIN_STATE_DTR);
       else
         cerr << name << " WARNING: can't set manual DTR state mode" << endl;
     }
     if (pMsg->u.val & SO_V2O_PIN_STATE(PIN_STATE_OUT1)) {
-      if (pComIo->SetManualOut1Control())
+      if (controlMask & PIN_STATE_OUT1)
         outOptions |= SO_V2O_PIN_STATE(PIN_STATE_OUT1);
       else
         cerr << name << " WARNING: can't set manual OUT1 state mode" << endl;
     }
     if (pMsg->u.val & SO_V2O_PIN_STATE(PIN_STATE_OUT2)) {
-      if (pComIo->SetManualOut2Control())
+      if (controlMask & PIN_STATE_OUT2)
         outOptions |= SO_V2O_PIN_STATE(PIN_STATE_OUT2);
       else
         cerr << name << " WARNING: can't set manual OUT2 state mode" << endl;
@@ -756,6 +775,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
            << "] will be ignored by driver" << endl;
     }
     break;
+  }
   case HUB_MSG_TYPE_ADD_XOFF_XON:
     if (pMsg->u.val) {
       countXoff++;
