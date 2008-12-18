@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/12/18 16:50:52  vfrolov
+ * Extended the number of possible IN options
+ *
  * Revision 1.1  2008/12/11 13:16:59  vfrolov
  * Initial revision
  *
@@ -69,7 +72,7 @@ class Filter : public Valid {
 
 Filter::Filter(int argc, const char *const argv[])
   : soOutMask(SO_PURGE_TX),
-    goInMask(GO_PURGE_TX_IN),
+    goInMask(GO1_PURGE_TX_IN),
     pName(NULL)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
@@ -168,18 +171,24 @@ static BOOL CALLBACK OutMethod(
     case HUB_MSG_TYPE_GET_IN_OPTS: {
       _ASSERTE(pOutMsg->u.pv.pVal != NULL);
 
+      if (GO_O2I(pOutMsg->u.pv.val) != 1)
+        break;
+
       // or'e with the required mask to purge
       *pOutMsg->u.pv.pVal |= (((Filter *)hFilter)->goInMask & pOutMsg->u.pv.val);
       break;
     }
     case HUB_MSG_TYPE_FAIL_IN_OPTS: {
+      if (GO_O2I(pOutMsg->u.pv.val) != 1)
+        break;
+
       DWORD fail_options = (pOutMsg->u.val & ((Filter *)hFilter)->goInMask);
 
       if (fail_options) {
         cerr << pPortName(hFromPort)
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
              << " for port " << pPortName(hToPort)
-             << " option(s) 0x" << hex << fail_options << dec
+             << " option(s) GO1_0x" << hex << fail_options << dec
              << " not accepted" << endl;
       }
       break;
@@ -192,7 +201,7 @@ static BOOL CALLBACK OutMethod(
       }
       break;
     case HUB_MSG_TYPE_PURGE_TX_IN:
-      if ((((Filter *)hFilter)->goInMask & GO_PURGE_TX_IN) == 0)
+      if ((((Filter *)hFilter)->goInMask & GO1_PURGE_TX_IN) == 0)
         break;
 
       if ((((Filter *)hFilter)->soOutMask & SO_PURGE_TX) == 0)

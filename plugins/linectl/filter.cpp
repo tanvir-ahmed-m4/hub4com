@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.9  2008/12/18 16:50:51  vfrolov
+ * Extended the number of possible IN options
+ *
  * Revision 1.8  2008/11/25 16:40:40  vfrolov
  * Added assert for port handle
  *
@@ -82,7 +85,7 @@ class Filter : public Valid {
     const char *FilterName() const { return pName; }
 
     DWORD soOutMask;
-    DWORD goInMask;
+    DWORD goInMask[2];
 
   private:
     const char *pName;
@@ -92,9 +95,10 @@ class Filter : public Valid {
 
 Filter::Filter(int argc, const char *const argv[])
   : soOutMask(0),
-    goInMask(0),
     pName(NULL)
 {
+  goInMask[0] = goInMask[1] = 0;
+
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
 
@@ -122,10 +126,10 @@ void Filter::Parse(const char *pArg)
 
     switch (tolower(*pParam)) {
       case 'l':
-        goInMask |= GO_LBR_STATUS;
+        goInMask[0] |= GO0_LBR_STATUS;
         break;
       case 'r':
-        goInMask |= GO_RBR_STATUS;
+        goInMask[1] |= GO1_RBR_STATUS;
         break;
       default:
         cerr << "Invalid option " << pArg << endl;
@@ -138,10 +142,10 @@ void Filter::Parse(const char *pArg)
 
     switch (tolower(*pParam)) {
       case 'l':
-        goInMask |= GO_LLC_STATUS;
+        goInMask[0] |= GO0_LLC_STATUS;
         break;
       case 'r':
-        goInMask |= GO_RLC_STATUS;
+        goInMask[1] |= GO1_RLC_STATUS;
         break;
       default:
         cerr << "Invalid option " << pArg << endl;
@@ -248,18 +252,28 @@ static BOOL CALLBACK OutMethod(
     case HUB_MSG_TYPE_GET_IN_OPTS: {
       _ASSERTE(pOutMsg->u.pv.pVal != NULL);
 
+      int iGo = GO_O2I(pOutMsg->u.pv.val);
+
+      if (iGo != 0 && iGo != 1)
+        break;
+
       // or'e with the required mask to get baudrate and line control
-      *pOutMsg->u.pv.pVal |= (((Filter *)hFilter)->goInMask & pOutMsg->u.pv.val);
+      *pOutMsg->u.pv.pVal |= (((Filter *)hFilter)->goInMask[iGo == 0 ? 0 : 1] & pOutMsg->u.pv.val);
       break;
     }
     case HUB_MSG_TYPE_FAIL_IN_OPTS: {
-      DWORD fail_options = (pOutMsg->u.val & ((Filter *)hFilter)->goInMask);
+      int iGo = GO_O2I(pOutMsg->u.pv.val);
+
+      if (iGo != 0 && iGo != 1)
+        break;
+
+      DWORD fail_options = (pOutMsg->u.val & ((Filter *)hFilter)->goInMask[iGo == 0 ? 0 : 1]);
 
       if (fail_options) {
         cerr << pPortName(hFromPort)
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
              << " for port " << pPortName(hToPort)
-             << " option(s) 0x" << hex << fail_options << dec
+             << " option(s) GO" << iGo << "_0x" << hex << fail_options << dec
              << " not accepted" << endl;
       }
       break;
@@ -279,7 +293,7 @@ static BOOL CALLBACK OutMethod(
       }
       break;
     case HUB_MSG_TYPE_LBR_STATUS:
-      if ((((Filter *)hFilter)->goInMask & GO_LBR_STATUS) == 0)
+      if ((((Filter *)hFilter)->goInMask[0] & GO0_LBR_STATUS) == 0)
         break;
 
       if ((((Filter *)hFilter)->soOutMask & SO_SET_BR) == 0)
@@ -288,7 +302,7 @@ static BOOL CALLBACK OutMethod(
       pOutMsg = pMsgInsertVal(pOutMsg, HUB_MSG_TYPE_SET_BR, pOutMsg->u.val);
       break;
     case HUB_MSG_TYPE_RBR_STATUS:
-      if ((((Filter *)hFilter)->goInMask & GO_RBR_STATUS) == 0)
+      if ((((Filter *)hFilter)->goInMask[1] & GO1_RBR_STATUS) == 0)
         break;
 
       if ((((Filter *)hFilter)->soOutMask & SO_SET_BR) == 0)
@@ -297,7 +311,7 @@ static BOOL CALLBACK OutMethod(
       pOutMsg = pMsgInsertVal(pOutMsg, HUB_MSG_TYPE_SET_BR, pOutMsg->u.val);
       break;
     case HUB_MSG_TYPE_LLC_STATUS:
-      if ((((Filter *)hFilter)->goInMask & GO_LLC_STATUS) == 0)
+      if ((((Filter *)hFilter)->goInMask[0] & GO0_LLC_STATUS) == 0)
         break;
 
       if ((((Filter *)hFilter)->soOutMask & SO_SET_LC) == 0)
@@ -306,7 +320,7 @@ static BOOL CALLBACK OutMethod(
       pOutMsg = pMsgInsertVal(pOutMsg, HUB_MSG_TYPE_SET_LC, pOutMsg->u.val);
       break;
     case HUB_MSG_TYPE_RLC_STATUS:
-      if ((((Filter *)hFilter)->goInMask & GO_RLC_STATUS) == 0)
+      if ((((Filter *)hFilter)->goInMask[1] & GO1_RLC_STATUS) == 0)
         break;
 
       if ((((Filter *)hFilter)->soOutMask & SO_SET_LC) == 0)

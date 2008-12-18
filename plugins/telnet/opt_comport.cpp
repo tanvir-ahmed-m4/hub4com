@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2008/12/18 16:50:52  vfrolov
+ * Extended the number of possible IN options
+ *
  * Revision 1.6  2008/12/12 08:28:34  vfrolov
  * Partialy implemented handling SET-CONTROL commands 0-3 and 13-19
  *
@@ -157,7 +160,7 @@ inline BYTE v2p_stopSize(BYTE val)
   return 1;
 }
 ///////////////////////////////////////////////////////////////
-TelnetOptionComPort::TelnetOptionComPort(TelnetProtocol &_telnet, BOOL _isClient, DWORD &_goMask, DWORD &_soMask)
+TelnetOptionComPort::TelnetOptionComPort(TelnetProtocol &_telnet, BOOL _isClient, DWORD (&_goMask)[2], DWORD &_soMask)
   : TelnetOption(_telnet, 44 /*COM-PORT-OPTION*/),
     isClient(_isClient),
     goMask(_goMask),
@@ -200,7 +203,7 @@ void TelnetOptionComPort::OnSuspendResume(BOOL suspend, HUB_MSG **ppMsg)
   }
 }
 ///////////////////////////////////////////////////////////////
-TelnetOptionComPortClient::TelnetOptionComPortClient(TelnetProtocol &_telnet, DWORD &_goMask, DWORD &_soMask)
+TelnetOptionComPortClient::TelnetOptionComPortClient(TelnetProtocol &_telnet, DWORD (&_goMask)[2], DWORD &_soMask)
   : TelnetOptionComPort(_telnet, TRUE, _goMask, _soMask)
 {
 }
@@ -302,7 +305,7 @@ BOOL TelnetOptionComPortClient::OnSubNegotiation(const BYTE_vector &params, HUB_
       if (par == 0)
         return FALSE;
 
-      if ((goMask & GO_LBR_STATUS) == 0)
+      if ((goMask[0] & GO0_LBR_STATUS) == 0)
         break;
 
       *ppMsg = FlushDecodedStream(*ppMsg);
@@ -323,7 +326,7 @@ BOOL TelnetOptionComPortClient::OnSubNegotiation(const BYTE_vector &params, HUB_
       if (par == 0)
         return FALSE;
 
-      if ((goMask & GO_LLC_STATUS) == 0)
+      if ((goMask[0] & GO0_LLC_STATUS) == 0)
         break;
 
       DWORD lcVal = (VAL2LC_BYTESIZE(p2v_dataSize(par))|LC_MASK_BYTESIZE);
@@ -346,7 +349,7 @@ BOOL TelnetOptionComPortClient::OnSubNegotiation(const BYTE_vector &params, HUB_
       if (par == 0)
         return FALSE;
 
-      if ((goMask & GO_LLC_STATUS) == 0)
+      if ((goMask[0] & GO0_LLC_STATUS) == 0)
         break;
 
       DWORD lcVal = (VAL2LC_PARITY(p2v_parity(par))|LC_MASK_PARITY);
@@ -369,7 +372,7 @@ BOOL TelnetOptionComPortClient::OnSubNegotiation(const BYTE_vector &params, HUB_
       if (par == 0)
         return FALSE;
 
-      if ((goMask & GO_LLC_STATUS) == 0)
+      if ((goMask[0] & GO0_LLC_STATUS) == 0)
         break;
 
       DWORD lcVal = (VAL2LC_STOPBITS(p2v_stopSize(par))|LC_MASK_STOPBITS);
@@ -412,7 +415,7 @@ BOOL TelnetOptionComPortClient::OnSubNegotiation(const BYTE_vector &params, HUB_
       if (params.size() != (1 + 1))
         return FALSE;
 
-      BYTE mask = GO_O2V_LINE_STATUS(goMask);
+      BYTE mask = GO1_O2V_LINE_STATUS(goMask[1]);
 
       if (mask == 0)
         return FALSE;
@@ -435,7 +438,7 @@ BOOL TelnetOptionComPortClient::OnSubNegotiation(const BYTE_vector &params, HUB_
       if (params.size() != (1 + 1))
         return FALSE;
 
-      BYTE mask = GO_O2V_MODEM_STATUS(goMask);
+      BYTE mask = GO1_O2V_MODEM_STATUS(goMask[1]);
 
       if (mask == 0)
         return FALSE;
@@ -476,7 +479,7 @@ BOOL TelnetOptionComPortClient::OnSubNegotiation(const BYTE_vector &params, HUB_
   return TRUE;
 }
 ///////////////////////////////////////////////////////////////
-TelnetOptionComPortServer::TelnetOptionComPortServer(TelnetProtocol &_telnet, DWORD &_goMask, DWORD &_soMask)
+TelnetOptionComPortServer::TelnetOptionComPortServer(TelnetProtocol &_telnet, DWORD (&_goMask)[2], DWORD &_soMask)
   : TelnetOptionComPort(_telnet, FALSE, _goMask, _soMask),
     br(0),
     brSend(FALSE),
@@ -635,7 +638,7 @@ BOOL TelnetOptionComPortServer::OnSubNegotiation(const BYTE_vector &params, HUB_
       brSend = TRUE;
 
       if (par != 0 && br != par) {
-        if (goMask & GO_RBR_STATUS) {
+        if (goMask[1] & GO1_RBR_STATUS) {
           br = 0;
 
           *ppMsg = FlushDecodedStream(*ppMsg);
@@ -672,7 +675,7 @@ BOOL TelnetOptionComPortServer::OnSubNegotiation(const BYTE_vector &params, HUB_
       if (par != 0 && (lc & (VAL2LC_BYTESIZE(-1)|LC_MASK_BYTESIZE)) != lcVal) {
         lc &= ~(VAL2LC_BYTESIZE(-1)|LC_MASK_BYTESIZE);
 
-        if (goMask & GO_RLC_STATUS) {
+        if (goMask[1] & GO1_RLC_STATUS) {
           *ppMsg = FlushDecodedStream(*ppMsg);
 
           if (!*ppMsg)
@@ -707,7 +710,7 @@ BOOL TelnetOptionComPortServer::OnSubNegotiation(const BYTE_vector &params, HUB_
       if (par != 0 && (lc & (VAL2LC_PARITY(-1)|LC_MASK_PARITY)) != lcVal) {
         lc &= ~(VAL2LC_PARITY(-1)|LC_MASK_PARITY);
 
-        if (goMask & GO_RLC_STATUS) {
+        if (goMask[1] & GO1_RLC_STATUS) {
           *ppMsg = FlushDecodedStream(*ppMsg);
 
           if (!*ppMsg)
@@ -742,7 +745,7 @@ BOOL TelnetOptionComPortServer::OnSubNegotiation(const BYTE_vector &params, HUB_
       if (par != 0 && (lc & (VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS)) != lcVal) {
         lc &= ~(VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS);
 
-        if (goMask & GO_RLC_STATUS) {
+        if (goMask[1] & GO1_RLC_STATUS) {
           *ppMsg = FlushDecodedStream(*ppMsg);
 
           if (!*ppMsg)
@@ -814,7 +817,7 @@ BOOL TelnetOptionComPortServer::OnSubNegotiation(const BYTE_vector &params, HUB_
           brkSend = TRUE;
           SetBreak(val == scSetBreakOn);
 
-          if ((goMask & GO_BREAK_STATUS) == 0)
+          if ((goMask[1] & GO1_BREAK_STATUS) == 0)
             return FALSE;
 
           *ppMsg = FlushDecodedStream(*ppMsg);
@@ -834,7 +837,7 @@ BOOL TelnetOptionComPortServer::OnSubNegotiation(const BYTE_vector &params, HUB_
           mcrSend |= SPS_P2V_MCR(PIN_STATE_DTR);
           SetMCR(val == scSetDtrOn ? SPS_P2V_MCR(PIN_STATE_DTR) : 0, SPS_P2V_MCR(PIN_STATE_DTR));
 
-          if ((goMask & GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR)) == 0)
+          if ((goMask[1] & GO1_V2O_MODEM_STATUS(MODEM_STATUS_DSR)) == 0)
             return FALSE;
 
           *ppMsg = FlushDecodedStream(*ppMsg);
@@ -855,7 +858,7 @@ BOOL TelnetOptionComPortServer::OnSubNegotiation(const BYTE_vector &params, HUB_
           mcrSend |= SPS_P2V_MCR(PIN_STATE_RTS);
           SetMCR(val == scSetRtsOn ? SPS_P2V_MCR(PIN_STATE_RTS) : 0, SPS_P2V_MCR(PIN_STATE_RTS));
 
-          if ((goMask & GO_V2O_MODEM_STATUS(MODEM_STATUS_CTS)) == 0)
+          if ((goMask[1] & GO1_V2O_MODEM_STATUS(MODEM_STATUS_CTS)) == 0)
             return FALSE;
 
           *ppMsg = FlushDecodedStream(*ppMsg);
@@ -933,7 +936,7 @@ BOOL TelnetOptionComPortServer::OnSubNegotiation(const BYTE_vector &params, HUB_
       answer.push_back(val);
       SendSubNegotiation(answer);
 
-      if ((goMask & GO_PURGE_TX_IN) == 0)
+      if ((goMask[1] & GO1_PURGE_TX_IN) == 0)
         return FALSE;
 
       if (val == pdRxBuf)

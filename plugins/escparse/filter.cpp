@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.9  2008/12/18 16:50:51  vfrolov
+ * Extended the number of possible IN options
+ *
  * Revision 1.8  2008/11/25 16:40:40  vfrolov
  * Added assert for port handle
  *
@@ -108,14 +111,14 @@ class EscParse {
 
     void OptionsDel(DWORD opts) {
       _options &= ~opts;
-      maskMst = GO_O2V_MODEM_STATUS(_options);
-      maskLsr = GO_O2V_LINE_STATUS(_options);
+      maskMst = GO1_O2V_MODEM_STATUS(_options);
+      maskLsr = GO1_O2V_LINE_STATUS(_options);
     }
 
     void OptionsAdd(DWORD opts) {
       _options |= opts;
-      maskMst = GO_O2V_MODEM_STATUS(_options);
-      maskLsr = GO_O2V_LINE_STATUS(_options);
+      maskMst = GO1_O2V_MODEM_STATUS(_options);
+      maskLsr = GO1_O2V_LINE_STATUS(_options);
     }
 
     BOOL escMode;
@@ -196,7 +199,7 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
                   break;
                 }
               case 2:
-                if (Options() & GO_BREAK_STATUS) {
+                if (Options() & GO1_BREAK_STATUS) {
                   pMsg = Flush(pMsg);
                   if (!pMsg)
                     return NULL;
@@ -253,7 +256,7 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
               if (subState < sizeof(ULONG)) {
                 subState++;
               } else {
-                if (Options() & GO_RBR_STATUS) {
+                if (Options() & GO1_RBR_STATUS) {
                   pMsg = Flush(pMsg);
                   if (!pMsg)
                     return NULL;
@@ -278,7 +281,7 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
               if (subState < 3) {
                 subState++;
               } else {
-                if (Options() & GO_RLC_STATUS) {
+                if (Options() & GO1_RLC_STATUS) {
                   pMsg = Flush(pMsg);
                   if (!pMsg)
                     return NULL;
@@ -344,11 +347,11 @@ Filter::Filter(int argc, const char *const argv[])
   : requestEscMode(TRUE),
     escapeChar(0xFF),
     acceptableOptions(
-      GO_RBR_STATUS |
-      GO_RLC_STATUS |
-      GO_BREAK_STATUS |
-      GO_V2O_MODEM_STATUS(-1) |
-      GO_V2O_LINE_STATUS(-1)),
+      GO1_RBR_STATUS |
+      GO1_RLC_STATUS |
+      GO1_BREAK_STATUS |
+      GO1_V2O_MODEM_STATUS(-1) |
+      GO1_V2O_LINE_STATUS(-1)),
     pName(NULL)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
@@ -493,37 +496,54 @@ static BOOL CALLBACK InMethod(
       }
       break;
     case HUB_MSG_TYPE_GET_IN_OPTS: {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
+      int iGo = GO_O2I(pInMsg->u.pv.val);
 
-      if (!pEscParse)
-        return FALSE;
+      if (iGo == 0) {
+        EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
-      // if the subsequent filters require interceptable options then
-      // accept the received options and request the escape mode
+        if (!pEscParse)
+          return FALSE;
 
-      pEscParse->OptionsAdd((pEscParse->intercepted_options & ((Filter *)hFilter)->acceptableOptions));
+        // if the subsequent filters require interceptable options then
+        // accept the received options and request the escape mode
 
-      if (((Filter *)hFilter)->requestEscMode) {
-        if (pEscParse->Options() && (pInMsg->u.pv.val & GO_ESCAPE_MODE)) {
+        pEscParse->OptionsAdd((pEscParse->intercepted_options & ((Filter *)hFilter)->acceptableOptions));
+
+        if (((Filter *)hFilter)->requestEscMode) {
+          if (pEscParse->Options() && (pInMsg->u.pv.val & GO0_ESCAPE_MODE)) {
+            pEscParse->escMode = TRUE;
+            *pInMsg->u.pv.pVal |= GO0_ESCAPE_MODE; // request the escape mode
+          }
+        } else {
           pEscParse->escMode = TRUE;
-          *pInMsg->u.pv.pVal |= GO_ESCAPE_MODE; // request the escape mode
         }
-      } else {
-        pEscParse->escMode = TRUE;
+
+        // the subsequent filters can't request the escape mode
+
+        pInMsg->u.pv.val &= ~GO0_ESCAPE_MODE;
       }
+      else
+      if (iGo == 1) {
+        EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
-      // get interceptable options from subsequent filters separately
+        if (!pEscParse)
+          return FALSE;
 
-      DWORD interceptable_options = (pInMsg->u.pv.val & (GO_ESCAPE_MODE | ((Filter *)hFilter)->acceptableOptions));
+        // get interceptable options from subsequent filters separately
 
-      pInMsg->u.pv.val &= ~interceptable_options;
+        DWORD interceptable_options = (pInMsg->u.pv.val & ((Filter *)hFilter)->acceptableOptions);
 
-      pInMsg = pMsgInsertNone(pInMsg, HUB_MSG_TYPE_EMPTY);
+        pInMsg->u.pv.val &= ~interceptable_options;
 
-      if (pInMsg) {
+        pInMsg = pMsgInsertNone(pInMsg, HUB_MSG_TYPE_EMPTY);
+
+        if (!pInMsg)
+          return FALSE;
+
         pInMsg->type = HUB_MSG_TYPE_GET_IN_OPTS;
         pInMsg->u.pv.pVal = &pEscParse->intercepted_options;
-        pInMsg->u.pv.val = interceptable_options;
+        _ASSERTE((interceptable_options & GO_I2O(-1)) == 0);
+        pInMsg->u.pv.val = interceptable_options | GO_I2O(iGo);
       }
 
       break;
@@ -534,7 +554,7 @@ static BOOL CALLBACK InMethod(
       if (!pEscParse)
         return FALSE;
 
-      *pInMsg->u.pv.pVal = ESC_OPTS_MAP_GO2EO(pEscParse->Options()) |
+      *pInMsg->u.pv.pVal = ESC_OPTS_MAP_GO1_2_EO(pEscParse->Options()) |
                            ESC_OPTS_V2O_ESCCHAR(((Filter *)hFilter)->escapeChar);
 
       // hide this message from subsequent filters
@@ -549,7 +569,7 @@ static BOOL CALLBACK InMethod(
       if (!pEscParse)
         return FALSE;
 
-      DWORD fail_options = (pInMsg->u.pv.val & ESC_OPTS_MAP_GO2EO(pEscParse->Options()));
+      DWORD fail_options = (pInMsg->u.pv.val & ESC_OPTS_MAP_GO1_2_EO(pEscParse->Options()));
 
       if (fail_options) {
         cerr << pPortName(hFromPort)
@@ -557,8 +577,8 @@ static BOOL CALLBACK InMethod(
              << " escape mode option(s) 0x" << hex << fail_options << dec
              << " not accepted (will try non escape mode option(s))" << endl;
 
-        pEscParse->OptionsDel(ESC_OPTS_MAP_EO2GO(fail_options));
-        *pInMsg->u.pv.pVal |= ESC_OPTS_MAP_EO2GO(fail_options);
+        pEscParse->OptionsDel(ESC_OPTS_MAP_EO_2_GO1(fail_options));
+        *pInMsg->u.pv.pVal |= ESC_OPTS_MAP_EO_2_GO1(fail_options);
       }
 
       // hide this message from subsequent filters
@@ -568,12 +588,15 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_TYPE_FAIL_IN_OPTS: {
+      if (GO_O2I(pInMsg->u.pv.val) != 0)
+        break;
+
       EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
         return FALSE;
 
-      if ((pInMsg->u.val & GO_ESCAPE_MODE) && ((Filter *)hFilter)->requestEscMode) {
+      if ((pInMsg->u.val & GO0_ESCAPE_MODE) && ((Filter *)hFilter)->requestEscMode) {
         cerr << pPortName(hFromPort)
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
              << " option ESCAPE_MODE not accepted" << endl;
@@ -582,7 +605,7 @@ static BOOL CALLBACK InMethod(
         pEscParse->OptionsDel((DWORD)-1);
       }
 
-      pInMsg->u.val &= ~GO_ESCAPE_MODE; // hide from subsequent filters
+      pInMsg->u.val &= ~GO0_ESCAPE_MODE; // hide from subsequent filters
 
       break;
     }
@@ -608,7 +631,7 @@ static BOOL CALLBACK InMethod(
         return FALSE;
 
       // discard any status settings controlled by this filter
-      pInMsg->u.val &= ~VAL2MASK(GO_O2V_MODEM_STATUS(pEscParse->Options()));
+      pInMsg->u.val &= ~VAL2MASK(GO1_O2V_MODEM_STATUS(pEscParse->Options()));
       break;
     }
     case HUB_MSG_TYPE_LINE_STATUS: {
@@ -618,7 +641,7 @@ static BOOL CALLBACK InMethod(
         return FALSE;
 
       // discard any status settings controlled by this filter
-      pInMsg->u.val &= ~VAL2MASK(GO_O2V_LINE_STATUS(pEscParse->Options()));
+      pInMsg->u.val &= ~VAL2MASK(GO1_O2V_LINE_STATUS(pEscParse->Options()));
       break;
     }
     case HUB_MSG_TYPE_RBR_STATUS: {
@@ -627,7 +650,7 @@ static BOOL CALLBACK InMethod(
       if (!pEscParse)
         return FALSE;
 
-      if (pEscParse->Options() & GO_RBR_STATUS) {
+      if (pEscParse->Options() & GO1_RBR_STATUS) {
         // discard any status settings controlled by this filter
         if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
           return FALSE;
@@ -640,7 +663,7 @@ static BOOL CALLBACK InMethod(
       if (!pEscParse)
         return FALSE;
 
-      if (pEscParse->Options() & GO_RLC_STATUS) {
+      if (pEscParse->Options() & GO1_RLC_STATUS) {
         // discard any status settings controlled by this filter
         if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
           return FALSE;
@@ -653,7 +676,7 @@ static BOOL CALLBACK InMethod(
       if (!pEscParse)
         return FALSE;
 
-      if (pEscParse->Options() & GO_BREAK_STATUS) {
+      if (pEscParse->Options() & GO1_BREAK_STATUS) {
         // discard any status settings controlled by this filter
         if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
           return FALSE;

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.14  2008/12/18 16:50:52  vfrolov
+ * Extended the number of possible IN options
+ *
  * Revision 1.13  2008/12/11 13:10:23  vfrolov
  * Added PURGE_TX
  *
@@ -488,13 +491,17 @@ static const FIELD2NAME fieldNameTableLineStatus[] = {
   {0, 0, NULL}
 };
 ///////////////////////////////////////////////////////////////
-static const FIELD2NAME fieldNameTableGoOptions[] = {
-  TOFIELD2NAME2(GO_, RBR_STATUS),
-  TOFIELD2NAME2(GO_, RLC_STATUS),
-  TOFIELD2NAME2(GO_, LBR_STATUS),
-  TOFIELD2NAME2(GO_, LLC_STATUS),
-  TOFIELD2NAME2(GO_, BREAK_STATUS),
-  TOFIELD2NAME2(GO_, ESCAPE_MODE),
+static const FIELD2NAME fieldNameTableGo0Options[] = {
+  TOFIELD2NAME2(GO0_, LBR_STATUS),
+  TOFIELD2NAME2(GO0_, LLC_STATUS),
+  TOFIELD2NAME2(GO0_, ESCAPE_MODE),
+  {0, 0, NULL}
+};
+///////////////////////////////////////////////////////////////
+static const FIELD2NAME fieldNameTableGo1Options[] = {
+  TOFIELD2NAME2(GO1_, RBR_STATUS),
+  TOFIELD2NAME2(GO1_, RLC_STATUS),
+  TOFIELD2NAME2(GO1_, BREAK_STATUS),
   {0, 0, NULL}
 };
 ///////////////////////////////////////////////////////////////
@@ -520,12 +527,33 @@ static const FIELD2NAME fieldNameTableSoOptions[] = {
 static BOOL PrintGoOptions(
     ostream &tout,
     DWORD fields,
-    BOOL delimitNext = FALSE,
-    const char *pUnknownPrefix = "")
+    BOOL delimitNext = FALSE)
 {
-  delimitNext = PrintFields(tout, fieldNameTableModemStatus, GO_O2V_MODEM_STATUS(fields), delimitNext, "MST_");
-  delimitNext = PrintFields(tout, fieldNameTableLineStatus, GO_O2V_LINE_STATUS(fields), delimitNext, "LSR_");
-  delimitNext = PrintFields(tout, fieldNameTableGoOptions, fields & ~(GO_V2O_MODEM_STATUS(-1) | GO_V2O_LINE_STATUS(-1)), delimitNext, pUnknownPrefix);
+  int iGo = GO_O2I(fields);
+
+  fields &= ~GO_I2O(-1);
+
+  const FIELD2NAME *pTable;
+
+  switch (iGo) {
+    case 0:
+      pTable = fieldNameTableGo0Options;
+      break;
+    case 1:
+      delimitNext = PrintFields(tout, fieldNameTableModemStatus, GO1_O2V_MODEM_STATUS(fields), delimitNext, "MST_");
+      delimitNext = PrintFields(tout, fieldNameTableLineStatus, GO1_O2V_LINE_STATUS(fields), delimitNext, "LSR_");
+      fields &= ~(GO1_V2O_MODEM_STATUS(-1) | GO1_V2O_LINE_STATUS(-1));
+      pTable = fieldNameTableGo1Options;
+      break;
+    default:
+      pTable = NULL;
+  }
+
+  stringstream buf;
+
+  buf << "GO" << iGo << "_";
+
+  delimitNext = PrintFields(tout, pTable, fields, delimitNext, buf.str().c_str());
 
   return delimitNext;
 }
@@ -535,8 +563,8 @@ static BOOL PrintEscOptions(
     DWORD fields,
     BOOL delimitNext = FALSE)
 {
-  PrintGoOptions(tout, ESC_OPTS_MAP_EO2GO(fields), delimitNext, "GO_");
-  PrintFields(tout, NULL, fields & ~ESC_OPTS_MAP_GO2EO(-1), delimitNext);
+  PrintGoOptions(tout, ESC_OPTS_MAP_EO_2_GO1(fields) | GO_I2O(1), delimitNext);
+  PrintFields(tout, NULL, fields & ~ESC_OPTS_MAP_GO1_2_EO(-1), delimitNext);
 
   return delimitNext;
 }
@@ -678,7 +706,7 @@ static void PrintMsg(ostream &tout, HUB_MSG *pMsg)
     }
     case HUB_MSG_TYPE_GET_IN_OPTS: {
       tout << hex << "&" << pMsg->u.pv.pVal << "[" << dec;
-      PrintGoOptions(tout, *pMsg->u.pv.pVal);
+      PrintGoOptions(tout, (*pMsg->u.pv.pVal & ~(GO_I2O(-1))) | (pMsg->u.pv.val & GO_I2O(-1)));
       tout << "] [";
       PrintGoOptions(tout, pMsg->u.pv.val);
       tout << "]";
@@ -699,7 +727,7 @@ static void PrintMsg(ostream &tout, HUB_MSG *pMsg)
     }
     case HUB_MSG_TYPE_FAIL_ESC_OPTS: {
       tout << hex << "&" << pMsg->u.pv.pVal << "[" << dec;
-      PrintGoOptions(tout, *pMsg->u.pv.pVal);
+      PrintGoOptions(tout, (*pMsg->u.pv.pVal & ~(GO_I2O(-1))) | GO_I2O(1));
       tout << "] [";
       PrintEscOptions(tout, pMsg->u.pv.val & ~ESC_OPTS_V2O_ESCCHAR(-1));
       tout << "]";

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.14  2008/12/18 16:50:51  vfrolov
+ * Extended the number of possible IN options
+ *
  * Revision 1.13  2008/11/24 16:30:56  vfrolov
  * Removed pOnXoffXon
  *
@@ -118,7 +121,11 @@ BOOL ComHub::StartAll() const
   }
 
   for (Ports::const_iterator i = ports.begin() ; i != ports.end() ; i++) {
-    DWORD fail_options = 0;
+    DWORD fail_options[GO_O2I(GO_I2O(-1)) + 1];
+
+    for (int iGo = 0 ; iGo < sizeof(fail_options)/sizeof(fail_options[0]) ; iGo++)
+      fail_options[iGo] = 0;
+
     DWORD repeats = 0;
 
     {
@@ -133,26 +140,30 @@ BOOL ComHub::StartAll() const
     }
 
     do {
-      HubMsg msg;
+      for (int iGo = 0 ; iGo < sizeof(fail_options)/sizeof(fail_options[0]) ; iGo++) {
+        HubMsg msg;
 
-      msg.type = HUB_MSG_TYPE_GET_IN_OPTS;
-      msg.u.pv.pVal = &fail_options;
-      msg.u.pv.val = DWORD(-1);
+        msg.type = HUB_MSG_TYPE_GET_IN_OPTS;
+        msg.u.pv.pVal = &fail_options[iGo];
+        msg.u.pv.val = ~GO_I2O(-1) | GO_I2O(iGo);
 
-      if (!OnFakeRead(*i, &msg))
-        return FALSE;
+        if (!OnFakeRead(*i, &msg))
+          return FALSE;
+      }
     } while (repeats--);
 
-    if (fail_options) {
-      cerr << (*i)->Name() << " WARNING: Requested option(s) 0x"
-           << hex << fail_options << dec << " not supported" << endl;
-    }
+    for (int iGo = 0 ; iGo < sizeof(fail_options)/sizeof(fail_options[0]) ; iGo++) {
+      _ASSERTE((fail_options[iGo] & GO_I2O(-1)) == 0);
 
-    {
+      if (fail_options[iGo]) {
+        cerr << (*i)->Name() << " WARNING: Requested option(s) GO" << iGo << "_0x"
+             << hex << fail_options << dec << " not supported" << endl;
+      }
+
       HubMsg msg;
 
       msg.type = HUB_MSG_TYPE_FAIL_IN_OPTS;
-      msg.u.val = fail_options;
+      msg.u.val = (fail_options[iGo] & ~GO_I2O(-1)) | GO_I2O(iGo);
 
       if (!OnFakeRead(*i, &msg))
         return FALSE;

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.14  2008/12/18 16:50:52  vfrolov
+ * Extended the number of possible IN options
+ *
  * Revision 1.13  2008/11/25 16:40:40  vfrolov
  * Added assert for port handle
  *
@@ -106,11 +109,11 @@ static struct {
   {"break=",  PIN_STATE_BREAK},
 };
 ///////////////////////////////////////////////////////////////
-#define LM_BREAK    ((WORD)1 << 8)
-#define LM_CONNECT  ((WORD)1 << 9)
-#define MST2LM(m)   ((WORD)((BYTE)(m)))
-#define LM2MST(lm)  ((BYTE)(lm))
-#define LM2GO(lm)   (GO_V2O_MODEM_STATUS(LM2MST(lm)) | ((lm & LM_BREAK) ? GO_BREAK_STATUS : 0))
+#define LM_BREAK     ((WORD)1 << 8)
+#define LM_CONNECT   ((WORD)1 << 9)
+#define MST2LM(m)    ((WORD)((BYTE)(m)))
+#define LM2MST(lm)   ((BYTE)(lm))
+#define LM_2_GO1(lm) (GO1_V2O_MODEM_STATUS(LM2MST(lm)) | ((lm & LM_BREAK) ? GO1_BREAK_STATUS : 0))
 
 static struct {
   const char *pName;
@@ -433,18 +436,24 @@ static BOOL CALLBACK OutMethod(
     case HUB_MSG_TYPE_GET_IN_OPTS: {
       _ASSERTE(pOutMsg->u.pv.pVal != NULL);
 
+      if (GO_O2I(pOutMsg->u.pv.val) != 1)
+        break;
+
       // or'e with the required mask to get break status and modem status
-      *pOutMsg->u.pv.pVal |= (LM2GO(((Filter *)hFilter)->lmInMask) & pOutMsg->u.pv.val);
+      *pOutMsg->u.pv.pVal |= (LM_2_GO1(((Filter *)hFilter)->lmInMask) & pOutMsg->u.pv.val);
       break;
     }
     case HUB_MSG_TYPE_FAIL_IN_OPTS: {
-      DWORD fail_options = (pOutMsg->u.val & LM2GO(((Filter *)hFilter)->lmInMask));
+      if (GO_O2I(pOutMsg->u.pv.val) != 1)
+        break;
+
+      DWORD fail_options = (pOutMsg->u.val & LM_2_GO1(((Filter *)hFilter)->lmInMask));
 
       if (fail_options) {
         cerr << pPortName(hFromPort)
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
              << " for port " << pPortName(hToPort)
-             << " option(s) 0x" << hex << fail_options << dec
+             << " option(s) GO1_0x" << hex << fail_options << dec
              << " not accepted" << endl;
       }
       break;

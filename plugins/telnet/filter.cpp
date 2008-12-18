@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.12  2008/12/18 16:50:52  vfrolov
+ * Extended the number of possible IN options
+ *
  * Revision 1.11  2008/12/11 13:13:40  vfrolov
  * Implemented PURGE-DATA (RFC 2217)
  *
@@ -97,11 +100,13 @@ class State {
     : pTelnetProtocol(NULL),
       pComPort(NULL),
       soMask(0),
-      goMask(0),
       pinState(0),
       br(0),
       lc(0)
-    {}
+    {
+      for (int iGo = 0 ; iGo < sizeof(goMask)/sizeof(goMask[0]) ; iGo++)
+        goMask[iGo] = 0;
+    }
 
     void SetProtocol(TelnetProtocol *_pTelnetProtocol) {
       pComPort = NULL;
@@ -117,7 +122,7 @@ class State {
     TelnetProtocol *pTelnetProtocol;
     TelnetOptionComPort *pComPort;
     DWORD soMask;
-    DWORD goMask;
+    DWORD goMask[2];
     WORD pinState;
     DWORD br;
     DWORD lc;
@@ -143,7 +148,7 @@ class Filter : public Valid {
     }
 
     DWORD soMask;
-    DWORD goMask;
+    DWORD goMask[2];
 
   private:
     const char *pName;
@@ -224,21 +229,22 @@ Filter::Filter(int argc, const char *const argv[])
       soMask = SO_V2O_PIN_STATE(PIN_STATE_DTR|PIN_STATE_RTS|PIN_STATE_BREAK) |
                SO_SET_BR|SO_SET_LC|SO_PURGE_TX;
 
-      goMask = GO_V2O_LINE_STATUS(-1) |
-               GO_V2O_MODEM_STATUS(-1) |
-               GO_LBR_STATUS|GO_LLC_STATUS;
+      goMask[0] = GO0_LBR_STATUS|GO0_LLC_STATUS;
+      goMask[1] = GO1_V2O_LINE_STATUS(-1) | GO1_V2O_MODEM_STATUS(-1);
       break;
     case comport_server:
       soMask = SO_V2O_PIN_STATE(SPS_V2P_MST(-1)) |
                SO_V2O_LINE_STATUS(-1) |
                SO_SET_BR|SO_SET_LC;
 
-      goMask = GO_V2O_MODEM_STATUS(MODEM_STATUS_CTS|MODEM_STATUS_DSR) |
-               GO_RBR_STATUS|GO_RLC_STATUS|GO_BREAK_STATUS|GO_PURGE_TX_IN;
+      goMask[0] = 0;
+      goMask[1] = GO1_V2O_MODEM_STATUS(MODEM_STATUS_CTS|MODEM_STATUS_DSR) |
+                  GO1_RBR_STATUS|GO1_RLC_STATUS|GO1_BREAK_STATUS|GO1_PURGE_TX_IN;
       break;
     default:
       soMask = 0;
-      goMask = 0;
+      goMask[0] = 0;
+      goMask[1] = 0;
   }
 }
 
@@ -473,7 +479,12 @@ static BOOL CALLBACK InMethod(
 
   switch (pInMsg->type) {
     case HUB_MSG_TYPE_GET_IN_OPTS: {
-      if (!((Filter *)hFilter)->goMask)
+      int iGo = GO_O2I(pInMsg->u.pv.val);
+
+      if (iGo != 0 && iGo != 1)
+        break;
+
+      if (!((Filter *)hFilter)->goMask[iGo == 0 ? 0 : 1])
         break;
 
       State *pState = ((Filter *)hFilter)->GetState(hFromPort);
@@ -483,7 +494,7 @@ static BOOL CALLBACK InMethod(
 
       // get interceptable options from subsequent filters separately
 
-      DWORD interceptable_options = (pInMsg->u.pv.val & ((Filter *)hFilter)->goMask);
+      DWORD interceptable_options = (pInMsg->u.pv.val & ((Filter *)hFilter)->goMask[iGo == 0 ? 0 : 1]);
 
       pInMsg->u.pv.val &= ~interceptable_options;
 
@@ -493,8 +504,9 @@ static BOOL CALLBACK InMethod(
         return FALSE;
 
       pInMsg->type = HUB_MSG_TYPE_GET_IN_OPTS;
-      pInMsg->u.pv.pVal = &pState->goMask;
-      pInMsg->u.pv.val = interceptable_options;
+      pInMsg->u.pv.pVal = &pState->goMask[iGo == 0 ? 0 : 1];
+      _ASSERTE((interceptable_options & GO_I2O(-1)) == 0);
+      pInMsg->u.pv.val = interceptable_options | GO_I2O(iGo);
 
       break;
     }
@@ -524,16 +536,16 @@ static BOOL CALLBACK InMethod(
 
       if (!pInMsg->u.val) {
         if (pState->pComPort) {
-          if (pState->goMask & GO_BREAK_STATUS) {
+          if (pState->goMask[1] & GO1_BREAK_STATUS) {
             pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_BREAK_STATUS, FALSE);
 
             if (!pInMsg)
               return FALSE;
           }
 
-          if (pState->goMask & GO_V2O_MODEM_STATUS(-1)) {
+          if (pState->goMask[1] & GO1_V2O_MODEM_STATUS(-1)) {
             pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_MODEM_STATUS,
-                 0 | VAL2MASK(GO_O2V_MODEM_STATUS(pState->goMask)));
+                 0 | VAL2MASK(GO1_O2V_MODEM_STATUS(pState->goMask[1])));
 
             if (!pInMsg)
               return FALSE;

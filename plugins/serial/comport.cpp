@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.23  2008/12/18 16:50:52  vfrolov
+ * Extended the number of possible IN options
+ *
  * Revision 1.22  2008/12/17 11:52:35  vfrolov
  * Replaced ComIo::dcb by serialBaudRate, serialLineControl,
  * serialHandFlow and serialChars
@@ -127,6 +130,151 @@ namespace PortSerial {
 #include "comparams.h"
 #include "import.h"
 ///////////////////////////////////////////////////////////////
+struct FIELD2NAME {
+  DWORD field;
+  DWORD mask;
+  const char *name;
+};
+#define TOFIELD2NAME2(p, s) { (ULONG)p##s, (ULONG)p##s, #s }
+
+static BOOL PrintFields(
+    ostream &tout,
+    const FIELD2NAME *pTable,
+    DWORD fields,
+    BOOL delimitNext = FALSE,
+    const char *pUnknownPrefix = "",
+    const char *pDelimiter = "|")
+{
+  if (pTable) {
+    while (pTable->name) {
+      DWORD field = (fields & pTable->mask);
+
+      if (field == pTable->field) {
+        fields &= ~pTable->mask;
+        if (delimitNext)
+          tout << pDelimiter;
+        else
+          delimitNext = TRUE;
+
+        tout << pTable->name;
+      }
+      pTable++;
+    }
+  }
+
+  if (fields) {
+    if (delimitNext)
+      tout << pDelimiter;
+    else
+      delimitNext = TRUE;
+
+    tout << pUnknownPrefix << "0x" << hex << fields << dec;
+  }
+
+  return delimitNext;
+}
+///////////////////////////////////////////////////////////////
+static const FIELD2NAME fieldNameTableModemStatus[] = {
+  TOFIELD2NAME2(MODEM_STATUS_, DCTS),
+  TOFIELD2NAME2(MODEM_STATUS_, DDSR),
+  TOFIELD2NAME2(MODEM_STATUS_, TERI),
+  TOFIELD2NAME2(MODEM_STATUS_, DDCD),
+  TOFIELD2NAME2(MODEM_STATUS_, CTS),
+  TOFIELD2NAME2(MODEM_STATUS_, DSR),
+  TOFIELD2NAME2(MODEM_STATUS_, RI),
+  TOFIELD2NAME2(MODEM_STATUS_, DCD),
+  {0, 0, NULL}
+};
+///////////////////////////////////////////////////////////////
+static const FIELD2NAME fieldNameTableLineStatus[] = {
+  TOFIELD2NAME2(LINE_STATUS_, DR),
+  TOFIELD2NAME2(LINE_STATUS_, OE),
+  TOFIELD2NAME2(LINE_STATUS_, PE),
+  TOFIELD2NAME2(LINE_STATUS_, FE),
+  TOFIELD2NAME2(LINE_STATUS_, BI),
+  TOFIELD2NAME2(LINE_STATUS_, THRE),
+  TOFIELD2NAME2(LINE_STATUS_, TEMT),
+  TOFIELD2NAME2(LINE_STATUS_, FIFOERR),
+  {0, 0, NULL}
+};
+///////////////////////////////////////////////////////////////
+static const FIELD2NAME fieldNameTableGo0Options[] = {
+  TOFIELD2NAME2(GO0_, LBR_STATUS),
+  TOFIELD2NAME2(GO0_, LLC_STATUS),
+  TOFIELD2NAME2(GO0_, ESCAPE_MODE),
+  {0, 0, NULL}
+};
+///////////////////////////////////////////////////////////////
+static const FIELD2NAME fieldNameTableGo1Options[] = {
+  TOFIELD2NAME2(GO1_, RBR_STATUS),
+  TOFIELD2NAME2(GO1_, RLC_STATUS),
+  TOFIELD2NAME2(GO1_, BREAK_STATUS),
+  {0, 0, NULL}
+};
+///////////////////////////////////////////////////////////////
+static const FIELD2NAME fieldNameTableComEvents[] = {
+  TOFIELD2NAME2(EV_, CTS),
+  TOFIELD2NAME2(EV_, DSR),
+  TOFIELD2NAME2(EV_, RLSD),
+  TOFIELD2NAME2(EV_, RING),
+  {0, 0, NULL}
+};
+///////////////////////////////////////////////////////////////
+static const FIELD2NAME fieldNameTableCommErrors[] = {
+  TOFIELD2NAME2(CE_, RXOVER),
+  TOFIELD2NAME2(CE_, OVERRUN),
+  TOFIELD2NAME2(CE_, RXPARITY),
+  TOFIELD2NAME2(CE_, FRAME),
+  TOFIELD2NAME2(CE_, BREAK),
+  TOFIELD2NAME2(CE_, TXFULL),
+  {0, 0, NULL}
+};
+///////////////////////////////////////////////////////////////
+static BOOL PrintGoOptions(
+    ostream &tout,
+    DWORD fields,
+    BOOL delimitNext = FALSE)
+{
+  int iGo = GO_O2I(fields);
+
+  fields &= ~GO_I2O(-1);
+
+  const FIELD2NAME *pTable;
+
+  switch (iGo) {
+    case 0:
+      pTable = fieldNameTableGo0Options;
+      break;
+    case 1:
+      delimitNext = PrintFields(tout, fieldNameTableModemStatus, GO1_O2V_MODEM_STATUS(fields), delimitNext, "MST_");
+      delimitNext = PrintFields(tout, fieldNameTableLineStatus, GO1_O2V_LINE_STATUS(fields), delimitNext, "LSR_");
+      fields &= ~(GO1_V2O_MODEM_STATUS(-1) | GO1_V2O_LINE_STATUS(-1));
+      pTable = fieldNameTableGo1Options;
+      break;
+    default:
+      pTable = NULL;
+  }
+
+  stringstream buf;
+
+  buf << "GO" << iGo << "_";
+
+  delimitNext = PrintFields(tout, pTable, fields, delimitNext, buf.str().c_str());
+
+  return delimitNext;
+}
+///////////////////////////////////////////////////////////////
+static BOOL PrintEscOptions(
+    ostream &tout,
+    DWORD fields,
+    BOOL delimitNext = FALSE)
+{
+  PrintGoOptions(tout, ESC_OPTS_MAP_EO_2_GO1(fields) | GO_I2O(1), delimitNext);
+  PrintFields(tout, NULL, fields & ~ESC_OPTS_MAP_GO1_2_EO(-1), delimitNext);
+
+  return delimitNext;
+}
+///////////////////////////////////////////////////////////////
 ComPort::ComPort(
     const ComParams &comParams,
     const char *pPath)
@@ -134,8 +282,6 @@ ComPort::ComPort(
     countReadOverlapped(0),
     countWaitCommEventOverlapped(0),
     countXoff(0),
-    intercepted_options(0),
-    inOptions(0),
     outOptions(0),
     writeQueueLimit(comParams.WriteQueueLimit()),
     writeQueued(0),
@@ -146,6 +292,11 @@ ComPort::ComPort(
     pWriteBuf(NULL),
     lenWriteBuf(0)
 {
+  for (int iO = 0 ; iO < 2 ; iO++) {
+    intercepted_options[iO] = 0;
+    inOptions[iO] = 0;
+  }
+
   writeQueueLimitSendXoff = (writeQueueLimit*2)/3;
   writeQueueLimitSendXon = writeQueueLimit/3;
 
@@ -187,118 +338,6 @@ BOOL ComPort::Init(HMASTERPORT _hMasterPort)
   return TRUE;
 }
 
-struct FIELD2NAME {
-  DWORD code;
-  DWORD mask;
-  const char *name;
-};
-
-static string FieldToName(const FIELD2NAME *pTable, DWORD mask, const char *pDelimiter = "|")
-{
-  stringstream str;
-  int count = 0;
-
-  if (pTable) {
-    while (pTable->name) {
-      DWORD m = (mask & pTable->mask);
-
-      if (m == pTable->code) {
-        mask &= ~pTable->mask;
-        if (count)
-          str << pDelimiter;
-        str << pTable->name;
-        count++;
-      }
-      pTable++;
-    }
-  }
-
-  if (mask) {
-    if (count)
-      str << pDelimiter;
-    str << "0x" << hex << (long)mask << dec;
-  }
-
-  return str.str();
-}
-
-#define TOFIELD2NAME2(p, s) { (ULONG)p##s, (ULONG)p##s, #s }
-
-static FIELD2NAME codeNameTableModemStatus[] = {
-  TOFIELD2NAME2(MODEM_STATUS_, DCTS),
-  TOFIELD2NAME2(MODEM_STATUS_, DDSR),
-  TOFIELD2NAME2(MODEM_STATUS_, TERI),
-  TOFIELD2NAME2(MODEM_STATUS_, DDCD),
-  TOFIELD2NAME2(MODEM_STATUS_, CTS),
-  TOFIELD2NAME2(MODEM_STATUS_, DSR),
-  TOFIELD2NAME2(MODEM_STATUS_, RI),
-  TOFIELD2NAME2(MODEM_STATUS_, DCD),
-  {0, 0, NULL}
-};
-
-static FIELD2NAME codeNameTableLineStatus[] = {
-  TOFIELD2NAME2(LINE_STATUS_, DR),
-  TOFIELD2NAME2(LINE_STATUS_, OE),
-  TOFIELD2NAME2(LINE_STATUS_, PE),
-  TOFIELD2NAME2(LINE_STATUS_, FE),
-  TOFIELD2NAME2(LINE_STATUS_, BI),
-  TOFIELD2NAME2(LINE_STATUS_, THRE),
-  TOFIELD2NAME2(LINE_STATUS_, TEMT),
-  TOFIELD2NAME2(LINE_STATUS_, FIFOERR),
-  {0, 0, NULL}
-};
-
-static FIELD2NAME codeNameTableGoOptions[] = {
-  TOFIELD2NAME2(GO_, RBR_STATUS),
-  TOFIELD2NAME2(GO_, RLC_STATUS),
-  TOFIELD2NAME2(GO_, LBR_STATUS),
-  TOFIELD2NAME2(GO_, LLC_STATUS),
-  TOFIELD2NAME2(GO_, BREAK_STATUS),
-  TOFIELD2NAME2(GO_, ESCAPE_MODE),
-  {0, 0, NULL}
-};
-
-static void WarnIgnoredInOptions(
-    const char *pHead,
-    const char *pTail,
-    DWORD goOptions,
-    DWORD otherOptions)
-{
-  if (GO_O2V_MODEM_STATUS(goOptions)) {
-    cerr << pHead << " WARNING: Changing of MODEM STATUS bit(s) ["
-         << FieldToName(codeNameTableModemStatus, GO_O2V_MODEM_STATUS(goOptions))
-         << "] will be ignored by driver" << pTail << endl;
-  }
-
-  if (GO_O2V_LINE_STATUS(goOptions)) {
-    cerr << pHead << " WARNING: Changing of LINE STATUS bit(s) ["
-         << FieldToName(codeNameTableLineStatus, GO_O2V_LINE_STATUS(goOptions))
-         << "] will be ignored by driver" << pTail << endl;
-  }
-
-  goOptions &= ~(GO_V2O_MODEM_STATUS(-1) | GO_V2O_LINE_STATUS(-1));
-
-  if (goOptions) {
-    cerr << pHead << " WARNING: Requested input option(s) ["
-         << FieldToName(codeNameTableGoOptions, goOptions)
-         << "] will be ignored by driver" << pTail << endl;
-  }
-
-  if (otherOptions) {
-    cerr << pHead << " WARNING: Requested input option(s) [0x"
-         << hex << otherOptions << dec
-         << "] will be ignored by driver" << pTail << endl;
-  }
-}
-
-static FIELD2NAME codeNameTableComEvents[] = {
-  TOFIELD2NAME2(EV_, CTS),
-  TOFIELD2NAME2(EV_, DSR),
-  TOFIELD2NAME2(EV_, RLSD),
-  TOFIELD2NAME2(EV_, RING),
-  {0, 0, NULL}
-};
-
 BOOL ComPort::Start()
 {
   //cout << name << " Start " << ::GetCurrentThreadId() << endl;
@@ -310,7 +349,7 @@ BOOL ComPort::Start()
   DWORD done = 0;
   HUB_MSG msg;
 
-  if (intercepted_options & GO_ESCAPE_MODE) {
+  if (intercepted_options[0] & GO0_ESCAPE_MODE) {
     DWORD escapeOptions = 0;
 
     msg.type = HUB_MSG_TYPE_GET_ESC_OPTS;
@@ -321,41 +360,54 @@ BOOL ComPort::Start()
     escapeOptions = pComIo->SetEscMode(escapeOptions, &pBuf, &done);
 
     if (escapeOptions & ~ESC_OPTS_V2O_ESCCHAR(-1)) {
-      WarnIgnoredInOptions(name.c_str(), " (requested for escape mode)",
-                           ESC_OPTS_MAP_EO2GO(escapeOptions),
-                           escapeOptions & ~(ESC_OPTS_MAP_GO2EO(-1) | ESC_OPTS_V2O_ESCCHAR(-1)));
+      cerr << name.c_str() << " WARNING: Requested for escape mode input option(s) [";
+      PrintEscOptions(cerr, escapeOptions & ~ESC_OPTS_V2O_ESCCHAR(-1));
+      cerr << "] will be ignored by driver" << endl;
     }
 
     if ((escapeOptions & ESC_OPTS_V2O_ESCCHAR(-1)) == 0) {
-      inOptions |= GO_ESCAPE_MODE;
+      inOptions[0] |= GO0_ESCAPE_MODE;
 
       msg.type = HUB_MSG_TYPE_FAIL_ESC_OPTS;
-      msg.u.pv.pVal = &intercepted_options;
+      msg.u.pv.pVal = &intercepted_options[1];
       msg.u.pv.val = escapeOptions;
       pOnRead(hMasterPort, &msg);
     }
   }
 
-  inOptions |= (intercepted_options & (
-        GO_RBR_STATUS    |
-        GO_RLC_STATUS    |
-        GO_LBR_STATUS    |
-        GO_LLC_STATUS    |
-        MODEM_STATUS_CTS |
-        MODEM_STATUS_DSR |
-        MODEM_STATUS_DCD |
-        MODEM_STATUS_RI));
+  for (int iO = 0 ; iO < 2 ; iO++) {
+    inOptions[iO] |= (
+      intercepted_options[iO] & (
+        iO == 0 ? (
+          GO0_LBR_STATUS|GO0_LLC_STATUS
+        ) : (
+          GO1_RBR_STATUS|GO1_RLC_STATUS |
+          GO1_V2O_MODEM_STATUS(
+            MODEM_STATUS_CTS |
+            MODEM_STATUS_DSR |
+            MODEM_STATUS_DCD |
+            MODEM_STATUS_RI
+          )
+        )
+      )
+    );
 
-  DWORD fail_options = (intercepted_options & ~inOptions);
+    DWORD fail_options = (intercepted_options[iO] & ~inOptions[iO]);
 
-  if (fail_options)
-    WarnIgnoredInOptions(name.c_str(), "", fail_options, 0);
+    _ASSERTE((fail_options & GO_I2O(-1)) == 0);
 
-  msg.type = HUB_MSG_TYPE_FAIL_IN_OPTS;
-  msg.u.val = fail_options;
-  pOnRead(hMasterPort, &msg);
+    if (fail_options) {
+      cerr << name.c_str() << " WARNING: Requested input option(s) [";
+      PrintGoOptions(cerr, fail_options | GO_I2O(iO == 0 ? 0 : 1));
+      cerr << "] will be ignored by driver" << endl;
+    }
 
-  if (inOptions & GO_V2O_MODEM_STATUS(
+    msg.type = HUB_MSG_TYPE_FAIL_IN_OPTS;
+    msg.u.val = fail_options | GO_I2O(iO == 0 ? 0 : 1);
+    pOnRead(hMasterPort, &msg);
+  }
+
+  if (inOptions[1] & GO1_V2O_MODEM_STATUS(
         MODEM_STATUS_CTS |
         MODEM_STATUS_DSR |
         MODEM_STATUS_DCD |
@@ -363,16 +415,16 @@ BOOL ComPort::Start()
   {
     DWORD events = 0;
 
-    if (inOptions & GO_V2O_MODEM_STATUS(MODEM_STATUS_CTS))
+    if (inOptions[1] & GO1_V2O_MODEM_STATUS(MODEM_STATUS_CTS))
       events |= EV_CTS;
 
-    if (inOptions & GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR))
+    if (inOptions[1] & GO1_V2O_MODEM_STATUS(MODEM_STATUS_DSR))
       events |= EV_DSR;
 
-    if (inOptions & GO_V2O_MODEM_STATUS(MODEM_STATUS_DCD))
+    if (inOptions[1] & GO1_V2O_MODEM_STATUS(MODEM_STATUS_DCD))
       events |= EV_RLSD;
 
-    if (inOptions & GO_V2O_MODEM_STATUS(MODEM_STATUS_RI))
+    if (inOptions[1] & GO1_V2O_MODEM_STATUS(MODEM_STATUS_RI))
       events |= EV_RING;
 
     if (!pComIo->SetComEvents(&events) || !StartWaitCommEvent()) {
@@ -380,9 +432,9 @@ BOOL ComPort::Start()
       return FALSE;
     }
 
-    cout << name << " Event(s) 0x" << hex << events << dec << " ["
-         << FieldToName(codeNameTableComEvents, events)
-         << "] will be monitired" << endl;
+    cout << name << " Event(s) 0x" << hex << events << dec << " [";
+    PrintFields(cout, fieldNameTableComEvents, events);
+    cout << "] will be monitired" << endl;
   }
 
   if (!StartRead()) {
@@ -394,19 +446,19 @@ BOOL ComPort::Start()
   msg.u.val = TRUE;
   pOnRead(hMasterPort, &msg);
 
-  if (inOptions & GO_LBR_STATUS) {
+  if (inOptions[0] & GO0_LBR_STATUS) {
     msg.type = HUB_MSG_TYPE_LBR_STATUS;
     msg.u.val = pComIo->BaudRate();
     pOnRead(hMasterPort, &msg);
   }
 
-  if (inOptions & GO_LLC_STATUS) {
+  if (inOptions[0] & GO0_LLC_STATUS) {
     msg.type = HUB_MSG_TYPE_LLC_STATUS;
     msg.u.val = pComIo->LineControl();
     pOnRead(hMasterPort, &msg);
   }
 
-  if (inOptions & GO_RBR_STATUS) {
+  if (inOptions[1] & GO1_RBR_STATUS) {
     cerr << name << " WARNING: Suppose remote baud rate is equal local settings" << endl;
 
     msg.type = HUB_MSG_TYPE_RBR_STATUS;
@@ -414,7 +466,7 @@ BOOL ComPort::Start()
     pOnRead(hMasterPort, &msg);
   }
 
-  if (inOptions & GO_RLC_STATUS) {
+  if (inOptions[1] & GO1_RLC_STATUS) {
     cerr << name << " WARNING: Suppose remote byte size, parity and stop bits are equal local settings" << endl;
 
     msg.type = HUB_MSG_TYPE_RLC_STATUS;
@@ -465,27 +517,37 @@ BOOL ComPort::FakeReadFilter(HUB_MSG *pInMsg)
 {
   _ASSERTE(pInMsg != NULL);
 
-  if (pInMsg->type == HUB_MSG_TYPE_GET_IN_OPTS) {
-    // get interceptable options from subsequent filters separately
+  switch (pInMsg->type) {
+    case HUB_MSG_TYPE_GET_IN_OPTS: {
+      int iGo = GO_O2I(pInMsg->u.pv.val);
 
-    DWORD interceptable_options = (pInMsg->u.pv.val &
-        GO_ESCAPE_MODE |
-        GO_RBR_STATUS |
-        GO_RLC_STATUS |
-        GO_LBR_STATUS |
-        GO_LLC_STATUS |
-        GO_BREAK_STATUS |
-        GO_V2O_MODEM_STATUS(-1) |
-        GO_V2O_LINE_STATUS(-1));
+      if (iGo != 0 && iGo != 1)
+        break;
 
-    pInMsg->u.pv.val &= ~interceptable_options;
+      // get interceptable options from subsequent filters separately
 
-    pInMsg = pMsgInsertNone(pInMsg, HUB_MSG_TYPE_EMPTY);
+      DWORD interceptable_options = (
+        pInMsg->u.pv.val & (
+          iGo == 0 ? (
+            GO0_ESCAPE_MODE|GO0_LBR_STATUS|GO0_LLC_STATUS
+          ) : (
+            GO1_RBR_STATUS|GO1_RLC_STATUS|GO1_BREAK_STATUS |
+            GO1_V2O_MODEM_STATUS(-1) |
+            GO1_V2O_LINE_STATUS(-1)
+          )
+        )
+      );
 
-    if (pInMsg) {
-      pInMsg->type = HUB_MSG_TYPE_GET_IN_OPTS;
-      pInMsg->u.pv.pVal = &intercepted_options;
-      pInMsg->u.pv.val = interceptable_options;
+      pInMsg->u.pv.val &= ~interceptable_options;
+
+      pInMsg = pMsgInsertNone(pInMsg, HUB_MSG_TYPE_EMPTY);
+
+      if (pInMsg) {
+        pInMsg->type = HUB_MSG_TYPE_GET_IN_OPTS;
+        pInMsg->u.pv.pVal = &intercepted_options[iGo == 0 ? 0 : 1];
+        _ASSERTE((interceptable_options & GO_I2O(-1)) == 0);
+        pInMsg->u.pv.val = interceptable_options | GO_I2O(iGo);
+      }
     }
   }
 
@@ -641,7 +703,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     }
 
     if (oldVal != curVal) {
-      if (inOptions & GO_LBR_STATUS) {
+      if (inOptions[0] & GO0_LBR_STATUS) {
         HUB_MSG msg;
 
         msg.type = HUB_MSG_TYPE_LBR_STATUS;
@@ -649,7 +711,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
         pOnRead(hMasterPort, &msg);
       }
 
-      if (inOptions & GO_RBR_STATUS) {
+      if (inOptions[1] & GO1_RBR_STATUS) {
         HUB_MSG msg;
 
         msg.type = HUB_MSG_TYPE_RBR_STATUS;
@@ -701,7 +763,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
       if ((changes & (VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS)) == 0)
         curVal &= ~(VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS);
 
-      if (inOptions & GO_LLC_STATUS) {
+      if (inOptions[0] & GO0_LLC_STATUS) {
         HUB_MSG msg;
 
         msg.type = HUB_MSG_TYPE_LLC_STATUS;
@@ -709,7 +771,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
         pOnRead(hMasterPort, &msg);
       }
 
-      if (inOptions & GO_RLC_STATUS) {
+      if (inOptions[1] & GO1_RLC_STATUS) {
         HUB_MSG msg;
 
         msg.type = HUB_MSG_TYPE_RLC_STATUS;
@@ -811,13 +873,6 @@ BOOL ComPort::StartWaitCommEvent()
 
   countWaitCommEventOverlapped++;
 
-  /*
-  cout << name << " Started WaitCommEvent " << countReadOverlapped
-       << " " << hex << events << dec << " ["
-       << FieldToName(codeNameTableComEvents, events)
-       << "] << endl;
-  */
-
   return TRUE;
 }
 
@@ -877,11 +932,9 @@ void ComPort::OnCommEvent(WaitCommEventOverlapped *pOverlapped, DWORD eMask)
 {
   //cout << name << " OnCommEvent " << ::GetCurrentThreadId() << endl;
 
-  /*
-  cout << name << " Event(s): 0x" << hex << eMask << dec << " ["
-       << FieldToName(codeNameTableComEvents, eMask)
-       << "]" << endl;
-  */
+  //cout << name << " Event(s): 0x" << hex << eMask << dec << " [";
+  //PrintFields(cout, fieldNameTableComEvents, eMask);
+  //cout << "]" << endl;
 
   CheckComEvents(eMask);
 
@@ -895,14 +948,14 @@ void ComPort::OnCommEvent(WaitCommEventOverlapped *pOverlapped, DWORD eMask)
 
 void ComPort::CheckComEvents(DWORD eMask)
 {
-  if (GO_O2V_MODEM_STATUS(inOptions) && (eMask & (EV_CTS|EV_DSR|EV_RLSD|EV_RING)) != 0) {
+  if (GO1_O2V_MODEM_STATUS(inOptions[1]) && (eMask & (EV_CTS|EV_DSR|EV_RLSD|EV_RING)) != 0) {
     DWORD stat;
 
     if (::GetCommModemStatus(pComIo->Handle(), &stat)) {
       HUB_MSG msg;
 
       msg.type = HUB_MSG_TYPE_MODEM_STATUS;
-      msg.u.val = ((DWORD)(BYTE)stat | VAL2MASK(GO_O2V_MODEM_STATUS(inOptions)));
+      msg.u.val = ((DWORD)(BYTE)stat | VAL2MASK(GO1_O2V_MODEM_STATUS(inOptions[1])));
 
       pOnRead(hMasterPort, &msg);
     }
@@ -915,16 +968,6 @@ void ComPort::CheckComEvents(DWORD eMask)
       errors |= errs;
   }
 }
-
-static FIELD2NAME codeNameTableCommErrors[] = {
-  TOFIELD2NAME2(CE_, RXOVER),
-  TOFIELD2NAME2(CE_, OVERRUN),
-  TOFIELD2NAME2(CE_, RXPARITY),
-  TOFIELD2NAME2(CE_, FRAME),
-  TOFIELD2NAME2(CE_, BREAK),
-  TOFIELD2NAME2(CE_, TXFULL),
-  {0, 0, NULL}
-};
 
 void ComPort::LostReport()
 {
@@ -939,7 +982,8 @@ void ComPort::LostReport()
   CheckComEvents(EV_BREAK|EV_ERR);
 
   if (errors) {
-    cout << "Error " << name << ": " << FieldToName(codeNameTableCommErrors, errors, " ");
+    cout << "Error " << name << ": ";
+    PrintFields(cout, fieldNameTableCommErrors, errors, FALSE, "", " ");
     errors = 0;
 
     #define IOCTL_SERIAL_GET_STATS CTL_CODE(FILE_DEVICE_SERIAL_PORT,35,METHOD_BUFFERED,FILE_ANY_ACCESS)

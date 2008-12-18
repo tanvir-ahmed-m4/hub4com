@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.17  2008/12/18 16:50:52  vfrolov
+ * Extended the number of possible IN options
+ *
  * Revision 1.16  2008/12/17 11:52:35  vfrolov
  * Replaced ComIo::dcb by serialBaudRate, serialLineControl,
  * serialHandFlow and serialChars
@@ -139,8 +142,8 @@ class ComPort
     int countWaitCommEventOverlapped;
     int countXoff;
 
-    DWORD intercepted_options;
-    DWORD inOptions;
+    DWORD intercepted_options[2];
+    DWORD inOptions[2];
     DWORD outOptions;
 
     DWORD writeQueueLimit;

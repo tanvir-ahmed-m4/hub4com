@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.5  2008/12/18 16:50:52  vfrolov
+ * Extended the number of possible IN options
+ *
  * Revision 1.4  2008/11/25 16:40:40  vfrolov
  * Added assert for port handle
  *
@@ -174,18 +177,24 @@ static BOOL CALLBACK OutMethod(
     case HUB_MSG_TYPE_GET_IN_OPTS: {
       _ASSERTE(pOutMsg->u.pv.pVal != NULL);
 
+      if (GO_O2I(pOutMsg->u.pv.val) != 1)
+        break;
+
       // or'e with the required mask to get line status
-      *pOutMsg->u.pv.pVal |= (GO_V2O_LINE_STATUS(((Filter *)hFilter)->lsrMask) & pOutMsg->u.pv.val);
+      *pOutMsg->u.pv.pVal |= (GO1_V2O_LINE_STATUS(((Filter *)hFilter)->lsrMask) & pOutMsg->u.pv.val);
       break;
     }
     case HUB_MSG_TYPE_FAIL_IN_OPTS: {
-      DWORD fail_options = (pOutMsg->u.val & GO_V2O_LINE_STATUS(((Filter *)hFilter)->lsrMask));
+      if (GO_O2I(pOutMsg->u.pv.val) != 1)
+        break;
+
+      DWORD fail_options = (pOutMsg->u.val & GO1_V2O_LINE_STATUS(((Filter *)hFilter)->lsrMask));
 
       if (fail_options) {
         cerr << pPortName(hFromPort)
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
              << " for port " << pPortName(hToPort)
-             << " option(s) 0x" << hex << fail_options << dec
+             << " option(s) GO1_0x" << hex << fail_options << dec
              << " not accepted" << endl;
       }
       break;

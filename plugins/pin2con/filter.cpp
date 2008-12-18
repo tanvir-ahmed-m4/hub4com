@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.14  2008/12/18 16:50:52  vfrolov
+ * Extended the number of possible IN options
+ *
  * Revision 1.13  2008/11/25 16:40:40  vfrolov
  * Added assert for port handle
  *
@@ -128,15 +131,15 @@ static struct {
   const char *pName;
   DWORD val;
 } pin_names[] = {
-  {"cts",  GO_V2O_MODEM_STATUS(MODEM_STATUS_CTS)},
-  {"dsr",  GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR)},
-  {"dcd",  GO_V2O_MODEM_STATUS(MODEM_STATUS_DCD)},
-  {"ring", GO_V2O_MODEM_STATUS(MODEM_STATUS_RI)},
-  {"break", GO_BREAK_STATUS},
+  {"cts",  GO1_V2O_MODEM_STATUS(MODEM_STATUS_CTS)},
+  {"dsr",  GO1_V2O_MODEM_STATUS(MODEM_STATUS_DSR)},
+  {"dcd",  GO1_V2O_MODEM_STATUS(MODEM_STATUS_DCD)},
+  {"ring", GO1_V2O_MODEM_STATUS(MODEM_STATUS_RI)},
+  {"break", GO1_BREAK_STATUS},
 };
 
 Filter::Filter(int argc, const char *const argv[])
-  : pin(GO_V2O_MODEM_STATUS(MODEM_STATUS_DSR)),
+  : pin(GO1_V2O_MODEM_STATUS(MODEM_STATUS_DSR)),
     negative(FALSE),
     pName(NULL)
 {
@@ -297,16 +300,23 @@ static BOOL CALLBACK InMethod(
   switch (pInMsg->type) {
   case HUB_MSG_TYPE_GET_IN_OPTS:
     _ASSERTE(pInMsg->u.pv.pVal != NULL);
+
+    if (GO_O2I(pInMsg->u.pv.val) != 1)
+      break;
+
     // or'e with the required mask to get line status and modem status
     *pInMsg->u.pv.pVal |= (((Filter *)hFilter)->pin & pInMsg->u.pv.val);
     break;
   case HUB_MSG_TYPE_FAIL_IN_OPTS: {
+    if (GO_O2I(pInMsg->u.pv.val) != 1)
+      break;
+
     DWORD fail_options = (pInMsg->u.val & ((Filter *)hFilter)->pin);
 
     if (fail_options) {
       cerr << pPortName(hFromPort)
            << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
-           << " option(s) 0x" << hex << fail_options << dec
+           << " option(s) GO1_0x" << hex << fail_options << dec
            << " not accepted" << endl;
     }
     break;
@@ -319,7 +329,7 @@ static BOOL CALLBACK InMethod(
   case HUB_MSG_TYPE_MODEM_STATUS: {
     WORD pin;
 
-    pin = GO_O2V_MODEM_STATUS(((Filter *)hFilter)->pin);
+    pin = GO1_O2V_MODEM_STATUS(((Filter *)hFilter)->pin);
 
     if ((pin & MASK2VAL(pInMsg->u.val)) == 0)
       break;
@@ -329,7 +339,7 @@ static BOOL CALLBACK InMethod(
     break;
   }
   case HUB_MSG_TYPE_BREAK_STATUS:
-    if (((Filter *)hFilter)->pin & GO_BREAK_STATUS)
+    if (((Filter *)hFilter)->pin & GO1_BREAK_STATUS)
       pInMsg = InsertConnectState(*((Filter *)hFilter), hFromPort, pInMsg, pInMsg->u.val != 0);
     break;
   }
