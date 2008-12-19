@@ -27,21 +27,21 @@ extern "C" {
 #endif
 
 /*******************************************************************/
-#define HUB_MSG_UNION_TYPES_MASK   0xF000
-#define HUB_MSG_UNION_TYPE_NONE    0x0000
-#define HUB_MSG_UNION_TYPE_BUF     0x1000
-#define HUB_MSG_UNION_TYPE_VAL     0x2000
-#define HUB_MSG_UNION_TYPE_PVAL    0x3000
-#define HUB_MSG_UNION_TYPE_HVAL    0x4000
+#define HUB_MSG_UNION_TYPES_MASK   ((DWORD)0xFF000000)
+#define HUB_MSG_UNION_TYPE_NONE    ((DWORD)0x00000000)
+#define HUB_MSG_UNION_TYPE_BUF     ((DWORD)0x01000000)
+#define HUB_MSG_UNION_TYPE_VAL     ((DWORD)0x02000000)
+#define HUB_MSG_UNION_TYPE_PVAL    ((DWORD)0x03000000)
+#define HUB_MSG_UNION_TYPE_HVAL    ((DWORD)0x04000000)
 /*******************************************************************/
-#define HUB_MSG_VAL_TYPES_MASK     0x0F00
-#define HUB_MSG_VAL_TYPE_MASK_VAL  0x0100
+#define HUB_MSG_VAL_TYPES_MASK     ((DWORD)0x00FF0000)
+#define HUB_MSG_VAL_TYPE_MASK_VAL  ((DWORD)0x00010000)
 #define   VAL2MASK(v)              ((DWORD)(WORD)(v) << 16)
 #define   MASK2VAL(m)              ((WORD)((m) >> 16))
-#define HUB_MSG_VAL_TYPE_BOOL      0x0200
-#define HUB_MSG_VAL_TYPE_MSG_TYPE  0x0300
-#define HUB_MSG_VAL_TYPE_UINT      0x0400
-#define HUB_MSG_VAL_TYPE_LC        0x0500
+#define HUB_MSG_VAL_TYPE_BOOL      ((DWORD)0x00020000)
+#define HUB_MSG_VAL_TYPE_MSG_TYPE  ((DWORD)0x00030000)
+#define HUB_MSG_VAL_TYPE_UINT      ((DWORD)0x00040000)
+#define HUB_MSG_VAL_TYPE_LC        ((DWORD)0x00050000)
 #define   LC_MASK_BYTESIZE         ((DWORD)1 << 24)
 #define   LC_MASK_PARITY           ((DWORD)1 << 25)
 #define   LC_MASK_STOPBITS         ((DWORD)1 << 26)
@@ -52,7 +52,9 @@ extern "C" {
 #define   LC2VAL_STOPBITS(t)       ((BYTE)((t) >> 16))
 #define   VAL2LC_STOPBITS(v)       ((DWORD)(BYTE)(v) << 16)
 /*******************************************************************/
-#define HUB_MSG_ROUTE_FLOW_CONTROL 0x0080
+#define HUB_MSG_ROUTE_FLOW_CONTROL ((DWORD)0x00008000)
+/*******************************************************************/
+#define HUB_MSG_T2N(t)             ((BYTE)((t) & 0xFF))
 /*******************************************************************/
 #define HUB_MSG_TYPE_EMPTY         (0   | HUB_MSG_UNION_TYPE_NONE)
 #define HUB_MSG_TYPE_LINE_DATA     (1   | HUB_MSG_UNION_TYPE_BUF)
@@ -133,7 +135,7 @@ extern "C" {
 #define HUB_MSG_TYPE_PURGE_TX      (23  | HUB_MSG_UNION_TYPE_NONE)
 /*******************************************************************/
 typedef struct _HUB_MSG {
-  WORD type;
+  DWORD type;
   union {
     struct {
       BYTE *pBuf;
@@ -162,28 +164,28 @@ typedef VOID (CALLBACK ROUTINE_BUF_APPEND)(
         DWORD sizeSrc);
 typedef BOOL (CALLBACK ROUTINE_MSG_REPLACE_BUF)(
         HUB_MSG *pMsg,
-        WORD type,
+        DWORD type,
         const BYTE *pSrc,
         DWORD sizeSrc);
 typedef HUB_MSG *(CALLBACK ROUTINE_MSG_INSERT_BUF)(
         HUB_MSG *pPrevMsg,
-        WORD type,
+        DWORD type,
         const BYTE *pSrc,
         DWORD sizeSrc);
 typedef BOOL (CALLBACK ROUTINE_MSG_REPLACE_VAL)(
         HUB_MSG *pMsg,
-        WORD type,
+        DWORD type,
         DWORD val);
 typedef HUB_MSG *(CALLBACK ROUTINE_MSG_INSERT_VAL)(
         HUB_MSG *pMsg,
-        WORD type,
+        DWORD type,
         DWORD val);
 typedef BOOL (CALLBACK ROUTINE_MSG_REPLACE_NONE)(
         HUB_MSG *pMsg,
-        WORD type);
+        DWORD type);
 typedef HUB_MSG *(CALLBACK ROUTINE_MSG_INSERT_NONE)(
         HUB_MSG *pMsg,
-        WORD type);
+        DWORD type);
 typedef const char *(CALLBACK ROUTINE_PORT_NAME_A)(
         HMASTERPORT hMasterPort);
 typedef const char *(CALLBACK ROUTINE_FILTER_NAME_A)(
