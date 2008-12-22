@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.13  2008/12/22 09:40:46  vfrolov
+ * Optimized message switching
+ *
  * Revision 1.12  2008/12/18 16:50:52  vfrolov
  * Extended the number of possible IN options
  *
@@ -477,8 +480,8 @@ static BOOL CALLBACK InMethod(
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
 
-  switch (pInMsg->type) {
-    case HUB_MSG_TYPE_GET_IN_OPTS: {
+  switch (HUB_MSG_T2N(pInMsg->type)) {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_GET_IN_OPTS): {
       int iGo = GO_O2I(pInMsg->u.pv.val);
 
       if (iGo != 0 && iGo != 1)
@@ -510,7 +513,7 @@ static BOOL CALLBACK InMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_LINE_DATA: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_DATA): {
       _ASSERTE(pInMsg->u.buf.pBuf != NULL || pInMsg->u.buf.size == 0);
 
       if (pInMsg->u.buf.size == 0)
@@ -528,7 +531,7 @@ static BOOL CALLBACK InMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_CONNECT: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_CONNECT): {
       State *pState = ((Filter *)hFilter)->GetState(hFromPort);
 
       if (!pState)
@@ -607,8 +610,8 @@ static BOOL CALLBACK OutMethod(
   _ASSERTE(hToPort != NULL);
   _ASSERTE(pOutMsg != NULL);
 
-  switch (pOutMsg->type) {
-    case HUB_MSG_TYPE_SET_OUT_OPTS: {
+  switch (HUB_MSG_T2N(pOutMsg->type)) {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_SET_OUT_OPTS): {
       DWORD soMask = (pOutMsg->u.val & ((Filter *)hFilter)->soMask);
 
       // discard supported options
@@ -623,7 +626,7 @@ static BOOL CALLBACK OutMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_SET_BR: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_SET_BR): {
       State *pState = ((Filter *)hFilter)->GetState(hToPort);
 
       if (!pState)
@@ -651,7 +654,7 @@ static BOOL CALLBACK OutMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_SET_LC: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_SET_LC): {
       _ASSERTE((pOutMsg->u.val & ~(VAL2LC_BYTESIZE(-1)|LC_MASK_BYTESIZE
                                   |VAL2LC_PARITY(-1)|LC_MASK_PARITY
                                   |VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS)) == 0);
@@ -698,7 +701,7 @@ static BOOL CALLBACK OutMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_SET_PIN_STATE: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_SET_PIN_STATE): {
       State *pState = ((Filter *)hFilter)->GetState(hToPort);
 
       if (!pState)
@@ -739,7 +742,7 @@ static BOOL CALLBACK OutMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_SET_LSR: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_SET_LSR): {
       State *pState = ((Filter *)hFilter)->GetState(hToPort);
 
       if (!pState)
@@ -765,7 +768,7 @@ static BOOL CALLBACK OutMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_PURGE_TX: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_PURGE_TX): {
       State *pState = ((Filter *)hFilter)->GetState(hToPort);
 
       if (!pState)
@@ -789,7 +792,7 @@ static BOOL CALLBACK OutMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_ADD_XOFF_XON: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_ADD_XOFF_XON): {
       State *pState = ((Filter *)hFilter)->GetState(hToPort);
 
       if (!pState)
@@ -803,7 +806,7 @@ static BOOL CALLBACK OutMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_LINE_DATA: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_DATA): {
       _ASSERTE(pOutMsg->u.buf.pBuf != NULL || pOutMsg->u.buf.size == 0);
 
       if (pOutMsg->u.buf.size == 0)

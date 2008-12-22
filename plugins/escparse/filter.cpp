@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.10  2008/12/22 09:40:45  vfrolov
+ * Optimized message switching
+ *
  * Revision 1.9  2008/12/18 16:50:51  vfrolov
  * Extended the number of possible IN options
  *
@@ -485,9 +488,9 @@ static BOOL CALLBACK InMethod(
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
 
-  switch (pInMsg->type) {
-    case HUB_MSG_TYPE_COUNT_REPEATS:
-      if (pInMsg->u.pv.val == HUB_MSG_TYPE_GET_IN_OPTS) {
+  switch (HUB_MSG_T2N(pInMsg->type)) {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_COUNT_REPEATS):
+      if (HUB_MSG_T2N(pInMsg->u.pv.val) == HUB_MSG_T2N(HUB_MSG_TYPE_GET_IN_OPTS)) {
         // we need it twice to
         //   - get interceptable options from subsequent filters
         //   - accept the received options and request the escape mode
@@ -495,7 +498,7 @@ static BOOL CALLBACK InMethod(
         (*pInMsg->u.pv.pVal)++;
       }
       break;
-    case HUB_MSG_TYPE_GET_IN_OPTS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_GET_IN_OPTS): {
       int iGo = GO_O2I(pInMsg->u.pv.val);
 
       if (iGo == 0) {
@@ -548,7 +551,7 @@ static BOOL CALLBACK InMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_GET_ESC_OPTS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_GET_ESC_OPTS): {
       EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
@@ -563,7 +566,7 @@ static BOOL CALLBACK InMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_FAIL_ESC_OPTS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_FAIL_ESC_OPTS): {
       EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
@@ -587,7 +590,7 @@ static BOOL CALLBACK InMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_FAIL_IN_OPTS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_FAIL_IN_OPTS): {
       if (GO_O2I(pInMsg->u.pv.val) != 0)
         break;
 
@@ -609,7 +612,7 @@ static BOOL CALLBACK InMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_LINE_DATA: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_DATA): {
       _ASSERTE(pInMsg->u.buf.pBuf != NULL || pInMsg->u.buf.size == 0);
 
       if (pInMsg->u.buf.size == 0)
@@ -624,7 +627,7 @@ static BOOL CALLBACK InMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_MODEM_STATUS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_MODEM_STATUS): {
       EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
@@ -634,7 +637,7 @@ static BOOL CALLBACK InMethod(
       pInMsg->u.val &= ~VAL2MASK(GO1_O2V_MODEM_STATUS(pEscParse->Options()));
       break;
     }
-    case HUB_MSG_TYPE_LINE_STATUS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_STATUS): {
       EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
@@ -644,7 +647,7 @@ static BOOL CALLBACK InMethod(
       pInMsg->u.val &= ~VAL2MASK(GO1_O2V_LINE_STATUS(pEscParse->Options()));
       break;
     }
-    case HUB_MSG_TYPE_RBR_STATUS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_RBR_STATUS): {
       EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
@@ -657,7 +660,7 @@ static BOOL CALLBACK InMethod(
       }
       break;
     }
-    case HUB_MSG_TYPE_RLC_STATUS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_RLC_STATUS): {
       EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)
@@ -670,7 +673,7 @@ static BOOL CALLBACK InMethod(
       }
       break;
     }
-    case HUB_MSG_TYPE_BREAK_STATUS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_BREAK_STATUS): {
       EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
 
       if (!pEscParse)

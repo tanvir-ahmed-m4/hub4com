@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2008/12/22 09:40:45  vfrolov
+ * Optimized message switching
+ *
  * Revision 1.2  2008/12/19 18:27:47  vfrolov
  * Fixed Release compile error
  *
@@ -282,8 +285,8 @@ static BOOL CALLBACK InMethod(
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
 
-  switch (pInMsg->type) {
-    case HUB_MSG_TYPE_LINE_DATA: {
+  switch (HUB_MSG_T2N(pInMsg->type)) {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_DATA): {
       _ASSERTE(pInMsg->u.buf.pBuf != NULL || pInMsg->u.buf.size == 0);
 
       DWORD len = pInMsg->u.buf.size;
@@ -306,7 +309,7 @@ static BOOL CALLBACK InMethod(
 
       break;
     }
-    case HUB_MSG_TYPE_CONNECT: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_CONNECT): {
       State *pState = ((Filter *)hFilter)->GetState(hFromPort);
 
       if (!pState)
@@ -335,8 +338,8 @@ static BOOL CALLBACK OutMethod(
   _ASSERTE(hToPort != NULL);
   _ASSERTE(pOutMsg != NULL);
 
-  switch (pOutMsg->type) {
-    case HUB_MSG_TYPE_LINE_DATA: {
+  switch (HUB_MSG_T2N(pOutMsg->type)) {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_DATA): {
       _ASSERTE(pOutMsg->u.buf.pBuf != NULL || pOutMsg->u.buf.size == 0);
 
       DWORD len = pOutMsg->u.buf.size;

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.15  2008/12/22 09:40:46  vfrolov
+ * Optimized message switching
+ *
  * Revision 1.14  2008/12/18 16:50:52  vfrolov
  * Extended the number of possible IN options
  *
@@ -685,18 +688,18 @@ static void PrintMsg(ostream &tout, HUB_MSG *pMsg)
 
   tout  << " {";
 
-  switch (pMsg->type) {
-    case HUB_MSG_TYPE_MODEM_STATUS:
+  switch (HUB_MSG_T2N(pMsg->type)) {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_MODEM_STATUS):
       PrintMaskedFields(tout, fieldNameTableModemStatus, pMsg->u.val);
       break;
-    case HUB_MSG_TYPE_LINE_STATUS:
-    case HUB_MSG_TYPE_SET_LSR:
+    case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_STATUS):
+    case HUB_MSG_T2N(HUB_MSG_TYPE_SET_LSR):
       PrintMaskedFields(tout, fieldNameTableLineStatus, pMsg->u.val);
       break;
-    case HUB_MSG_TYPE_SET_PIN_STATE:
+    case HUB_MSG_T2N(HUB_MSG_TYPE_SET_PIN_STATE):
       PrintMaskedFields(tout, codeNameTableSetPinState, pMsg->u.val);
       break;
-    case HUB_MSG_TYPE_SET_OUT_OPTS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_SET_OUT_OPTS): {
       tout << "[";
       BOOL delimitNext = FALSE;
       delimitNext = PrintFields(tout, codeNameTableSetPinState, SO_O2V_PIN_STATE(pMsg->u.val), delimitNext, "SET_");
@@ -704,7 +707,7 @@ static void PrintMsg(ostream &tout, HUB_MSG *pMsg)
       tout << "]";
       break;
     }
-    case HUB_MSG_TYPE_GET_IN_OPTS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_GET_IN_OPTS): {
       tout << hex << "&" << pMsg->u.pv.pVal << "[" << dec;
       PrintGoOptions(tout, (*pMsg->u.pv.pVal & ~(GO_I2O(-1))) | (pMsg->u.pv.val & GO_I2O(-1)));
       tout << "] [";
@@ -712,20 +715,20 @@ static void PrintMsg(ostream &tout, HUB_MSG *pMsg)
       tout << "]";
       break;
     }
-    case HUB_MSG_TYPE_FAIL_IN_OPTS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_FAIL_IN_OPTS): {
       tout << "[";
       PrintGoOptions(tout, pMsg->u.val);
       tout << "]";
       break;
     }
-    case HUB_MSG_TYPE_GET_ESC_OPTS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_GET_ESC_OPTS): {
       tout << hex << "&" << pMsg->u.pv.pVal << "[" << dec;
       tout << "CHAR_0x" << hex << (unsigned)ESC_OPTS_O2V_ESCCHAR(*pMsg->u.pv.pVal) << dec;
       PrintEscOptions(tout, *pMsg->u.pv.pVal & ~ESC_OPTS_V2O_ESCCHAR(-1), TRUE);
       tout << "]";
       break;
     }
-    case HUB_MSG_TYPE_FAIL_ESC_OPTS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_FAIL_ESC_OPTS): {
       tout << hex << "&" << pMsg->u.pv.pVal << "[" << dec;
       PrintGoOptions(tout, (*pMsg->u.pv.pVal & ~(GO_I2O(-1))) | GO_I2O(1));
       tout << "] [";

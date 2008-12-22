@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2008/12/22 09:40:45  vfrolov
+ * Optimized message switching
+ *
  * Revision 1.1  2008/11/27 16:38:05  vfrolov
  * Initial revision
  *
@@ -51,8 +54,8 @@ BOOL ComPort::FakeReadFilter(HUB_MSG *pInMsg)
 {
   _ASSERTE(pInMsg != NULL);
 
-  switch (pInMsg->type) {
-    case HUB_MSG_TYPE_LOOP_TEST:
+  switch (HUB_MSG_T2N(pInMsg->type)) {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_LOOP_TEST):
       pInMsg->u.hVal = (HANDLE)hMasterPort;
       break;
   }
@@ -64,8 +67,8 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
 {
   _ASSERTE(pMsg != NULL);
 
-  switch (pMsg->type) {
-    case HUB_MSG_TYPE_LOOP_TEST:
+  switch (HUB_MSG_T2N(pMsg->type)) {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_LOOP_TEST):
       for (Ports::const_iterator i = connectedDataPorts.begin() ; i != connectedDataPorts.end() ; i++) {
         if (pMsg->u.hVal == (HANDLE)(*i)->hMasterPort) {
           cerr << "Loop detected on link " << Name() << "->" << (*i)->Name() << endl;
@@ -74,7 +77,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
       }
 
       break;
-    case HUB_MSG_TYPE_LINE_DATA:
+    case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_DATA):
       if (!pMsg->u.buf.size)
         break;
 
@@ -96,7 +99,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
       }
 
       break;
-    case HUB_MSG_TYPE_CONNECT:
+    case HUB_MSG_T2N(HUB_MSG_TYPE_CONNECT):
       if (pMsg->u.val) {
         if (countConnections++ != 0)
           break;
@@ -115,14 +118,14 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
       }
 
       break;
-    case HUB_MSG_TYPE_SET_OUT_OPTS:
+    case HUB_MSG_T2N(HUB_MSG_TYPE_SET_OUT_OPTS):
       if (pMsg->u.val) {
         cerr << name << " WARNING: Requested output option(s) [0x"
              << hex << pMsg->u.val << dec
              << "] will be ignored by driver" << endl;
       }
       break;
-    case HUB_MSG_TYPE_ADD_XOFF_XON:
+    case HUB_MSG_T2N(HUB_MSG_TYPE_ADD_XOFF_XON):
       if (pMsg->u.val) {
         if (countXoff++ != 0)
           break;

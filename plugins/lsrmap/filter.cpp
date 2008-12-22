@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/12/22 09:40:45  vfrolov
+ * Optimized message switching
+ *
  * Revision 1.5  2008/12/18 16:50:52  vfrolov
  * Extended the number of possible IN options
  *
@@ -168,13 +171,13 @@ static BOOL CALLBACK OutMethod(
   _ASSERTE(hToPort != NULL);
   _ASSERTE(pOutMsg != NULL);
 
-  switch (pOutMsg->type) {
-    case HUB_MSG_TYPE_SET_OUT_OPTS: {
+  switch (HUB_MSG_T2N(pOutMsg->type)) {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_SET_OUT_OPTS): {
       // or'e with the required mask to set line status
       pOutMsg->u.val |= SO_V2O_LINE_STATUS(((Filter *)hFilter)->lsrMask);
       break;
     }
-    case HUB_MSG_TYPE_GET_IN_OPTS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_GET_IN_OPTS): {
       _ASSERTE(pOutMsg->u.pv.pVal != NULL);
 
       if (GO_O2I(pOutMsg->u.pv.val) != 1)
@@ -184,7 +187,7 @@ static BOOL CALLBACK OutMethod(
       *pOutMsg->u.pv.pVal |= (GO1_V2O_LINE_STATUS(((Filter *)hFilter)->lsrMask) & pOutMsg->u.pv.val);
       break;
     }
-    case HUB_MSG_TYPE_FAIL_IN_OPTS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_FAIL_IN_OPTS): {
       if (GO_O2I(pOutMsg->u.pv.val) != 1)
         break;
 
@@ -199,7 +202,7 @@ static BOOL CALLBACK OutMethod(
       }
       break;
     }
-    case HUB_MSG_TYPE_LINE_STATUS: {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_STATUS): {
       BYTE lsr;
 
       lsr = (BYTE)pOutMsg->u.val & (BYTE)MASK2VAL(pOutMsg->u.val) & ((Filter *)hFilter)->lsrMask;

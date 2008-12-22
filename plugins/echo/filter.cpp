@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2008/12/22 09:40:45  vfrolov
+ * Optimized message switching
+ *
  * Revision 1.5  2008/11/25 16:40:40  vfrolov
  * Added assert for port handle
  *
@@ -115,7 +118,8 @@ static BOOL CALLBACK InMethod(
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
 
-  if (pInMsg->type == HUB_MSG_TYPE_LINE_DATA) {
+  switch (HUB_MSG_T2N(pInMsg->type)) {
+  case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_DATA):
     _ASSERTE(pInMsg->u.buf.pBuf != NULL || pInMsg->u.buf.size == 0);
 
     if (pInMsg->u.buf.size == 0)
@@ -128,6 +132,8 @@ static BOOL CALLBACK InMethod(
 
     if (!*ppEchoMsg)
       return FALSE;
+
+    break;
   }
 
   return TRUE;

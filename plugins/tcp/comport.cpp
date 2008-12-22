@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.13  2008/12/22 09:40:46  vfrolov
+ * Optimized message switching
+ *
  * Revision 1.12  2008/12/01 17:09:34  vfrolov
  * Improved write buffering
  *
@@ -330,7 +333,8 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
 {
   _ASSERTE(pMsg != NULL);
 
-  if (pMsg->type == HUB_MSG_TYPE_LINE_DATA) {
+  switch (HUB_MSG_T2N(pMsg->type)) {
+  case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_DATA): {
     BYTE *pBuf = pMsg->u.buf.pBuf;
     DWORD len = pMsg->u.buf.size;
 
@@ -386,9 +390,9 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     FlowControlUpdate();
 
     //cout << "Started Write " << name << " " << len << " " << writeQueued << endl;
+    break;
   }
-  else
-  if (pMsg->type == HUB_MSG_TYPE_CONNECT) {
+  case HUB_MSG_T2N(HUB_MSG_TYPE_CONNECT): {
     if (pMsg->u.val) {
       connectionCounter++;
 
@@ -408,23 +412,23 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
       if (hSock != INVALID_SOCKET && !permanent && connectionCounter <= 0)
         PortTcp::Disconnect(hSock);
     }
+    break;
   }
-  else
-  if (pMsg->type == HUB_MSG_TYPE_SET_OUT_OPTS) {
+  case HUB_MSG_T2N(HUB_MSG_TYPE_SET_OUT_OPTS):
     if (pMsg->u.val) {
       cerr << name << " WARNING: Requested output option(s) [0x"
            << hex << pMsg->u.val << dec
            << "] will be ignored by driver" << endl;
     }
-  }
-  else
-  if (pMsg->type == HUB_MSG_TYPE_ADD_XOFF_XON) {
+    break;
+  case HUB_MSG_T2N(HUB_MSG_TYPE_ADD_XOFF_XON):
     if (pMsg->u.val) {
       countXoff++;
     } else {
       if (--countXoff == 0 && isConnected)
         StartRead();
     }
+    break;
   }
 
   return TRUE;
