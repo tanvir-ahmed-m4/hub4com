@@ -1,7 +1,7 @@
 /*
  * plugins_api.h
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -133,6 +133,7 @@ extern "C" {
 #define HUB_MSG_TYPE_ADD_XOFF_XON  (21  | HUB_MSG_ROUTE_FLOW_CONTROL | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_BOOL)
 #define HUB_MSG_TYPE_PURGE_TX_IN   (22  | HUB_MSG_UNION_TYPE_NONE)
 #define HUB_MSG_TYPE_PURGE_TX      (23  | HUB_MSG_UNION_TYPE_NONE)
+#define HUB_MSG_TYPE_TICK          (24  | HUB_MSG_UNION_TYPE_HVAL)
 /*******************************************************************/
 typedef struct _HUB_MSG {
   DWORD type;
@@ -152,6 +153,7 @@ typedef struct _HUB_MSG {
 /*******************************************************************/
 DECLARE_HANDLE(HMASTERPORT);
 DECLARE_HANDLE(HMASTERFILTER);
+DECLARE_HANDLE(HMASTERTIMER);
 /*******************************************************************/
 typedef BYTE *(CALLBACK ROUTINE_BUF_ALLOC)(
         DWORD size);
@@ -193,6 +195,17 @@ typedef const char *(CALLBACK ROUTINE_FILTER_NAME_A)(
 typedef void (CALLBACK ROUTINE_ON_READ)(
         HMASTERPORT hMasterPort,
         HUB_MSG *pMsg);
+typedef HMASTERTIMER (CALLBACK ROUTINE_TIMER_CREATE)(
+        );
+typedef BOOL (CALLBACK ROUTINE_TIMER_SET)(
+        HMASTERTIMER hMasterTimer,
+        HMASTERPORT hMasterPort,
+        const LARGE_INTEGER *pDueTime,
+        LONG period);
+typedef void (CALLBACK ROUTINE_TIMER_CANCEL)(
+        HMASTERTIMER hMasterTimer);
+typedef void (CALLBACK ROUTINE_TIMER_DELETE)(
+        HMASTERTIMER hMasterTimer);
 /*******************************************************************/
 typedef struct _HUB_ROUTINES_A {
   size_t size;
@@ -208,6 +221,10 @@ typedef struct _HUB_ROUTINES_A {
   ROUTINE_PORT_NAME_A *pPortName;
   ROUTINE_FILTER_NAME_A *pFilterName;
   ROUTINE_ON_READ *pOnRead;
+  ROUTINE_TIMER_CREATE *pTimerCreate;
+  ROUTINE_TIMER_SET *pTimerSet;
+  ROUTINE_TIMER_CANCEL *pTimerCancel;
+  ROUTINE_TIMER_DELETE *pTimerDelete;
 } HUB_ROUTINES_A;
 /*******************************************************************/
 typedef enum _PLUGIN_TYPE {
