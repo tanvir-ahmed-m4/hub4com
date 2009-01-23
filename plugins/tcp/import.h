@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2009/01/23 16:55:05  vfrolov
+ * Utilized timer routines
+ *
  * Revision 1.5  2008/12/01 17:09:34  vfrolov
  * Improved write buffering
  *
@@ -44,6 +47,8 @@ extern ROUTINE_BUF_ALLOC *pBufAlloc;
 extern ROUTINE_BUF_FREE *pBufFree;
 extern ROUTINE_BUF_APPEND *pBufAppend;
 extern ROUTINE_ON_READ *pOnRead;
+extern ROUTINE_TIMER_CREATE *pTimerCreate;
+extern ROUTINE_TIMER_SET *pTimerSet;
 ///////////////////////////////////////////////////////////////
 
 #endif  // _IMPORT_H

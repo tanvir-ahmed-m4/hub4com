@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.14  2009/01/23 16:55:05  vfrolov
+ * Utilized timer routines
+ *
  * Revision 1.13  2008/12/22 09:40:46  vfrolov
  * Optimized message switching
  *
@@ -261,6 +264,29 @@ BOOL ComPort::StartRead()
   //cout << "Started Read " << name << " " << countReadOverlapped << endl;
 
   return TRUE;
+}
+
+BOOL ComPort::FakeReadFilter(HUB_MSG *pInMsg)
+{
+  _ASSERTE(pInMsg != NULL);
+
+  switch (HUB_MSG_T2N(pInMsg->type)) {
+    case HUB_MSG_T2N(HUB_MSG_TYPE_TICK): {
+      HMASTERTIMER hTimer = (HMASTERTIMER)pInMsg->u.hVal;
+
+      if (!hTimer)
+        break;
+
+      if (hTimer == hReconnectTimer) {
+        if (CanConnect())
+          StartConnect();
+      }
+
+      break;
+    }
+  }
+
+  return pInMsg != NULL;
 }
 
 void ComPort::StartConnect()
@@ -513,15 +539,6 @@ void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)
   }
 }
 
-static VOID CALLBACK TimerAPCProc(
-  LPVOID pArg,
-  DWORD /*dwTimerLowValue*/,
-  DWORD /*dwTimerHighValue*/)
-{
-  if (((ComPort *)pArg)->CanConnect())
-    ((ComPort *)pArg)->StartConnect();
-}
-
 void ComPort::OnDisconnect()
 {
   Close(hSock);
@@ -561,22 +578,14 @@ void ComPort::OnDisconnect()
     else
     if (reconnectTime > 0) {
       if (!hReconnectTimer)
-        hReconnectTimer = ::CreateWaitableTimer(NULL, FALSE, NULL);
+        hReconnectTimer = pTimerCreate();
 
       if (hReconnectTimer) {
         LARGE_INTEGER firstReportTime;
 
         firstReportTime.QuadPart = -10000LL * reconnectTime;
 
-        if (!::SetWaitableTimer(hReconnectTimer, &firstReportTime, 0, TimerAPCProc, this, FALSE)) {
-          DWORD err = GetLastError();
-
-          cerr << "WARNING: SetWaitableTimer() - error=" << err << endl;
-        }
-      } else {
-        DWORD err = GetLastError();
-
-        cerr << "WARNING: CreateWaitableTimer() - error=" << err << endl;
+        pTimerSet(hReconnectTimer, hMasterPort, &firstReportTime, 0);
       }
     }
   }

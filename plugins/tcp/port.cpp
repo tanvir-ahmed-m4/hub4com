@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.12  2009/01/23 16:55:05  vfrolov
+ * Utilized timer routines
+ *
  * Revision 1.11  2008/12/01 17:09:34  vfrolov
  * Improved write buffering
  *
@@ -270,6 +273,16 @@ static BOOL CALLBACK Start(HPORT hPort)
   return ((ComPort *)hPort)->Start();
 }
 ///////////////////////////////////////////////////////////////
+static BOOL CALLBACK FakeReadFilter(
+    HPORT hPort,
+    HUB_MSG *pMsg)
+{
+  _ASSERTE(hPort != NULL);
+  _ASSERTE(pMsg != NULL);
+
+  return ((ComPort *)hPort)->FakeReadFilter(pMsg);
+}
+///////////////////////////////////////////////////////////////
 static BOOL CALLBACK Write(
     HPORT hPort,
     HUB_MSG *pMsg)
@@ -301,7 +314,7 @@ static const PORT_ROUTINES_A routines = {
   SetPortName,
   Init,
   Start,
-  NULL,      // FakeReadFilter
+  FakeReadFilter,
   Write,
   LostReport,
 };
@@ -315,6 +328,8 @@ ROUTINE_BUF_ALLOC *pBufAlloc;
 ROUTINE_BUF_FREE *pBufFree;
 ROUTINE_BUF_APPEND *pBufAppend;
 ROUTINE_ON_READ *pOnRead;
+ROUTINE_TIMER_CREATE *pTimerCreate;
+ROUTINE_TIMER_SET *pTimerSet;
 ///////////////////////////////////////////////////////////////
 PLUGIN_INIT_A InitA;
 const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
@@ -323,7 +338,9 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   if (!ROUTINE_IS_VALID(pHubRoutines, pBufAlloc) ||
       !ROUTINE_IS_VALID(pHubRoutines, pBufFree) ||
       !ROUTINE_IS_VALID(pHubRoutines, pBufAppend) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pOnRead))
+      !ROUTINE_IS_VALID(pHubRoutines, pOnRead) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pTimerCreate) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pTimerSet))
   {
     return NULL;
   }
@@ -332,6 +349,8 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   pBufFree = pHubRoutines->pBufFree;
   pBufAppend = pHubRoutines->pBufAppend;
   pOnRead = pHubRoutines->pOnRead;
+  pTimerCreate = pHubRoutines->pTimerCreate;
+  pTimerSet = pHubRoutines->pTimerSet;
 
   WSADATA wsaData;
 

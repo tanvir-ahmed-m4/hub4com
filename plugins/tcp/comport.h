@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.9  2009/01/23 16:55:05  vfrolov
+ * Utilized timer routines
+ *
  * Revision 1.8  2008/12/01 17:09:34  vfrolov
  * Improved write buffering
  *
@@ -84,6 +87,7 @@ class ComPort
 
     BOOL Init(HMASTERPORT _hMasterPort);
     BOOL Start();
+    BOOL FakeReadFilter(HUB_MSG *pInMsg);
     BOOL Write(HUB_MSG *pMsg);
     void OnWrite(WriteOverlapped *pOverlapped, DWORD len, DWORD done);
     void OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done);
@@ -117,7 +121,7 @@ class ComPort
     BOOL permanent;
 
     int reconnectTime;
-    HANDLE hReconnectTimer;
+    HMASTERTIMER hReconnectTimer;
 
     string name;
     HMASTERPORT hMasterPort;
