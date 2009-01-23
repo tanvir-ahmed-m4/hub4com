@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.14  2009/01/23 17:01:28  vfrolov
+ * Fixed discarding of data if engine not started
+ *
  * Revision 1.13  2008/12/22 09:40:46  vfrolov
  * Optimized message switching
  *
@@ -521,8 +524,13 @@ static BOOL CALLBACK InMethod(
 
       TelnetProtocol *pTelnetProtocol = ((Filter *)hFilter)->GetProtocol(hFromPort);
 
-      if (!pTelnetProtocol)
-        return FALSE;
+      if (!pTelnetProtocol) {
+        // discard data
+        if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+          return FALSE;
+
+        break;
+      }
 
       if (!pTelnetProtocol->Decode(pInMsg))
         return FALSE;
@@ -814,8 +822,13 @@ static BOOL CALLBACK OutMethod(
 
       TelnetProtocol *pTelnetProtocol = ((Filter *)hFilter)->GetProtocol(hToPort);
 
-      if (!pTelnetProtocol)
-        return FALSE;
+      if (!pTelnetProtocol) {
+        // discard data
+        if (!pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY))
+          return FALSE;
+
+        break;
+      }
 
       if (!pTelnetProtocol->Encode(pOutMsg))
         return FALSE;
