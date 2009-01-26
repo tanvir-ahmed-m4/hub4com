@@ -50,6 +50,12 @@ SETLOCAL
       GOTO BEGIN_PARSE_OPTIONS
     :END_OPTION_CONNECT
 
+    IF /I "%OPTION%" NEQ "--keep-active" GOTO END_OPTION_KEEP_ACTIVE
+      SET TCP_TELNET_OPTIONS=%TCP_TELNET_OPTIONS% --keep-active=%~1
+      SHIFT /1
+      GOTO BEGIN_PARSE_OPTIONS
+    :END_OPTION_KEEP_ACTIVE
+
     GOTO USAGE
   :END_PARSE_OPTIONS
 
@@ -75,7 +81,7 @@ SETLOCAL
 
   IF /I "%LC_CLIENT_MODE%" == "yes" GOTO SET_LC_CLIENT_MODE_OPTIONS
 
-    SET TCP_TELNET_OPTIONS=:"--comport=server --suppress-echo=yes"
+    SET TCP_TELNET_OPTIONS=%TCP_TELNET_OPTIONS% --comport=server --suppress-echo=yes
     SET TCP_LSRMAP=--create-filter=lsrmap,tcp,lsrmap
     SET TCP_PINMAP_OPTIONS=:"--cts=cts --dsr=dsr --dcd=dcd --ring=ring"
     SET TCP_LC_OPTIONS=:"--br=local --lc=local"
@@ -87,7 +93,7 @@ SETLOCAL
     GOTO END_SET_LC_MODE_OPTIONS
   :SET_LC_CLIENT_MODE_OPTIONS
 
-    SET TCP_TELNET_OPTIONS=:"--comport=client"
+    SET TCP_TELNET_OPTIONS=%TCP_TELNET_OPTIONS% --comport=client
     SET TCP_PINMAP_OPTIONS=:"--rts=cts --dtr=dsr --break=break"
     SET TCP_LC_OPTIONS=:"--br=remote --lc=remote"
     :SET TCP_PURGE=--create-filter=purge,tcp,purge
@@ -96,6 +102,10 @@ SETLOCAL
     SET COM_LC_OPTIONS=:"--br=local --lc=local"
 
   :END_SET_LC_MODE_OPTIONS
+
+  IF "%TCP_TELNET_OPTIONS%" == "" GOTO END_QUOTE_TCP_TELNET_OPTIONS
+    SET TCP_TELNET_OPTIONS=:"%TCP_TELNET_OPTIONS%"
+  :END_QUOTE_TCP_TELNET_OPTIONS
 
   %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,com,COM
   SET OPTIONS=%OPTIONS% --create-filter=escparse,com,parse
@@ -141,6 +151,8 @@ ECHO                             ^<state^> is cts, dsr, dcd, ring or break. The
 ECHO                             exclamation sign ^(^!^) can be used to invert the
 ECHO                             action. By default the connection will be permanent
 ECHO                             as it's possible.
+ECHO     --keep-active ^<s^>     - send NOP command every ^<s^> seconds to keep the
+ECHO                             connection active if data is not transferred.
 ECHO     --trace               - enable trace output.
 ECHO     --help                - show this help.
 ECHO.

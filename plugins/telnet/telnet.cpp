@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2005-2008 Vyacheslav Frolov
+ * Copyright (c) 2005-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2009/01/26 15:07:52  vfrolov
+ * Implemented --keep-active option
+ *
  * Revision 1.5  2008/11/13 07:44:12  vfrolov
  * Changed for staticaly linking
  *
@@ -159,6 +162,14 @@ HUB_MSG *TelnetProtocol::Encode(HUB_MSG *pMsg)
   }
 
   return FlushEncodedStream(pMsg);
+}
+
+void TelnetProtocol::KeepActive()
+{
+  cout << name << " SEND: NOP" << endl;
+
+  streamEncoded += (BYTE)cdIAC;
+  streamEncoded += (BYTE)cdNOP;
 }
 
 HUB_MSG *TelnetProtocol::Decode(HUB_MSG *pMsg)

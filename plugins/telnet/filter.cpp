@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.15  2009/01/26 15:07:52  vfrolov
+ * Implemented --keep-active option
+ *
  * Revision 1.14  2009/01/23 17:01:28  vfrolov
  * Fixed discarding of data if engine not started
  *
@@ -74,6 +77,9 @@ namespace FilterTelnet {
 ///////////////////////////////////////////////////////////////
 static ROUTINE_PORT_NAME_A *pPortName;
 static ROUTINE_FILTER_NAME_A *pFilterName;
+static ROUTINE_TIMER_CREATE *pTimerCreate;
+static ROUTINE_TIMER_SET *pTimerSet;
+static ROUTINE_TIMER_DELETE *pTimerDelete;
 ///////////////////////////////////////////////////////////////
 #ifndef _DEBUG
   #define DEBUG_PARAM(par)
@@ -108,7 +114,8 @@ class State {
       soMask(0),
       pinState(0),
       br(0),
-      lc(0)
+      lc(0),
+      hKeepActiveTimer(NULL)
     {
       for (int iGo = 0 ; iGo < sizeof(goMask)/sizeof(goMask[0]) ; iGo++)
         goMask[iGo] = 0;
@@ -132,6 +139,7 @@ class State {
     WORD pinState;
     DWORD br;
     DWORD lc;
+    HMASTERTIMER hKeepActiveTimer;
 };
 ///////////////////////////////////////////////////////////////
 class Filter : public Valid {
@@ -156,6 +164,8 @@ class Filter : public Valid {
     DWORD soMask;
     DWORD goMask[2];
 
+    unsigned keepActive;
+
   private:
     const char *pName;
     string terminalType;
@@ -177,6 +187,7 @@ Filter::Filter(int argc, const char *const argv[])
   : pName(NULL),
     terminalType("UNKNOWN"),
     suppressEcho(FALSE),
+    keepActive(0),
     comport(comport_no)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
@@ -206,7 +217,7 @@ Filter::Filter(int argc, const char *const argv[])
           comport = comport_server;
           break;
         default:
-          cerr << "Unknown value in " << pArg << endl;
+          cerr << "Unknown value in " << *pArgs << endl;
           Invalidate();
       }
     }
@@ -220,12 +231,21 @@ Filter::Filter(int argc, const char *const argv[])
           suppressEcho = FALSE;
           break;
         default:
-          cerr << "Unknown value in " << pArg << endl;
+          cerr << "Unknown value in " << *pArgs << endl;
           Invalidate();
       }
     }
+    else
+    if ((pParam = GetParam(pArg, "keep-active=")) != NULL) {
+      if (isdigit(*pParam)) {
+        keepActive = (unsigned)atol(pParam);
+      } else {
+        cerr << "Invalid value in " << *pArgs << endl;
+        Invalidate();
+      }
+    }
     else {
-      cerr << "Unknown option " << pArg << endl;
+      cerr << "Unknown option " << *pArgs << endl;
       Invalidate();
     }
   }
@@ -381,6 +401,8 @@ static void CALLBACK Help(const char *pProgPath)
   << "  --suppress-echo=<c>      - enable/disable local echo suppression on the" << endl
   << "                             remote side. Where <c> is y[es] or n[o] (no by" << endl
   << "                             default)." << endl
+  << "  --keep-active=<s>        - send NOP command every <s> seconds to keep the" << endl
+  << "                             connection active if data is not transferred." << endl
   << endl
   << "IN method input data stream description:" << endl
   << "  LINE_DATA - telnet protocol data (will be discarded if engine not started)." << endl
@@ -546,6 +568,13 @@ static BOOL CALLBACK InMethod(
         return FALSE;
 
       if (!pInMsg->u.val) {
+        // CONNECT(FALSE)
+
+        if (pState->hKeepActiveTimer) {
+          pTimerDelete(pState->hKeepActiveTimer);
+          pState->hKeepActiveTimer = NULL;
+        }
+
         if (pState->pComPort) {
           if (pState->goMask[1] & GO1_BREAK_STATUS) {
             pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_BREAK_STATUS, FALSE);
@@ -568,6 +597,8 @@ static BOOL CALLBACK InMethod(
 
         break;
       }
+
+      // CONNECT(TRUE)
 
       TelnetProtocol *pTelnetProtocol = ((Filter *)hFilter)->CreateProtocol(pState, pPortName(hFromPort));
 
@@ -598,7 +629,43 @@ static BOOL CALLBACK InMethod(
           pState->pComPort->NotifyLSR(0);
       }
 
+      if (((Filter *)hFilter)->keepActive) {
+        _ASSERTE(pState->hKeepActiveTimer == NULL);
+
+        pState->hKeepActiveTimer = pTimerCreate();
+
+        if (pState->hKeepActiveTimer) {
+          LARGE_INTEGER firstReportTime;
+
+          firstReportTime.QuadPart = -10000000LL * ((Filter *)hFilter)->keepActive;
+
+          pTimerSet(pState->hKeepActiveTimer, hFromPort, &firstReportTime, ((Filter *)hFilter)->keepActive * 1000L);
+        }
+      }
+
       pTelnetProtocol->FlushEncodedStream(ppEchoMsg);
+
+      break;
+    }
+    case HUB_MSG_T2N(HUB_MSG_TYPE_TICK): {
+      HMASTERTIMER hTimer = (HMASTERTIMER)pInMsg->u.hVal;
+
+      if (!hTimer)
+        break;
+
+      State *pState = ((Filter *)hFilter)->GetState(hFromPort);
+
+      if (!pState)
+        return FALSE;
+
+      if (hTimer == pState->hKeepActiveTimer) {
+        TelnetProtocol *pTelnetProtocol = ((Filter *)hFilter)->GetProtocol(hFromPort);
+
+        if (pTelnetProtocol) {
+          pTelnetProtocol->KeepActive();
+          pTelnetProtocol->FlushEncodedStream(ppEchoMsg);
+        }
+      }
 
       break;
     }
@@ -875,7 +942,10 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
       !ROUTINE_IS_VALID(pHubRoutines, pMsgReplaceNone) ||
       !ROUTINE_IS_VALID(pHubRoutines, pMsgInsertNone) ||
       !ROUTINE_IS_VALID(pHubRoutines, pPortName) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pFilterName))
+      !ROUTINE_IS_VALID(pHubRoutines, pFilterName) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pTimerCreate) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pTimerSet) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pTimerDelete))
   {
     return NULL;
   }
@@ -887,6 +957,9 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   pMsgInsertNone = pHubRoutines->pMsgInsertNone;
   pPortName = pHubRoutines->pPortName;
   pFilterName = pHubRoutines->pFilterName;
+  pTimerCreate = pHubRoutines->pTimerCreate;
+  pTimerSet = pHubRoutines->pTimerSet;
+  pTimerDelete = pHubRoutines->pTimerDelete;
 
   return plugins;
 }
