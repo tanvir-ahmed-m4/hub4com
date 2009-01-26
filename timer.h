@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2009/01/26 14:55:29  vfrolov
+ * Added signature checking for Timer
+ *
  * Revision 1.1  2009/01/23 16:46:32  vfrolov
  * Initial revision
  *
@@ -30,6 +33,8 @@
 ///////////////////////////////////////////////////////////////
 class Port;
 ///////////////////////////////////////////////////////////////
+#define TIMER_SIGNATURE 'h4cT'
+///////////////////////////////////////////////////////////////
 class Timer
 {
   public:
@@ -39,7 +44,7 @@ class Timer
     BOOL Set(Port *_pPort, const LARGE_INTEGER *pDueTime, LONG period);
     void Cancel();
 
-  protected:
+  private:
     static VOID CALLBACK TimerAPCProc(
       LPVOID pArg,
       DWORD dwTimerLowValue,
@@ -47,6 +52,14 @@ class Timer
 
     Port *pPort;
     HANDLE hTimer;
+
+#ifdef _DEBUG
+  private:
+    DWORD signature;
+
+  public:
+    BOOL IsValid() { return signature == TIMER_SIGNATURE; }
+#endif
 };
 ///////////////////////////////////////////////////////////////
 

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.11  2009/01/26 14:55:29  vfrolov
+ * Added signature checking for Timer
+ *
  * Revision 1.10  2009/01/23 16:48:49  vfrolov
  * Exported timer routines
  *
@@ -250,7 +253,9 @@ static BOOL CALLBACK timer_set(
   LONG period)
 {
   _ASSERTE(hMasterTimer != NULL);
+  _ASSERTE(((Timer *)hMasterTimer)->IsValid());
   _ASSERTE(hMasterPort != NULL);
+  _ASSERTE(((Port *)hMasterPort)->IsValid());
 
   return ((Timer *)hMasterTimer)->Set((Port *)hMasterPort, pDueTime, period);
 }
@@ -258,6 +263,7 @@ static BOOL CALLBACK timer_set(
 static void CALLBACK timer_cancel(HMASTERTIMER hMasterTimer)
 {
   _ASSERTE(hMasterTimer != NULL);
+  _ASSERTE(((Timer *)hMasterTimer)->IsValid());
 
   ((Timer *)hMasterTimer)->Cancel();
 }
@@ -265,6 +271,7 @@ static void CALLBACK timer_cancel(HMASTERTIMER hMasterTimer)
 static void CALLBACK timer_delete(HMASTERTIMER hMasterTimer)
 {
   _ASSERTE(hMasterTimer != NULL);
+  _ASSERTE(((Timer *)hMasterTimer)->IsValid());
 
   delete ((Timer *)hMasterTimer);
 }

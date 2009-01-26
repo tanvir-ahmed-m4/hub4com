@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2009/01/26 14:55:29  vfrolov
+ * Added signature checking for Timer
+ *
  * Revision 1.1  2009/01/23 16:46:32  vfrolov
  * Initial revision
  *
@@ -34,6 +37,10 @@
 ///////////////////////////////////////////////////////////////
 Timer::Timer()
 {
+#ifdef _DEBUG
+  signature = TIMER_SIGNATURE;
+#endif
+
   hTimer = ::CreateWaitableTimer(NULL, FALSE, NULL);
 
   if (!hTimer) {
@@ -45,10 +52,16 @@ Timer::Timer()
 ///////////////////////////////////////////////////////////////
 Timer::~Timer()
 {
+  _ASSERTE(signature == TIMER_SIGNATURE);
+
   if (hTimer) {
     Cancel();
     CloseHandle(hTimer);
   }
+
+#ifdef _DEBUG
+  signature = 0;
+#endif
 }
 ///////////////////////////////////////////////////////////////
 VOID CALLBACK Timer::TimerAPCProc(
@@ -56,6 +69,8 @@ VOID CALLBACK Timer::TimerAPCProc(
   DWORD /*dwTimerLowValue*/,
   DWORD /*dwTimerHighValue*/)
 {
+  _ASSERTE(((Timer *)pArg)->signature == TIMER_SIGNATURE);
+
   HubMsg msg;
 
   msg.type = HUB_MSG_TYPE_TICK;
@@ -66,6 +81,8 @@ VOID CALLBACK Timer::TimerAPCProc(
 ///////////////////////////////////////////////////////////////
 BOOL Timer::Set(Port *_pPort, const LARGE_INTEGER *pDueTime, LONG period)
 {
+  _ASSERTE(signature == TIMER_SIGNATURE);
+
   pPort = _pPort;
 
   _ASSERTE(pPort != NULL);
@@ -83,6 +100,8 @@ BOOL Timer::Set(Port *_pPort, const LARGE_INTEGER *pDueTime, LONG period)
 ///////////////////////////////////////////////////////////////
 void Timer::Cancel()
 {
+  _ASSERTE(signature == TIMER_SIGNATURE);
+
   if (!::CancelWaitableTimer(hTimer)) {
     DWORD err = GetLastError();
 
