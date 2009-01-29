@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2009/01/29 14:54:05  vfrolov
+ * Fixed failure if pInitProc() returns NULL
+ *
  * Revision 1.5  2008/11/24 12:36:59  vfrolov
  * Changed plugin API
  *
@@ -273,7 +276,7 @@ void Plugins::LoadPlugin(const string &pathPlugin)
   HMODULE hDll = ::LoadLibrary(pathPlugin.c_str());
 
   if (!hDll) {
-    cerr << "Can't load " << pathPlugin << endl;
+    cerr << "WARNING: Can't load " << pathPlugin << endl;
     return;
   }
 
@@ -285,7 +288,7 @@ void Plugins::LoadPlugin(const string &pathPlugin)
     pInitProc = (PLUGIN_INIT_A *)::GetProcAddress(hDll, PLUGIN_INIT_PROC_NAME);
 
     if (!pInitProc) {
-      cerr << "No procedure " << PLUGIN_INIT_PROC_NAME_A << " in " << pathPlugin << endl;
+      cerr << "WARNING: No procedure " << PLUGIN_INIT_PROC_NAME_A << " in " << pathPlugin << endl;
       FreeLibrary(hDll);
       return;
     }
@@ -319,16 +322,20 @@ void Plugins::InitPlugin(
     PLUGIN_INIT_A *pInitProc,
     PluginArray &pluginArray)
 {
-  for (const PLUGIN_ROUTINES_A *const *ppPlgRoutines = pInitProc(&hubRoutines) ;
-       *ppPlgRoutines ;
-       *ppPlgRoutines++)
-  {
+  const PLUGIN_ROUTINES_A *const *ppPlgRoutines = pInitProc(&hubRoutines);
+
+  if (!ppPlgRoutines) {
+    cerr << "WARNING: Can't initialize " << GetModulePath(hDll, TRUE) << endl;
+    return;
+  }
+
+  for ( ; *ppPlgRoutines ; *ppPlgRoutines++) {
     PLUGIN_TYPE type = ROUTINE_IS_VALID(*ppPlgRoutines, pGetPluginType) ?
                        (*ppPlgRoutines)->pGetPluginType() :
                        PLUGIN_TYPE_INVALID;
 
     if (type == PLUGIN_TYPE_INVALID) {
-      cerr << "Found module with invalid type in " << GetModulePath(hDll, TRUE) << endl;
+      cerr << "WARNING: Found module with invalid type in " << GetModulePath(hDll, TRUE) << endl;
       continue;
     }
 
@@ -347,7 +354,7 @@ void Plugins::InitPlugin(
       iPair = plugins.find(type);
 
       if (iPair == plugins.end()) {
-        cerr << "Can't add module type " << type2str(type) << endl;
+        cerr << "WARNING: Can't add module type " << type2str(type) << endl;
         delete pPlugin;
         continue;
       }
