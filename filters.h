@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2009/02/02 15:21:42  vfrolov
+ * Optimized filter's API
+ *
  * Revision 1.7  2008/11/24 12:36:59  vfrolov
  * Changed plugin API
  *
@@ -48,13 +51,12 @@
 ///////////////////////////////////////////////////////////////
 class ComHub;
 class Filter;
-class FilterMethod;
+class FilterInstance;
 class HubMsg;
 ///////////////////////////////////////////////////////////////
 typedef vector<Filter*> FilterArray;
-typedef vector<FilterMethod*> FilterMethodArray;
-typedef map<Port *, FilterMethodArray*> PortFiltersMap;
-typedef set<Port *> SetOfPorts;
+typedef vector<FilterInstance*> FilterInstanceArray;
+typedef map<Port *, FilterInstanceArray*> PortFiltersMap;
 ///////////////////////////////////////////////////////////////
 class Filters
 {
@@ -72,7 +74,7 @@ class Filters
         const char *pGroup,
         BOOL addInMethod,
         BOOL addOutMethod,
-        const SetOfPorts *pOutMethodSrcPorts);
+        const set<Port *> *pOutMethodSrcPorts);
     void Report() const;
     BOOL InMethod(
         Port *pFromPort,
@@ -84,6 +86,13 @@ class Filters
         HubMsg *pOutMsg) const;
 
   private:
+    static BOOL Filters::InMethod(
+        Port *pFromPort,
+        const FilterInstanceArray::const_iterator &i,
+        const FilterInstanceArray::const_iterator &iEnd,
+        HubMsg *pInMsg,
+        HubMsg **ppEchoMsg);
+
     const ComHub &hub;
     FilterArray allFilters;
     PortFiltersMap portFilters;

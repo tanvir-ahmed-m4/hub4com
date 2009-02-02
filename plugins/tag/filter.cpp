@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2009/02/02 15:21:42  vfrolov
+ * Optimized filter's API
+ *
  * Revision 1.3  2008/12/22 09:40:46  vfrolov
  * Optimized message switching
  *
@@ -202,14 +205,19 @@ static void CALLBACK Help(const char *pProgPath)
 }
 ///////////////////////////////////////////////////////////////
 static HFILTER CALLBACK Create(
+    HMASTERFILTER DEBUG_PARAM(hMasterFilter),
     HCONFIG /*hConfig*/,
     int argc,
     const char *const argv[])
 {
+  _ASSERTE(hMasterFilter != NULL);
+
   Filter *pFilter = new Filter(argc, argv);
 
-  if (!pFilter)
-    return NULL;
+  if (!pFilter) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
 
   if (!pFilter->IsValid()) {
     delete pFilter;
@@ -219,14 +227,21 @@ static HFILTER CALLBACK Create(
   return (HFILTER)pFilter;
 }
 ///////////////////////////////////////////////////////////////
+static void CALLBACK Delete(
+    HFILTER hFilter)
+{
+  _ASSERTE(hFilter != NULL);
+
+  delete (Filter *)hFilter;
+}
+///////////////////////////////////////////////////////////////
 static BOOL CALLBACK InMethod(
     HFILTER hFilter,
-    HMASTERPORT DEBUG_PARAM(hFromPort),
+    HFILTERINSTANCE /*hFilterInstance*/,
     HUB_MSG *pInMsg,
     HUB_MSG **DEBUG_PARAM(ppEchoMsg))
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hFromPort != NULL);
   _ASSERTE(pInMsg != NULL);
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
@@ -260,13 +275,12 @@ static BOOL CALLBACK InMethod(
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK OutMethod(
     HFILTER hFilter,
+    HFILTERINSTANCE /*hFilterInstance*/,
     HMASTERPORT DEBUG_PARAM(hFromPort),
-    HMASTERPORT DEBUG_PARAM(hToPort),
     HUB_MSG *pOutMsg)
 {
   _ASSERTE(hFilter != NULL);
   _ASSERTE(hFromPort != NULL);
-  _ASSERTE(hToPort != NULL);
   _ASSERTE(pOutMsg != NULL);
 
   switch (HUB_MSG_T2N(pOutMsg->type)) {
@@ -318,7 +332,9 @@ static const FILTER_ROUTINES_A routines = {
   NULL,           // Config
   NULL,           // ConfigStop
   Create,
-  NULL,           // Init
+  Delete,
+  NULL,           // CreateInstance
+  NULL,           // DeleteInstance
   InMethod,
   OutMethod,
 };

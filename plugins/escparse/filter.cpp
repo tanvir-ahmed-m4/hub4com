@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.11  2009/02/02 15:21:42  vfrolov
+ * Optimized filter's API
+ *
  * Revision 1.10  2008/12/22 09:40:45  vfrolov
  * Optimized message switching
  *
@@ -66,13 +69,14 @@ namespace FilterEscParse {
   #define DEBUG_PARAM(par) par
 #endif  /* _DEBUG */
 ///////////////////////////////////////////////////////////////
-static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal = NULL;
-static ROUTINE_MSG_INSERT_NONE *pMsgInsertNone = NULL;
-static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone = NULL;
-static ROUTINE_MSG_INSERT_BUF *pMsgInsertBuf = NULL;
-static ROUTINE_MSG_REPLACE_BUF *pMsgReplaceBuf = NULL;
-static ROUTINE_PORT_NAME_A *pPortName = NULL;
-static ROUTINE_FILTER_NAME_A *pFilterName = NULL;
+static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal;
+static ROUTINE_MSG_INSERT_NONE *pMsgInsertNone;
+static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone;
+static ROUTINE_MSG_INSERT_BUF *pMsgInsertBuf;
+static ROUTINE_MSG_REPLACE_BUF *pMsgReplaceBuf;
+static ROUTINE_PORT_NAME_A *pPortName;
+static ROUTINE_FILTER_NAME_A *pFilterName;
+static ROUTINE_FILTERPORT *pFilterPort;
 ///////////////////////////////////////////////////////////////
 const char *GetParam(const char *pArg, const char *pPattern)
 {
@@ -93,12 +97,12 @@ class Valid {
     BOOL isValid;
 };
 ///////////////////////////////////////////////////////////////
-class EscParse {
+class State {
   public:
-    EscParse(BYTE _escapeChar)
-      : escMode(FALSE),
+    State(HMASTERPORT hMasterPort)
+      : pName(pPortName(hMasterPort)),
+        escMode(FALSE),
         intercepted_options(0),
-        escapeChar(_escapeChar),
         maskMst(0),
         maskLsr(0),
         _options(0)
@@ -106,7 +110,7 @@ class EscParse {
       Reset();
     }
 
-    HUB_MSG *Convert(HUB_MSG *pMsg);
+    HUB_MSG *Convert(BYTE escapeChar, HUB_MSG *pMsg);
 
     DWORD Options() const {
       return _options;
@@ -124,6 +128,7 @@ class EscParse {
       maskLsr = GO1_O2V_LINE_STATUS(_options);
     }
 
+    const char *const pName;
     BOOL escMode;
     DWORD intercepted_options;
 
@@ -131,7 +136,6 @@ class EscParse {
     void Reset() { state = subState = 0; }
     HUB_MSG *Flush(HUB_MSG *pMsg);
 
-    BYTE escapeChar;
     BYTE maskMst;
     BYTE maskLsr;
     int state;
@@ -143,7 +147,7 @@ class EscParse {
     DWORD _options;
 };
 
-HUB_MSG *EscParse::Flush(HUB_MSG *pMsg)
+HUB_MSG *State::Flush(HUB_MSG *pMsg)
 {
   if (!line_data.empty()) {
     pMsg = pMsgInsertBuf(pMsg,
@@ -157,7 +161,7 @@ HUB_MSG *EscParse::Flush(HUB_MSG *pMsg)
   return pMsg;
 }
 
-HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
+HUB_MSG *State::Convert(BYTE escapeChar, HUB_MSG *pMsg)
 {
   _ASSERTE(pMsg->type == HUB_MSG_TYPE_LINE_DATA);
 
@@ -327,10 +331,8 @@ HUB_MSG *EscParse::Convert(HUB_MSG *pMsg)
 ///////////////////////////////////////////////////////////////
 class Filter : public Valid {
   public:
-    Filter(int argc, const char *const argv[]);
-    EscParse *GetEscParse(HMASTERPORT hPort);
+    Filter(const char *pName, int argc, const char *const argv[]);
 
-    void SetFilterName(const char *_pName) { pName = _pName; }
     const char *FilterName() const { return pName; }
 
     BOOL requestEscMode;
@@ -339,23 +341,18 @@ class Filter : public Valid {
 
   private:
     const char *pName;
-
-    typedef map<HMASTERPORT, EscParse*> PortsMap;
-    typedef pair<HMASTERPORT, EscParse*> PortPair;
-
-    PortsMap portsMap;
 };
 
-Filter::Filter(int argc, const char *const argv[])
-  : requestEscMode(TRUE),
+Filter::Filter(const char *_pName, int argc, const char *const argv[])
+  : pName(_pName),
+    requestEscMode(TRUE),
     escapeChar(0xFF),
     acceptableOptions(
       GO1_RBR_STATUS |
       GO1_RLC_STATUS |
       GO1_BREAK_STATUS |
       GO1_V2O_MODEM_STATUS(-1) |
-      GO1_V2O_LINE_STATUS(-1)),
-    pName(NULL)
+      GO1_V2O_LINE_STATUS(-1))
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
@@ -385,25 +382,6 @@ Filter::Filter(int argc, const char *const argv[])
       Invalidate();
     }
   }
-}
-
-EscParse *Filter::GetEscParse(HMASTERPORT hPort)
-{
-  PortsMap::iterator iPair = portsMap.find(hPort);
-
-  if (iPair == portsMap.end()) {
-      portsMap.insert(PortPair(hPort, NULL));
-
-      iPair = portsMap.find(hPort);
-
-      if (iPair == portsMap.end())
-        return NULL;
-  }
-
-  if (!iPair->second)
-    iPair->second = new EscParse(escapeChar);
-
-  return iPair->second;
 }
 ///////////////////////////////////////////////////////////////
 static PLUGIN_TYPE CALLBACK GetPluginType()
@@ -447,14 +425,19 @@ static void CALLBACK Help(const char *pProgPath)
 }
 ///////////////////////////////////////////////////////////////
 static HFILTER CALLBACK Create(
+    HMASTERFILTER hMasterFilter,
     HCONFIG /*hConfig*/,
     int argc,
     const char *const argv[])
 {
-  Filter *pFilter = new Filter(argc, argv);
+  _ASSERTE(hMasterFilter != NULL);
 
-  if (!pFilter)
-    return NULL;
+  Filter *pFilter = new Filter(pFilterName(hMasterFilter), argc, argv);
+
+  if (!pFilter) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
 
   if (!pFilter->IsValid()) {
     delete pFilter;
@@ -464,26 +447,42 @@ static HFILTER CALLBACK Create(
   return (HFILTER)pFilter;
 }
 ///////////////////////////////////////////////////////////////
-static BOOL CALLBACK Init(
-    HFILTER hFilter,
-    HMASTERFILTER hMasterFilter)
+static void CALLBACK Delete(
+    HFILTER hFilter)
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hMasterFilter != NULL);
 
-  ((Filter *)hFilter)->SetFilterName(pFilterName(hMasterFilter));
+  delete (Filter *)hFilter;
+}
+///////////////////////////////////////////////////////////////
+static HFILTERINSTANCE CALLBACK CreateInstance(
+    HMASTERFILTERINSTANCE hMasterFilterInstance)
+{
+  _ASSERTE(hMasterFilterInstance != NULL);
 
-  return TRUE;
+  HMASTERPORT hMasterPort = pFilterPort(hMasterFilterInstance);
+
+  _ASSERTE(hMasterPort != NULL);
+
+  return (HFILTERINSTANCE)new State(hMasterPort);
+}
+///////////////////////////////////////////////////////////////
+static void CALLBACK DeleteInstance(
+    HFILTERINSTANCE hFilterInstance)
+{
+  _ASSERTE(hFilterInstance != NULL);
+
+  delete (State *)hFilterInstance;
 }
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK InMethod(
     HFILTER hFilter,
-    HMASTERPORT hFromPort,
+    HFILTERINSTANCE hFilterInstance,
     HUB_MSG *pInMsg,
     HUB_MSG ** DEBUG_PARAM(ppEchoMsg))
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hFromPort != NULL);
+  _ASSERTE(hFilterInstance != NULL);
   _ASSERTE(pInMsg != NULL);
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
@@ -502,23 +501,18 @@ static BOOL CALLBACK InMethod(
       int iGo = GO_O2I(pInMsg->u.pv.val);
 
       if (iGo == 0) {
-        EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
-
-        if (!pEscParse)
-          return FALSE;
-
         // if the subsequent filters require interceptable options then
         // accept the received options and request the escape mode
 
-        pEscParse->OptionsAdd((pEscParse->intercepted_options & ((Filter *)hFilter)->acceptableOptions));
+        ((State *)hFilterInstance)->OptionsAdd((((State *)hFilterInstance)->intercepted_options & ((Filter *)hFilter)->acceptableOptions));
 
         if (((Filter *)hFilter)->requestEscMode) {
-          if (pEscParse->Options() && (pInMsg->u.pv.val & GO0_ESCAPE_MODE)) {
-            pEscParse->escMode = TRUE;
+          if (((State *)hFilterInstance)->Options() && (pInMsg->u.pv.val & GO0_ESCAPE_MODE)) {
+            ((State *)hFilterInstance)->escMode = TRUE;
             *pInMsg->u.pv.pVal |= GO0_ESCAPE_MODE; // request the escape mode
           }
         } else {
-          pEscParse->escMode = TRUE;
+          ((State *)hFilterInstance)->escMode = TRUE;
         }
 
         // the subsequent filters can't request the escape mode
@@ -527,11 +521,6 @@ static BOOL CALLBACK InMethod(
       }
       else
       if (iGo == 1) {
-        EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
-
-        if (!pEscParse)
-          return FALSE;
-
         // get interceptable options from subsequent filters separately
 
         DWORD interceptable_options = (pInMsg->u.pv.val & ((Filter *)hFilter)->acceptableOptions);
@@ -544,7 +533,7 @@ static BOOL CALLBACK InMethod(
           return FALSE;
 
         pInMsg->type = HUB_MSG_TYPE_GET_IN_OPTS;
-        pInMsg->u.pv.pVal = &pEscParse->intercepted_options;
+        pInMsg->u.pv.pVal = &((State *)hFilterInstance)->intercepted_options;
         _ASSERTE((interceptable_options & GO_I2O(-1)) == 0);
         pInMsg->u.pv.val = interceptable_options | GO_I2O(iGo);
       }
@@ -552,12 +541,7 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_GET_ESC_OPTS): {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
-
-      if (!pEscParse)
-        return FALSE;
-
-      *pInMsg->u.pv.pVal = ESC_OPTS_MAP_GO1_2_EO(pEscParse->Options()) |
+      *pInMsg->u.pv.pVal = ESC_OPTS_MAP_GO1_2_EO(((State *)hFilterInstance)->Options()) |
                            ESC_OPTS_V2O_ESCCHAR(((Filter *)hFilter)->escapeChar);
 
       // hide this message from subsequent filters
@@ -567,20 +551,15 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_FAIL_ESC_OPTS): {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
-
-      if (!pEscParse)
-        return FALSE;
-
-      DWORD fail_options = (pInMsg->u.pv.val & ESC_OPTS_MAP_GO1_2_EO(pEscParse->Options()));
+      DWORD fail_options = (pInMsg->u.pv.val & ESC_OPTS_MAP_GO1_2_EO(((State *)hFilterInstance)->Options()));
 
       if (fail_options) {
-        cerr << pPortName(hFromPort)
+        cerr << ((State *)hFilterInstance)->pName
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
              << " escape mode option(s) 0x" << hex << fail_options << dec
              << " not accepted (will try non escape mode option(s))" << endl;
 
-        pEscParse->OptionsDel(ESC_OPTS_MAP_EO_2_GO1(fail_options));
+        ((State *)hFilterInstance)->OptionsDel(ESC_OPTS_MAP_EO_2_GO1(fail_options));
         *pInMsg->u.pv.pVal |= ESC_OPTS_MAP_EO_2_GO1(fail_options);
       }
 
@@ -594,18 +573,13 @@ static BOOL CALLBACK InMethod(
       if (GO_O2I(pInMsg->u.pv.val) != 0)
         break;
 
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
-
-      if (!pEscParse)
-        return FALSE;
-
       if ((pInMsg->u.val & GO0_ESCAPE_MODE) && ((Filter *)hFilter)->requestEscMode) {
-        cerr << pPortName(hFromPort)
+        cerr << ((State *)hFilterInstance)->pName
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
              << " option ESCAPE_MODE not accepted" << endl;
 
-        pEscParse->escMode = FALSE;
-        pEscParse->OptionsDel((DWORD)-1);
+        ((State *)hFilterInstance)->escMode = FALSE;
+        ((State *)hFilterInstance)->OptionsDel((DWORD)-1);
       }
 
       pInMsg->u.val &= ~GO0_ESCAPE_MODE; // hide from subsequent filters
@@ -618,42 +592,22 @@ static BOOL CALLBACK InMethod(
       if (pInMsg->u.buf.size == 0)
         return TRUE;
 
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
-
-      if (!pEscParse)
-        return FALSE;
-
-      pInMsg = pEscParse->Convert(pInMsg);
+      pInMsg = ((State *)hFilterInstance)->Convert(((Filter *)hFilter)->escapeChar, pInMsg);
 
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_MODEM_STATUS): {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
-
-      if (!pEscParse)
-        return FALSE;
-
       // discard any status settings controlled by this filter
-      pInMsg->u.val &= ~VAL2MASK(GO1_O2V_MODEM_STATUS(pEscParse->Options()));
+      pInMsg->u.val &= ~VAL2MASK(GO1_O2V_MODEM_STATUS(((State *)hFilterInstance)->Options()));
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_STATUS): {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
-
-      if (!pEscParse)
-        return FALSE;
-
       // discard any status settings controlled by this filter
-      pInMsg->u.val &= ~VAL2MASK(GO1_O2V_LINE_STATUS(pEscParse->Options()));
+      pInMsg->u.val &= ~VAL2MASK(GO1_O2V_LINE_STATUS(((State *)hFilterInstance)->Options()));
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_RBR_STATUS): {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
-
-      if (!pEscParse)
-        return FALSE;
-
-      if (pEscParse->Options() & GO1_RBR_STATUS) {
+      if (((State *)hFilterInstance)->Options() & GO1_RBR_STATUS) {
         // discard any status settings controlled by this filter
         if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
           return FALSE;
@@ -661,12 +615,7 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_RLC_STATUS): {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
-
-      if (!pEscParse)
-        return FALSE;
-
-      if (pEscParse->Options() & GO1_RLC_STATUS) {
+      if (((State *)hFilterInstance)->Options() & GO1_RLC_STATUS) {
         // discard any status settings controlled by this filter
         if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
           return FALSE;
@@ -674,12 +623,7 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_BREAK_STATUS): {
-      EscParse *pEscParse = ((Filter *)hFilter)->GetEscParse(hFromPort);
-
-      if (!pEscParse)
-        return FALSE;
-
-      if (pEscParse->Options() & GO1_BREAK_STATUS) {
+      if (((State *)hFilterInstance)->Options() & GO1_BREAK_STATUS) {
         // discard any status settings controlled by this filter
         if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
           return FALSE;
@@ -700,7 +644,9 @@ static const FILTER_ROUTINES_A routines = {
   NULL,           // Config
   NULL,           // ConfigStop
   Create,
-  Init,
+  Delete,
+  CreateInstance,
+  DeleteInstance,
   InMethod,
   NULL,           // OutMethod
 };
@@ -720,7 +666,8 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
       !ROUTINE_IS_VALID(pHubRoutines, pMsgInsertBuf) ||
       !ROUTINE_IS_VALID(pHubRoutines, pMsgReplaceBuf) ||
       !ROUTINE_IS_VALID(pHubRoutines, pPortName) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pFilterName))
+      !ROUTINE_IS_VALID(pHubRoutines, pFilterName) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pFilterPort))
   {
     return NULL;
   }
@@ -732,6 +679,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   pMsgReplaceBuf = pHubRoutines->pMsgReplaceBuf;
   pPortName = pHubRoutines->pPortName;
   pFilterName = pHubRoutines->pFilterName;
+  pFilterPort = pHubRoutines->pFilterPort;
 
   return plugins;
 }

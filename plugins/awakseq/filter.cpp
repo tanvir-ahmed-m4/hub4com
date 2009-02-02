@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.12  2009/02/02 15:21:42  vfrolov
+ * Optimized filter's API
+ *
  * Revision 1.11  2008/12/22 09:40:45  vfrolov
  * Optimized message switching
  *
@@ -79,10 +82,22 @@ const char *GetParam(const char *pArg, const char *pPattern)
   return pArg + lenPattern;
 }
 ///////////////////////////////////////////////////////////////
+class Valid {
+  public:
+    Valid() : isValid(TRUE) {}
+    void Invalidate() { isValid = FALSE; }
+    BOOL IsValid() const { return isValid; }
+  private:
+    BOOL isValid;
+};
+///////////////////////////////////////////////////////////////
 class State {
   public:
-    State(const BYTE *pAwakSeq)
-      : connectSent(FALSE), connectionCounter(0) { StartAwakSeq(pAwakSeq); }
+    State()
+      : waitAwakSeq(FALSE),
+        pAwakSeqNext(NULL),
+        connectSent(FALSE),
+        connectionCounter(0) {}
 
     void StartAwakSeq(const BYTE *pAwakSeq) {
       waitAwakSeq = TRUE;
@@ -95,59 +110,58 @@ class State {
     int connectionCounter;
 };
 ///////////////////////////////////////////////////////////////
-class Filter {
+class Filter : public Valid {
   public:
     Filter(int argc, const char *const argv[]);
-    State *GetState(HMASTERPORT hPort);
+    ~Filter() {
+      if (pAwakSeq)
+        free((void *)pAwakSeq);
+    }
 
     const BYTE *pAwakSeq;
-
-  private:
-
-    typedef map<HMASTERPORT, State*> PortsMap;
-    typedef pair<HMASTERPORT, State*> PortPair;
-
-    PortsMap portsMap;
 };
 
 Filter::Filter(int argc, const char *const argv[])
-  : pAwakSeq((const BYTE *)"")
+  : pAwakSeq(NULL)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
 
     if (!pArg) {
-      cerr << "Unknown option " << *pArgs << endl;
+      cerr << "ERROR: Unknown option " << *pArgs << endl;
+      Invalidate();
       continue;
     }
 
     const char *pParam;
 
     if ((pParam = GetParam(pArg, "awak-seq=")) != NULL) {
-      pAwakSeq = (const BYTE *)_strdup(pParam);
+      if (pAwakSeq) {
+        cerr << "ERROR: The awakening sequence was set twice" << endl;
+        Invalidate();
+        continue;
+      }
+
+      pAwakSeq = (BYTE *)_strdup(pParam);
+
+      if (!pAwakSeq) {
+        cerr << "No enough memory." << endl;
+        exit(2);
+      }
     } else {
-      cerr << "Unknown option " << pArg << endl;
+      cerr << "ERROR: Unknown option " << *pArgs << endl;
+      Invalidate();
     }
   }
-}
 
-State *Filter::GetState(HMASTERPORT hPort)
-{
-  PortsMap::iterator iPair = portsMap.find(hPort);
+  if (IsValid() && !pAwakSeq) {
+    pAwakSeq = (BYTE *)_strdup("");
 
-  if (iPair == portsMap.end()) {
-      portsMap.insert(PortPair(hPort, NULL));
-
-      iPair = portsMap.find(hPort);
-
-      if (iPair == portsMap.end())
-        return NULL;
+    if (!pAwakSeq) {
+      cerr << "No enough memory." << endl;
+      exit(2);
+    }
   }
-
-  if (!iPair->second)
-    iPair->second = new State(pAwakSeq);
-
-  return iPair->second;
 }
 ///////////////////////////////////////////////////////////////
 static PLUGIN_TYPE CALLBACK GetPluginType()
@@ -205,21 +219,60 @@ static void CALLBACK Help(const char *pProgPath)
 }
 ///////////////////////////////////////////////////////////////
 static HFILTER CALLBACK Create(
+    HMASTERFILTER DEBUG_PARAM(hMasterFilter),
     HCONFIG /*hConfig*/,
     int argc,
     const char *const argv[])
 {
-  return (HFILTER)new Filter(argc, argv);
+  _ASSERTE(hMasterFilter != NULL);
+
+  Filter *pFilter = new Filter(argc, argv);
+
+  if (!pFilter) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
+
+  if (!pFilter->IsValid()) {
+    delete pFilter;
+    return NULL;
+  }
+
+  return (HFILTER)pFilter;
+}
+///////////////////////////////////////////////////////////////
+static void CALLBACK Delete(
+    HFILTER hFilter)
+{
+  _ASSERTE(hFilter != NULL);
+
+  delete (Filter *)hFilter;
+}
+///////////////////////////////////////////////////////////////
+static HFILTERINSTANCE CALLBACK CreateInstance(
+    HMASTERFILTERINSTANCE DEBUG_PARAM(hMasterFilterInstance))
+{
+  _ASSERTE(hMasterFilterInstance != NULL);
+
+  return (HFILTERINSTANCE)new State();
+}
+///////////////////////////////////////////////////////////////
+static void CALLBACK DeleteInstance(
+    HFILTERINSTANCE hFilterInstance)
+{
+  _ASSERTE(hFilterInstance != NULL);
+
+  delete (State *)hFilterInstance;
 }
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK InMethod(
     HFILTER hFilter,
-    HMASTERPORT hFromPort,
+    HFILTERINSTANCE hFilterInstance,
     HUB_MSG *pInMsg,
     HUB_MSG **DEBUG_PARAM(ppEchoMsg))
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hFromPort != NULL);
+  _ASSERTE(hFilterInstance != NULL);
   _ASSERTE(pInMsg != NULL);
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
@@ -233,16 +286,14 @@ static BOOL CALLBACK InMethod(
     if (size == 0)
       return TRUE;
 
-    State *pState = ((Filter *)hFilter)->GetState(hFromPort);
+    if (((State *)hFilterInstance)->pAwakSeqNext == NULL)
+      ((State *)hFilterInstance)->StartAwakSeq(((Filter *)hFilter)->pAwakSeq);
 
-    if (!pState)
-      return FALSE;
-
-    if (!pState->waitAwakSeq)
+    if (!((State *)hFilterInstance)->waitAwakSeq)
       return TRUE;
 
     BYTE *pBuf = pInMsg->u.buf.pBuf;
-    const BYTE *pAwakSeqNext = pState->pAwakSeqNext;
+    const BYTE *pAwakSeqNext = ((State *)hFilterInstance)->pAwakSeqNext;
 
     for ( ; *pAwakSeqNext && size ; size--) {
       if (*pAwakSeqNext == *pBuf++)
@@ -252,7 +303,7 @@ static BOOL CALLBACK InMethod(
     }
 
     if (!*pAwakSeqNext) {
-      pState->waitAwakSeq = FALSE;
+      ((State *)hFilterInstance)->waitAwakSeq = FALSE;
 
       if (size) {
         // insert CONNECT(TRUE) before rest of data
@@ -279,10 +330,10 @@ static BOOL CALLBACK InMethod(
           return FALSE;
       }
 
-      pState->connectSent = TRUE;
+      ((State *)hFilterInstance)->connectSent = TRUE;
     } else {
       pInMsg->u.buf.size = 0;
-      pState->pAwakSeqNext = pAwakSeqNext;
+      ((State *)hFilterInstance)->pAwakSeqNext = pAwakSeqNext;
     }
     break;
   }
@@ -292,22 +343,17 @@ static BOOL CALLBACK InMethod(
       if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
         return FALSE;
     } else {
-      State *pState = ((Filter *)hFilter)->GetState(hFromPort);
-
-      if (!pState)
-        return FALSE;
-
       // discard CONNECT(FALSE) from the input stream
       // if CONNECT(TRUE) was not added yet
-      if (pState->connectSent) {
-        pState->connectSent = FALSE;
+      if (((State *)hFilterInstance)->connectSent) {
+        ((State *)hFilterInstance)->connectSent = FALSE;
       } else {
         if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
           return FALSE;
       }
 
       // start awakening sequence waiting
-      pState->StartAwakSeq(((Filter *)hFilter)->pAwakSeq);
+      ((State *)hFilterInstance)->StartAwakSeq(((Filter *)hFilter)->pAwakSeq);
     }
     break;
   }
@@ -317,34 +363,29 @@ static BOOL CALLBACK InMethod(
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK OutMethod(
     HFILTER hFilter,
+    HFILTERINSTANCE hFilterInstance,
     HMASTERPORT DEBUG_PARAM(hFromPort),
-    HMASTERPORT hToPort,
     HUB_MSG *pOutMsg)
 {
   _ASSERTE(hFilter != NULL);
+  _ASSERTE(hFilterInstance != NULL);
   _ASSERTE(hFromPort != NULL);
-  _ASSERTE(hToPort != NULL);
   _ASSERTE(pOutMsg != NULL);
 
   switch (HUB_MSG_T2N(pOutMsg->type)) {
-  case HUB_MSG_T2N(HUB_MSG_TYPE_CONNECT): {
-    State *pState = ((Filter *)hFilter)->GetState(hToPort);
+    case HUB_MSG_T2N(HUB_MSG_TYPE_CONNECT): {
+      if (pOutMsg->u.val) {
+        ((State *)hFilterInstance)->connectionCounter++;
 
-    if (!pState)
-      return FALSE;
+        _ASSERTE(((State *)hFilterInstance)->connectionCounter > 0);
+      } else {
+        _ASSERTE(((State *)hFilterInstance)->connectionCounter > 0);
 
-    if (pOutMsg->u.val) {
-      pState->connectionCounter++;
-
-      _ASSERTE(pState->connectionCounter > 0);
-    } else {
-      _ASSERTE(pState->connectionCounter > 0);
-
-      if (--pState->connectionCounter <= 0)
-        pState->StartAwakSeq(((Filter *)hFilter)->pAwakSeq);
+        if (--((State *)hFilterInstance)->connectionCounter <= 0)
+          ((State *)hFilterInstance)->StartAwakSeq(((Filter *)hFilter)->pAwakSeq);
+      }
+      break;
     }
-    break;
-  }
   }
 
   return TRUE;
@@ -359,7 +400,9 @@ static const FILTER_ROUTINES_A routines = {
   NULL,           // Config
   NULL,           // ConfigStop
   Create,
-  NULL,           // Init
+  Delete,
+  CreateInstance,
+  DeleteInstance,
   InMethod,
   OutMethod,
 };

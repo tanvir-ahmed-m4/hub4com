@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2009/02/02 15:21:42  vfrolov
+ * Optimized filter's API
+ *
  * Revision 1.6  2008/12/22 09:40:45  vfrolov
  * Optimized message switching
  *
@@ -98,22 +101,12 @@ static void CALLBACK Help(const char *pProgPath)
   ;
 }
 ///////////////////////////////////////////////////////////////
-static HFILTER CALLBACK Create(
-    HCONFIG /*hConfig*/,
-    int /*argc*/,
-    const char *const /*argv*/[])
-{
-  return HFILTER(1);
-}
-///////////////////////////////////////////////////////////////
 static BOOL CALLBACK InMethod(
-    HFILTER DEBUG_PARAM(hFilter),
-    HMASTERPORT DEBUG_PARAM(hFromPort),
+    HFILTER /*hFilter*/,
+    HFILTERINSTANCE /*hFilterInstance*/,
     HUB_MSG *pInMsg,
     HUB_MSG **ppEchoMsg)
 {
-  _ASSERTE(hFilter != NULL);
-  _ASSERTE(hFromPort != NULL);
   _ASSERTE(pInMsg != NULL);
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
@@ -147,8 +140,10 @@ static const FILTER_ROUTINES_A routines = {
   NULL,           // ConfigStart
   NULL,           // Config
   NULL,           // ConfigStop
-  Create,
-  NULL,           // Init
+  NULL,           // Create
+  NULL,           // Delete
+  NULL,           // CreateInstance
+  NULL,           // DeleteInstance
   InMethod,
   NULL,           // OutMethod
 };

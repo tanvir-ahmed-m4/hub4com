@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.4  2009/02/02 15:21:42  vfrolov
+ * Optimized filter's API
+ *
  * Revision 1.3  2008/12/22 09:40:45  vfrolov
  * Optimized message switching
  *
@@ -64,9 +67,14 @@ class Valid {
     BOOL isValid;
 };
 ///////////////////////////////////////////////////////////////
+class Filter;
+
 class State : public Valid {
   public:
     State() { Invalidate(); }
+    ~State() { Close(); }
+    void Open(const Filter &filter);
+    void Close();
 
     HCRYPTKEY hKeyIn;
     HCRYPTKEY hKeyOut;
@@ -75,18 +83,19 @@ class State : public Valid {
 class Filter : public Valid {
   public:
     Filter(int argc, const char *const argv[]);
-    State *GetState(HMASTERPORT hPort);
-    void Open(State *pState);
-    void Close(State *pState);
+
+    ~Filter() {
+      if (IsValid())
+        CryptRelease();
+    }
 
   private:
+    void CryptRelease(BOOL all = TRUE);
+
+    friend class State;
+
     HCRYPTPROV hProv;
     HCRYPTHASH hHash;
-
-    typedef map<HMASTERPORT, State*> PortsMap;
-    typedef pair<HMASTERPORT, State*> PortPair;
-
-    PortsMap portsMap;
 };
 
 Filter::Filter(int argc, const char *const argv[])
@@ -97,7 +106,7 @@ Filter::Filter(int argc, const char *const argv[])
     const char *pArg = GetParam(*pArgs, "--");
 
     if (!pArg) {
-      cerr << "Unknown option " << *pArgs << endl;
+      cerr << "ERROR: Unknown option " << *pArgs << endl;
       Invalidate();
       continue;
     }
@@ -105,6 +114,12 @@ Filter::Filter(int argc, const char *const argv[])
     const char *pParam;
 
     if ((pParam = GetParam(pArg, "secret=")) != NULL) {
+      if (!noSecret) {
+        cerr << "ERROR: The secret was set twice" << endl;
+        Invalidate();
+        continue;
+      }
+
       if (!*pParam)
         cerr << "WARNING: The secret is empty" << endl;
 
@@ -118,6 +133,7 @@ Filter::Filter(int argc, const char *const argv[])
       if (!CryptCreateHash(hProv, CALG_MD5, 0, 0, &hHash)) {
         DWORD err = GetLastError();
         cerr << "CryptCreateHash() - error=" << err << endl;
+        CryptRelease(FALSE);
         Invalidate();
         continue;
       }
@@ -125,70 +141,61 @@ Filter::Filter(int argc, const char *const argv[])
       if (!CryptHashData(hHash, (const BYTE *)pParam, (DWORD)strlen(pParam), 0)) {
         DWORD err = GetLastError();
         cerr << "CryptHashData() - error=" << err << endl;
+        CryptRelease();
         Invalidate();
         continue;
       }
 
-      //if (!CryptDestroyHash(hHash)) {
-      //  DWORD err = GetLastError();
-      //  cerr << "CryptDestroyHash() - error=" << err << endl;
-      //}
-
-      //if (CryptReleaseContext(hProv, 0)) {
-      //  DWORD err = GetLastError();
-      //  cerr << "CryptReleaseContext() - error=" << err << endl;
-      //}
-
       noSecret = FALSE;
     }
     else {
-      cerr << "Unknown option " << pArg << endl;
+      cerr << "ERROR: Unknown option " << pArg << endl;
       Invalidate();
     }
   }
 
   if (noSecret) {
-    cerr << "The secret was not set" << endl;
+    cerr << "ERROR: The secret was not set" << endl;
     Invalidate();
   }
+  else
+  if (!IsValid()) {
+    CryptRelease();
+  }
 }
 
-State *Filter::GetState(HMASTERPORT hPort)
+void Filter::CryptRelease(BOOL all)
 {
-  PortsMap::iterator iPair = portsMap.find(hPort);
-
-  if (iPair == portsMap.end()) {
-      portsMap.insert(PortPair(hPort, NULL));
-
-      iPair = portsMap.find(hPort);
-
-      if (iPair == portsMap.end())
-        return NULL;
+  if (all) {
+    if (!CryptDestroyHash(hHash)) {
+      DWORD err = GetLastError();
+      cerr << "CryptDestroyHash() - error=" << err << endl;
+    }
   }
 
-  if (!iPair->second)
-    iPair->second = new State();
-
-  return iPair->second;
+  if (CryptReleaseContext(hProv, 0)) {
+    DWORD err = GetLastError();
+    cerr << "CryptReleaseContext() - error=" << err << endl;
+  }
 }
-
-void Filter::Open(State *pState)
+///////////////////////////////////////////////////////////////
+void State::Open(const Filter &filter)
 {
-  _ASSERTE(!pState->IsValid());
+  _ASSERTE(!IsValid());
 
   static const DWORD flags = (((DWORD)128) << 16);
 
-  if (!CryptDeriveKey(hProv, CALG_RC4, hHash, flags, &pState->hKeyIn)) {
+  if (!CryptDeriveKey(filter.hProv, CALG_RC4, filter.hHash, flags, &hKeyIn)) {
     DWORD err = GetLastError();
     cerr << "CryptDeriveKey() - error=" << err << endl;
     return;
   }
 
-  if (!CryptDeriveKey(hProv, CALG_RC4, hHash, flags, &pState->hKeyOut)) {
+  if (!CryptDeriveKey(filter.hProv, CALG_RC4, filter.hHash, flags, &hKeyOut)) {
     DWORD err = GetLastError();
     cerr << "CryptDeriveKey() - error=" << err << endl;
 
-    if (!CryptDestroyKey(pState->hKeyIn)) {
+    if (!CryptDestroyKey(hKeyIn)) {
       DWORD err = GetLastError();
       cerr << "CryptDestroyKey() - error=" << err << endl;
     }
@@ -196,17 +203,17 @@ void Filter::Open(State *pState)
     return;
   }
 
-  pState->Validate();
+  Validate();
 }
 
-void Filter::Close(State *pState)
+void State::Close()
 {
-  if (!pState->IsValid())
+  if (!IsValid())
     return;
 
-  pState->Invalidate();
+  Invalidate();
 
-  if (!CryptDestroyKey(pState->hKeyIn) || !CryptDestroyKey(pState->hKeyOut)) {
+  if (!CryptDestroyKey(hKeyIn) || !CryptDestroyKey(hKeyOut)) {
     DWORD err = GetLastError();
     cerr << "CryptDestroyKey() - error=" << err << endl;
   }
@@ -256,14 +263,19 @@ static void CALLBACK Help(const char *pProgPath)
 }
 ///////////////////////////////////////////////////////////////
 static HFILTER CALLBACK Create(
+    HMASTERFILTER DEBUG_PARAM(hMasterFilter),
     HCONFIG /*hConfig*/,
     int argc,
     const char *const argv[])
 {
+  _ASSERTE(hMasterFilter != NULL);
+
   Filter *pFilter = new Filter(argc, argv);
 
-  if (!pFilter)
-    return NULL;
+  if (!pFilter) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
 
   if (!pFilter->IsValid()) {
     delete pFilter;
@@ -273,14 +285,38 @@ static HFILTER CALLBACK Create(
   return (HFILTER)pFilter;
 }
 ///////////////////////////////////////////////////////////////
+static void CALLBACK Delete(
+    HFILTER hFilter)
+{
+  _ASSERTE(hFilter != NULL);
+
+  delete (Filter *)hFilter;
+}
+///////////////////////////////////////////////////////////////
+static HFILTERINSTANCE CALLBACK CreateInstance(
+    HMASTERFILTERINSTANCE DEBUG_PARAM(hMasterFilterInstance))
+{
+  _ASSERTE(hMasterFilterInstance != NULL);
+
+  return (HFILTERINSTANCE)new State();
+}
+///////////////////////////////////////////////////////////////
+static void CALLBACK DeleteInstance(
+    HFILTERINSTANCE hFilterInstance)
+{
+  _ASSERTE(hFilterInstance != NULL);
+
+  delete (State *)hFilterInstance;
+}
+///////////////////////////////////////////////////////////////
 static BOOL CALLBACK InMethod(
     HFILTER hFilter,
-    HMASTERPORT hFromPort,
+    HFILTERINSTANCE hFilterInstance,
     HUB_MSG *pInMsg,
     HUB_MSG **DEBUG_PARAM(ppEchoMsg))
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hFromPort != NULL);
+  _ASSERTE(hFilterInstance != NULL);
   _ASSERTE(pInMsg != NULL);
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
@@ -294,12 +330,7 @@ static BOOL CALLBACK InMethod(
       if (len == 0)
         break;
 
-      State *pState = ((Filter *)hFilter)->GetState(hFromPort);
-
-      if (!pState)
-        return FALSE;
-
-      if (!CryptDecrypt(pState->hKeyIn, 0, FALSE, 0, pInMsg->u.buf.pBuf, &pInMsg->u.buf.size)) {
+      if (!CryptDecrypt(((State *)hFilterInstance)->hKeyIn, 0, FALSE, 0, pInMsg->u.buf.pBuf, &pInMsg->u.buf.size)) {
         DWORD err = GetLastError();
         cerr << "CryptDecrypt() - error=" << err << endl;
         return FALSE;
@@ -310,15 +341,10 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_CONNECT): {
-      State *pState = ((Filter *)hFilter)->GetState(hFromPort);
-
-      if (!pState)
-        return FALSE;
-
       if (pInMsg->u.val)
-        ((Filter *)hFilter)->Open(pState);
+        ((State *)hFilterInstance)->Open(*(Filter *)hFilter);
       else
-        ((Filter *)hFilter)->Close(pState);
+        ((State *)hFilterInstance)->Close();
 
       break;
     }
@@ -328,14 +354,14 @@ static BOOL CALLBACK InMethod(
 }
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK OutMethod(
-    HFILTER hFilter,
+    HFILTER DEBUG_PARAM(hFilter),
+    HFILTERINSTANCE hFilterInstance,
     HMASTERPORT DEBUG_PARAM(hFromPort),
-    HMASTERPORT hToPort,
     HUB_MSG *pOutMsg)
 {
   _ASSERTE(hFilter != NULL);
+  _ASSERTE(hFilterInstance != NULL);
   _ASSERTE(hFromPort != NULL);
-  _ASSERTE(hToPort != NULL);
   _ASSERTE(pOutMsg != NULL);
 
   switch (HUB_MSG_T2N(pOutMsg->type)) {
@@ -347,12 +373,7 @@ static BOOL CALLBACK OutMethod(
       if (len == 0)
         break;
 
-      State *pState = ((Filter *)hFilter)->GetState(hToPort);
-
-      if (!pState)
-        return FALSE;
-
-      if (!CryptEncrypt(pState->hKeyOut, 0, FALSE, 0, pOutMsg->u.buf.pBuf, &pOutMsg->u.buf.size, len)) {
+      if (!CryptEncrypt(((State *)hFilterInstance)->hKeyOut, 0, FALSE, 0, pOutMsg->u.buf.pBuf, &pOutMsg->u.buf.size, len)) {
         DWORD err = GetLastError();
         cerr << "CryptEncrypt() - error=" << err << endl;
         return FALSE;
@@ -376,7 +397,9 @@ static const FILTER_ROUTINES_A routines = {
   NULL,           // Config
   NULL,           // ConfigStop
   Create,
-  NULL,           // Init
+  Delete,
+  CreateInstance,
+  DeleteInstance,
   InMethod,
   OutMethod,
 };

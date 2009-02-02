@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.16  2009/02/02 15:21:42  vfrolov
+ * Optimized filter's API
+ *
  * Revision 1.15  2008/12/22 09:40:46  vfrolov
  * Optimized message switching
  *
@@ -88,10 +91,11 @@ namespace FilterPin2Con {
   #define DEBUG_PARAM(par) par
 #endif  /* _DEBUG */
 ///////////////////////////////////////////////////////////////
-static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal = NULL;
-static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone = NULL;
-static ROUTINE_PORT_NAME_A *pPortName = NULL;
-static ROUTINE_FILTER_NAME_A *pFilterName = NULL;
+static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal;
+static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone;
+static ROUTINE_PORT_NAME_A *pPortName;
+static ROUTINE_FILTER_NAME_A *pFilterName;
+static ROUTINE_FILTERPORT *pFilterPort;
 ///////////////////////////////////////////////////////////////
 const char *GetParam(const char *pArg, const char *pPattern)
 {
@@ -103,19 +107,27 @@ const char *GetParam(const char *pArg, const char *pPattern)
   return pArg + lenPattern;
 }
 ///////////////////////////////////////////////////////////////
+class Valid {
+  public:
+    Valid() : isValid(TRUE) {}
+    void Invalidate() { isValid = FALSE; }
+    BOOL IsValid() const { return isValid; }
+  private:
+    BOOL isValid;
+};
+///////////////////////////////////////////////////////////////
 class State {
   public:
-    State() : connect(FALSE) {}
+    State(HMASTERPORT hMasterPort) : pName(pPortName(hMasterPort)), connect(FALSE) {}
 
+    const char *const pName;
     BOOL connect;
 };
 ///////////////////////////////////////////////////////////////
-class Filter {
+class Filter : public Valid {
   public:
-    Filter(int argc, const char *const argv[]);
-    State *GetState(HMASTERPORT hPort);
+    Filter(const char *_pName, int argc, const char *const argv[]);
 
-    void SetFilterName(const char *_pName) { pName = _pName; }
     const char *FilterName() const { return pName; }
 
     DWORD pin;
@@ -123,11 +135,6 @@ class Filter {
 
   private:
     const char *pName;
-
-    typedef map<HMASTERPORT, State*> PortsMap;
-    typedef pair<HMASTERPORT, State*> PortPair;
-
-    PortsMap portsMap;
 };
 
 static struct {
@@ -141,16 +148,17 @@ static struct {
   {"break", GO1_BREAK_STATUS},
 };
 
-Filter::Filter(int argc, const char *const argv[])
-  : pin(GO1_V2O_MODEM_STATUS(MODEM_STATUS_DSR)),
-    negative(FALSE),
-    pName(NULL)
+Filter::Filter(const char *_pName, int argc, const char *const argv[])
+  : pName(_pName),
+    pin(GO1_V2O_MODEM_STATUS(MODEM_STATUS_DSR)),
+    negative(FALSE)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
 
     if (!pArg) {
       cerr << "Unknown option " << *pArgs << endl;
+      Invalidate();
       continue;
     }
 
@@ -171,31 +179,15 @@ Filter::Filter(int argc, const char *const argv[])
         }
       }
 
-      if (!pin)
-        cerr << "Unknown pin " << pParam << endl;
+      if (!pin) {
+        cerr << "Unknown pin " << pParam << " in " << *pArgs << endl;
+        Invalidate();
+      }
     } else {
-      cerr << "Unknown option " << pArg << endl;
+      cerr << "Unknown option " << *pArgs << endl;
+      Invalidate();
     }
   }
-}
-
-State *Filter::GetState(HMASTERPORT hPort)
-{
-  PortsMap::iterator iPair = portsMap.find(hPort);
-
-  if (iPair == portsMap.end()) {
-      portsMap.insert(PortPair(hPort, NULL));
-
-      iPair = portsMap.find(hPort);
-
-      if (iPair == portsMap.end())
-        return NULL;
-  }
-
-  if (!iPair->second)
-    iPair->second = new State();
-
-  return iPair->second;
 }
 ///////////////////////////////////////////////////////////////
 static PLUGIN_TYPE CALLBACK GetPluginType()
@@ -249,53 +241,79 @@ static void CALLBACK Help(const char *pProgPath)
 }
 ///////////////////////////////////////////////////////////////
 static HFILTER CALLBACK Create(
+    HMASTERFILTER hMasterFilter,
     HCONFIG /*hConfig*/,
     int argc,
     const char *const argv[])
 {
-  return (HFILTER)new Filter(argc, argv);
-}
-///////////////////////////////////////////////////////////////
-static BOOL CALLBACK Init(
-    HFILTER hFilter,
-    HMASTERFILTER hMasterFilter)
-{
-  _ASSERTE(hFilter != NULL);
   _ASSERTE(hMasterFilter != NULL);
 
-  ((Filter *)hFilter)->SetFilterName(pFilterName(hMasterFilter));
+  Filter *pFilter = new Filter(pFilterName(hMasterFilter), argc, argv);
 
-  return TRUE;
+  if (!pFilter) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
+
+  if (!pFilter->IsValid()) {
+    delete pFilter;
+    return NULL;
+  }
+
+  return (HFILTER)pFilter;
+}
+///////////////////////////////////////////////////////////////
+static void CALLBACK Delete(
+    HFILTER hFilter)
+{
+  _ASSERTE(hFilter != NULL);
+
+  delete (Filter *)hFilter;
+}
+///////////////////////////////////////////////////////////////
+static HFILTERINSTANCE CALLBACK CreateInstance(
+    HMASTERFILTERINSTANCE hMasterFilterInstance)
+{
+  _ASSERTE(hMasterFilterInstance != NULL);
+
+  HMASTERPORT hMasterPort = pFilterPort(hMasterFilterInstance);
+
+  _ASSERTE(hMasterPort != NULL);
+
+  return (HFILTERINSTANCE)new State(hMasterPort);
+}
+///////////////////////////////////////////////////////////////
+static void CALLBACK DeleteInstance(
+    HFILTERINSTANCE hFilterInstance)
+{
+  _ASSERTE(hFilterInstance != NULL);
+
+  delete (State *)hFilterInstance;
 }
 ///////////////////////////////////////////////////////////////
 static HUB_MSG *InsertConnectState(
     Filter &filter,
-    HMASTERPORT hFromPort,
+    State &state,
     HUB_MSG *pInMsg,
     BOOL pinState)
 {
-  State *pState = filter.GetState(hFromPort);
-
-  if (!pState)
-    return FALSE;
-
   if (filter.negative)
     pinState = !pinState;
 
-  if (pState->connect != pinState)
-    pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_CONNECT, pState->connect = pinState);
+  if (state.connect != pinState)
+    pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_CONNECT, state.connect = pinState);
 
   return pInMsg;
 }
 
 static BOOL CALLBACK InMethod(
     HFILTER hFilter,
-    HMASTERPORT hFromPort,
+    HFILTERINSTANCE hFilterInstance,
     HUB_MSG *pInMsg,
     HUB_MSG **DEBUG_PARAM(ppEchoMsg))
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hFromPort != NULL);
+  _ASSERTE(hFilterInstance != NULL);
   _ASSERTE(pInMsg != NULL);
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
@@ -317,7 +335,7 @@ static BOOL CALLBACK InMethod(
     DWORD fail_options = (pInMsg->u.val & ((Filter *)hFilter)->pin);
 
     if (fail_options) {
-      cerr << pPortName(hFromPort)
+      cerr << ((State *)hFilterInstance)->pName
            << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
            << " option(s) GO1_0x" << hex << fail_options << dec
            << " not accepted" << endl;
@@ -337,13 +355,13 @@ static BOOL CALLBACK InMethod(
     if ((pin & MASK2VAL(pInMsg->u.val)) == 0)
       break;
 
-    pInMsg = InsertConnectState(*((Filter *)hFilter), hFromPort, pInMsg, ((pInMsg->u.val & pin) != 0));
+    pInMsg = InsertConnectState(*((Filter *)hFilter), *(State *)hFilterInstance, pInMsg, ((pInMsg->u.val & pin) != 0));
 
     break;
   }
   case HUB_MSG_T2N(HUB_MSG_TYPE_BREAK_STATUS):
     if (((Filter *)hFilter)->pin & GO1_BREAK_STATUS)
-      pInMsg = InsertConnectState(*((Filter *)hFilter), hFromPort, pInMsg, pInMsg->u.val != 0);
+      pInMsg = InsertConnectState(*((Filter *)hFilter), *(State *)hFilterInstance, pInMsg, pInMsg->u.val != 0);
     break;
   }
 
@@ -359,7 +377,9 @@ static const FILTER_ROUTINES_A routines = {
   NULL,           // Config
   NULL,           // ConfigStop
   Create,
-  Init,
+  Delete,
+  CreateInstance,
+  DeleteInstance,
   InMethod,
   NULL,           // OutMethod
 };
@@ -376,7 +396,8 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   if (!ROUTINE_IS_VALID(pHubRoutines, pMsgInsertVal) ||
       !ROUTINE_IS_VALID(pHubRoutines, pMsgReplaceNone) ||
       !ROUTINE_IS_VALID(pHubRoutines, pPortName) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pFilterName))
+      !ROUTINE_IS_VALID(pHubRoutines, pFilterName) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pFilterPort))
   {
     return NULL;
   }
@@ -385,6 +406,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   pMsgReplaceNone = pHubRoutines->pMsgReplaceNone;
   pPortName = pHubRoutines->pPortName;
   pFilterName = pHubRoutines->pFilterName;
+  pFilterPort = pHubRoutines->pFilterPort;
 
   return plugins;
 }

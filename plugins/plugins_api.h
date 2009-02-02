@@ -153,6 +153,7 @@ typedef struct _HUB_MSG {
 /*******************************************************************/
 DECLARE_HANDLE(HMASTERPORT);
 DECLARE_HANDLE(HMASTERFILTER);
+DECLARE_HANDLE(HMASTERFILTERINSTANCE);
 DECLARE_HANDLE(HMASTERTIMER);
 /*******************************************************************/
 typedef BYTE *(CALLBACK ROUTINE_BUF_ALLOC)(
@@ -206,6 +207,8 @@ typedef void (CALLBACK ROUTINE_TIMER_CANCEL)(
         HMASTERTIMER hMasterTimer);
 typedef void (CALLBACK ROUTINE_TIMER_DELETE)(
         HMASTERTIMER hMasterTimer);
+typedef HMASTERPORT (CALLBACK ROUTINE_FILTERPORT)(
+        HMASTERFILTERINSTANCE hMasterFilterInstance);
 /*******************************************************************/
 typedef struct _HUB_ROUTINES_A {
   size_t size;
@@ -225,6 +228,7 @@ typedef struct _HUB_ROUTINES_A {
   ROUTINE_TIMER_SET *pTimerSet;
   ROUTINE_TIMER_CANCEL *pTimerCancel;
   ROUTINE_TIMER_DELETE *pTimerDelete;
+  ROUTINE_FILTERPORT *pFilterPort;
 } HUB_ROUTINES_A;
 /*******************************************************************/
 typedef enum _PLUGIN_TYPE {
@@ -274,29 +278,36 @@ typedef const PLUGIN_ROUTINES_A *const *(CALLBACK PLUGIN_INIT_A)(
         const HUB_ROUTINES_A *pHubRoutines);
 /*******************************************************************/
 DECLARE_HANDLE(HFILTER);
+DECLARE_HANDLE(HFILTERINSTANCE);
 /*******************************************************************/
 typedef HFILTER (CALLBACK FILTER_CREATE_A)(
+        HMASTERFILTER hMasterFilter,
         HCONFIG hConfig,
         int argc,
         const char *const argv[]);
-typedef BOOL (CALLBACK FILTER_INIT)(
-        HFILTER hFilter,
-        HMASTERFILTER hMasterFilter);
+typedef void (CALLBACK FILTER_DELETE)(
+        HFILTER hFilter);
+typedef HFILTERINSTANCE (CALLBACK FILTER_CREATE_INSTANCE)(
+        HMASTERFILTERINSTANCE hMasterFilterInstance);
+typedef void (CALLBACK FILTER_DELETE_INSTANCE)(
+        HFILTERINSTANCE hFilterInstance);
 typedef BOOL (CALLBACK FILTER_IN_METHOD)(
         HFILTER hFilter,
-        HMASTERPORT hFromPort,
+        HFILTERINSTANCE hFilterInstance,
         HUB_MSG *pInMsg,
         HUB_MSG **ppEchoMsg);
 typedef BOOL (CALLBACK FILTER_OUT_METHOD)(
         HFILTER hFilter,
+        HFILTERINSTANCE hFilterInstance,
         HMASTERPORT hFromPort,
-        HMASTERPORT hToPort,
         HUB_MSG *pOutMsg);
 /*******************************************************************/
 typedef struct _FILTER_ROUTINES_A {
   COMMON_PLUGIN_ROUTINES_A
   FILTER_CREATE_A *pCreate;
-  FILTER_INIT *pInit;
+  FILTER_DELETE *pDelete;
+  FILTER_CREATE_INSTANCE *pCreateInstance;
+  FILTER_DELETE_INSTANCE *pDeleteInstance;
   FILTER_IN_METHOD *pInMethod;
   FILTER_OUT_METHOD *pOutMethod;
 } FILTER_ROUTINES_A;

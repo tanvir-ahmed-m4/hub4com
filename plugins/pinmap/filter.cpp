@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.16  2009/02/02 15:21:42  vfrolov
+ * Optimized filter's API
+ *
  * Revision 1.15  2008/12/22 09:40:46  vfrolov
  * Optimized message switching
  *
@@ -74,9 +77,10 @@
 ///////////////////////////////////////////////////////////////
 namespace FilterPinMap {
 ///////////////////////////////////////////////////////////////
-static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal = NULL;
-static ROUTINE_PORT_NAME_A *pPortName = NULL;
-static ROUTINE_FILTER_NAME_A *pFilterName = NULL;
+static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal;
+static ROUTINE_PORT_NAME_A *pPortName;
+static ROUTINE_FILTER_NAME_A *pFilterName;
+static ROUTINE_FILTERPORT *pFilterPort;
 ///////////////////////////////////////////////////////////////
 const char *GetParam(const char *pArg, const char *pPattern)
 {
@@ -132,17 +136,16 @@ static struct {
 ///////////////////////////////////////////////////////////////
 class State {
   public:
-    State() : lmInVal(0) {}
+    State(HMASTERPORT hMasterPort) : pName(pPortName(hMasterPort)), lmInVal(0) {}
 
+    const char *const pName;
     WORD lmInVal;
 };
 ///////////////////////////////////////////////////////////////
 class Filter : public Valid {
   public:
-    Filter(int argc, const char *const argv[]);
-    State *GetState(HMASTERPORT hPort);
+    Filter(const char *pName, int argc, const char *const argv[]);
 
-    void SetFilterName(const char *_pName) { pName = _pName; }
     const char *FilterName() const { return pName; }
 
     struct PinOuts {
@@ -159,18 +162,13 @@ class Filter : public Valid {
   private:
     const char *pName;
 
-    typedef map<HMASTERPORT, State*> PortsMap;
-    typedef pair<HMASTERPORT, State*> PortPair;
-
-    PortsMap portsMap;
-
     void Parse(const char *pArg);
 };
 
-Filter::Filter(int argc, const char *const argv[])
-  : outMask(0),
-    lmInMask(0),
-    pName(NULL)
+Filter::Filter(const char *_pName, int argc, const char *const argv[])
+  : pName(_pName),
+    outMask(0),
+    lmInMask(0)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
@@ -251,25 +249,6 @@ void Filter::Parse(const char *pArg)
     Invalidate();
   }
 }
-
-State *Filter::GetState(HMASTERPORT hPort)
-{
-  PortsMap::iterator iPair = portsMap.find(hPort);
-
-  if (iPair == portsMap.end()) {
-      portsMap.insert(PortPair(hPort, NULL));
-
-      iPair = portsMap.find(hPort);
-
-      if (iPair == portsMap.end())
-        return NULL;
-  }
-
-  if (!iPair->second)
-    iPair->second = new State();
-
-  return iPair->second;
-}
 ///////////////////////////////////////////////////////////////
 static PLUGIN_TYPE CALLBACK GetPluginType()
 {
@@ -348,14 +327,19 @@ static void CALLBACK Help(const char *pProgPath)
 }
 ///////////////////////////////////////////////////////////////
 static HFILTER CALLBACK Create(
+    HMASTERFILTER hMasterFilter,
     HCONFIG /*hConfig*/,
     int argc,
     const char *const argv[])
 {
-  Filter *pFilter = new Filter(argc, argv);
+  _ASSERTE(hMasterFilter != NULL);
 
-  if (!pFilter)
-    return NULL;
+  Filter *pFilter = new Filter(pFilterName(hMasterFilter), argc, argv);
+
+  if (!pFilter) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
 
   if (!pFilter->IsValid()) {
     delete pFilter;
@@ -365,16 +349,32 @@ static HFILTER CALLBACK Create(
   return (HFILTER)pFilter;
 }
 ///////////////////////////////////////////////////////////////
-static BOOL CALLBACK Init(
-    HFILTER hFilter,
-    HMASTERFILTER hMasterFilter)
+static void CALLBACK Delete(
+    HFILTER hFilter)
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hMasterFilter != NULL);
 
-  ((Filter *)hFilter)->SetFilterName(pFilterName(hMasterFilter));
+  delete (Filter *)hFilter;
+}
+///////////////////////////////////////////////////////////////
+static HFILTERINSTANCE CALLBACK CreateInstance(
+    HMASTERFILTERINSTANCE hMasterFilterInstance)
+{
+  _ASSERTE(hMasterFilterInstance != NULL);
 
-  return TRUE;
+  HMASTERPORT hMasterPort = pFilterPort(hMasterFilterInstance);
+
+  _ASSERTE(hMasterPort != NULL);
+
+  return (HFILTERINSTANCE)new State(hMasterPort);
+}
+///////////////////////////////////////////////////////////////
+static void CALLBACK DeleteInstance(
+    HFILTERINSTANCE hFilterInstance)
+{
+  _ASSERTE(hFilterInstance != NULL);
+
+  delete (State *)hFilterInstance;
 }
 ///////////////////////////////////////////////////////////////
 static void InsertPinState(
@@ -412,12 +412,12 @@ static void InsertPinState(
 
 static BOOL CALLBACK OutMethod(
     HFILTER hFilter,
-    HMASTERPORT hFromPort,
+    HFILTERINSTANCE hFilterInstance,
     HMASTERPORT hToPort,
     HUB_MSG *pOutMsg)
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hFromPort != NULL);
+  _ASSERTE(hFilterInstance != NULL);
   _ASSERTE(hToPort != NULL);
   _ASSERTE(pOutMsg != NULL);
 
@@ -426,13 +426,8 @@ static BOOL CALLBACK OutMethod(
       // or'e with the required mask to set pin state
       pOutMsg->u.val |= SO_V2O_PIN_STATE(((Filter *)hFilter)->outMask);
 
-      State *pState = ((Filter *)hFilter)->GetState(hToPort);
-
-      if (!pState)
-        return FALSE;
-
       // init pin state
-      InsertPinState(*(Filter *)hFilter, ((Filter *)hFilter)->lmInMask, pState->lmInVal, &pOutMsg);
+      InsertPinState(*(Filter *)hFilter, ((Filter *)hFilter)->lmInMask, ((State *)hFilterInstance)->lmInVal, &pOutMsg);
 
       break;
     }
@@ -453,7 +448,7 @@ static BOOL CALLBACK OutMethod(
       DWORD fail_options = (pOutMsg->u.val & LM_2_GO1(((Filter *)hFilter)->lmInMask));
 
       if (fail_options) {
-        cerr << pPortName(hFromPort)
+        cerr << ((State *)hFilterInstance)->pName
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
              << " for port " << pPortName(hToPort)
              << " option(s) GO1_0x" << hex << fail_options << dec
@@ -466,46 +461,31 @@ static BOOL CALLBACK OutMethod(
       pOutMsg->u.val &= ~(VAL2MASK(((Filter *)hFilter)->outMask));
       break;
     case HUB_MSG_T2N(HUB_MSG_TYPE_MODEM_STATUS): {
-      State *pState = ((Filter *)hFilter)->GetState(hToPort);
-
-      if (!pState)
-        return FALSE;
-
       WORD lmInMask = MST2LM(MASK2VAL(pOutMsg->u.val)) & ((Filter *)hFilter)->lmInMask;
-      WORD lmInVal = ((MST2LM(pOutMsg->u.val) & lmInMask) | (pState->lmInVal & ~lmInMask));
+      WORD lmInVal = ((MST2LM(pOutMsg->u.val) & lmInMask) | (((State *)hFilterInstance)->lmInVal & ~lmInMask));
 
-      InsertPinState(*(Filter *)hFilter, pState->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
+      InsertPinState(*(Filter *)hFilter, ((State *)hFilterInstance)->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
 
-      pState->lmInVal = lmInVal;
+      ((State *)hFilterInstance)->lmInVal = lmInVal;
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_BREAK_STATUS): {
       if (((Filter *)hFilter)->lmInMask & LM_BREAK) {
-        State *pState = ((Filter *)hFilter)->GetState(hToPort);
+        WORD lmInVal = ((pOutMsg->u.val ? LM_BREAK : 0) | (((State *)hFilterInstance)->lmInVal & ~LM_BREAK));
 
-        if (!pState)
-          return FALSE;
+        InsertPinState(*(Filter *)hFilter, ((State *)hFilterInstance)->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
 
-        WORD lmInVal = ((pOutMsg->u.val ? LM_BREAK : 0) | (pState->lmInVal & ~LM_BREAK));
-
-        InsertPinState(*(Filter *)hFilter, pState->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
-
-        pState->lmInVal = lmInVal;
+        ((State *)hFilterInstance)->lmInVal = lmInVal;
       }
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_CONNECT): {
       if (((Filter *)hFilter)->lmInMask & LM_CONNECT) {
-        State *pState = ((Filter *)hFilter)->GetState(hToPort);
+        WORD lmInVal = ((pOutMsg->u.val ? LM_CONNECT : 0) | (((State *)hFilterInstance)->lmInVal & ~LM_CONNECT));
 
-        if (!pState)
-          return FALSE;
+        InsertPinState(*(Filter *)hFilter, ((State *)hFilterInstance)->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
 
-        WORD lmInVal = ((pOutMsg->u.val ? LM_CONNECT : 0) | (pState->lmInVal & ~LM_CONNECT));
-
-        InsertPinState(*(Filter *)hFilter, pState->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
-
-        pState->lmInVal = lmInVal;
+        ((State *)hFilterInstance)->lmInVal = lmInVal;
       }
       break;
     }
@@ -523,7 +503,9 @@ static const FILTER_ROUTINES_A routines = {
   NULL,           // Config
   NULL,           // ConfigStop
   Create,
-  Init,
+  Delete,
+  CreateInstance,
+  DeleteInstance,
   NULL,           // InMethod
   OutMethod,
 };
@@ -539,7 +521,8 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 {
   if (!ROUTINE_IS_VALID(pHubRoutines, pMsgInsertVal) ||
       !ROUTINE_IS_VALID(pHubRoutines, pPortName) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pFilterName))
+      !ROUTINE_IS_VALID(pHubRoutines, pFilterName) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pFilterPort))
   {
     return NULL;
   }
@@ -547,6 +530,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   pMsgInsertVal = pHubRoutines->pMsgInsertVal;
   pPortName = pHubRoutines->pPortName;
   pFilterName = pHubRoutines->pFilterName;
+  pFilterPort = pHubRoutines->pFilterPort;
 
   return plugins;
 }

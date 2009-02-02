@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2008 Vyacheslav Frolov
+ * Copyright (c) 2006-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.21  2009/02/02 15:21:42  vfrolov
+ * Optimized filter's API
+ *
  * Revision 1.20  2008/12/01 17:14:52  vfrolov
  * Implemented --fc-route and --no-default-fc-route options
  *
@@ -390,7 +393,7 @@ static BOOL AddFilters(ComHub &hub, Port *pPort, HPRM0 pFilters, HPRM1 pListFlt,
     string filter(STRTOK_R(pFilter, "(", &pSave2));
     char *pList = STRTOK_R(NULL, ")", &pSave2);
 
-    SetOfPorts *pSrcPorts = NULL;
+    set<Port *> *pSrcPorts = NULL;
 
     if (pList) {
       for (char *p = STRTOK_R(pList, ",", &pSave2) ; p ; p = STRTOK_R(NULL, ",", &pSave2)) {
@@ -406,7 +409,7 @@ static BOOL AddFilters(ComHub &hub, Port *pPort, HPRM0 pFilters, HPRM1 pListFlt,
         else
         if (StrToInt(p, &i) && i >= 0 && (unsigned)i < hub.NumPorts()) {
           if (!pSrcPorts) {
-            pSrcPorts = new SetOfPorts;
+            pSrcPorts = new set<Port *>;
 
             if (!pSrcPorts) {
               cerr << "No enough memory." << endl;

@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.2  2009/02/02 15:21:42  vfrolov
+ * Optimized filter's API
+ *
  * Revision 1.1  2008/11/24 11:46:56  vfrolov
  * Initial revision
  *
@@ -36,14 +39,15 @@ class Filter
     Filter(
         const char *pGroup,
         const char *pName,
-        HFILTER _hFilter,
+        FILTER_CREATE_INSTANCE *_pCreateInstance,
         FILTER_IN_METHOD *_pInMethod,
         FILTER_OUT_METHOD *_pOutMethod)
       : group(pGroup),
         name(pName),
-        hFilter(_hFilter),
+        pCreateInstance(_pCreateInstance),
         pInMethod(_pInMethod),
-        pOutMethod(_pOutMethod)
+        pOutMethod(_pOutMethod),
+        hFilter(NULL)
     {
 #ifdef _DEBUG
       signature = FILTER_SIGNATURE;
@@ -57,11 +61,19 @@ class Filter
     }
 #endif
 
+    const string &Name() const { return name; }
+
+  protected:
+    friend class Filters;
+    friend class FilterInstance;
+
     const string group;
     const string name;
-    const HFILTER hFilter;
+    FILTER_CREATE_INSTANCE *const pCreateInstance;
     FILTER_IN_METHOD *const pInMethod;
     FILTER_OUT_METHOD *const pOutMethod;
+
+    HFILTER hFilter;
 
 #ifdef _DEBUG
   private:
@@ -69,6 +81,62 @@ class Filter
 
   public:
     BOOL IsValid() { return signature == FILTER_SIGNATURE; }
+#endif
+};
+///////////////////////////////////////////////////////////////
+#define FILTER_INSTANCE_SIGNATURE 'h4cI'
+///////////////////////////////////////////////////////////////
+class FilterInstance {
+  public:
+    FilterInstance(
+        Filter &_filter,
+        Port &_port,
+        BOOL addInMethod,
+        BOOL addOutMethod,
+        const set<Port *> *_pSrcPorts)
+      : filter(_filter),
+        port(_port),
+        pInMethod(addInMethod ? _filter.pInMethod : NULL),
+        pOutMethod(addOutMethod ? _filter.pOutMethod : NULL),
+        pSrcPorts(_pSrcPorts),
+        hFilterInstance(NULL)
+    {
+#ifdef _DEBUG
+      signature = FILTER_INSTANCE_SIGNATURE;
+#endif
+    }
+
+    ~FilterInstance() {
+      if (pSrcPorts)
+        delete pSrcPorts;
+
+      //if (hFilterInstance)
+      //  Delete(hFilterInstance);
+
+#ifdef _DEBUG
+      _ASSERTE(signature == FILTER_INSTANCE_SIGNATURE);
+      signature = 0;
+#endif
+    }
+
+    Filter &filter;
+    Port &port;
+
+  protected:
+    friend class Filters;
+
+    FILTER_IN_METHOD *const pInMethod;
+    FILTER_OUT_METHOD *const pOutMethod;
+    const set<Port *> *const pSrcPorts;
+
+    HFILTERINSTANCE hFilterInstance;
+
+#ifdef _DEBUG
+  private:
+    DWORD signature;
+
+  public:
+    BOOL IsValid() { return signature == FILTER_INSTANCE_SIGNATURE; }
 #endif
 };
 ///////////////////////////////////////////////////////////////

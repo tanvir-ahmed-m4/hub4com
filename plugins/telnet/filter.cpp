@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.16  2009/02/02 15:21:42  vfrolov
+ * Optimized filter's API
+ *
  * Revision 1.15  2009/01/26 15:07:52  vfrolov
  * Implemented --keep-active option
  *
@@ -80,6 +83,7 @@ static ROUTINE_FILTER_NAME_A *pFilterName;
 static ROUTINE_TIMER_CREATE *pTimerCreate;
 static ROUTINE_TIMER_SET *pTimerSet;
 static ROUTINE_TIMER_DELETE *pTimerDelete;
+static ROUTINE_FILTERPORT *pFilterPort;
 ///////////////////////////////////////////////////////////////
 #ifndef _DEBUG
   #define DEBUG_PARAM(par)
@@ -106,10 +110,14 @@ class Valid {
     BOOL isValid;
 };
 ///////////////////////////////////////////////////////////////
+class Filter;
+
 class State {
   public:
-    State()
-    : pTelnetProtocol(NULL),
+    State(HMASTERPORT _hMasterPort)
+    : hMasterPort(_hMasterPort),
+      pName(pPortName(_hMasterPort)),
+      pTelnetProtocol(NULL),
       pComPort(NULL),
       soMask(0),
       pinState(0),
@@ -121,45 +129,45 @@ class State {
         goMask[iGo] = 0;
     }
 
-    void SetProtocol(TelnetProtocol *_pTelnetProtocol) {
-      pComPort = NULL;
+    ~State() {
       if (pTelnetProtocol)
         delete pTelnetProtocol;
-      pTelnetProtocol = _pTelnetProtocol;
+
+      if (hKeepActiveTimer)
+        pTimerDelete(hKeepActiveTimer);
     }
 
-    void SetOption(TelnetOptionComPort *_pComPort) {
-      pComPort = _pComPort;
+    TelnetProtocol *CreateProtocol(const Filter &filter);
+
+    void DelProtocol() {
+      _ASSERTE(pTelnetProtocol != NULL);
+
+      pComPort = NULL;
+      delete pTelnetProtocol;
+
+      pTelnetProtocol = NULL;
     }
+
+    const HMASTERPORT hMasterPort;
+    const char *const pName;
 
     TelnetProtocol *pTelnetProtocol;
     TelnetOptionComPort *pComPort;
+
     DWORD soMask;
     DWORD goMask[2];
     WORD pinState;
     DWORD br;
     DWORD lc;
+
     HMASTERTIMER hKeepActiveTimer;
 };
 ///////////////////////////////////////////////////////////////
 class Filter : public Valid {
   public:
-    Filter(int argc, const char *const argv[]);
-    State *GetState(HMASTERPORT hPort);
-    TelnetProtocol *CreateProtocol(State *pState, const char *pName);
-    BOOL DelProtocol(State *pState);
+    Filter(const char *pName, int argc, const char *const argv[]);
 
-    void SetFilterName(const char *_pName) { pName = _pName; }
     const char *FilterName() const { return pName; }
-
-    TelnetProtocol *GetProtocol(HMASTERPORT hPort) {
-      State *pState = GetState(hPort);
-
-      if (!pState)
-        return NULL;
-
-      return pState->pTelnetProtocol;
-    }
 
     DWORD soMask;
     DWORD goMask[2];
@@ -167,7 +175,9 @@ class Filter : public Valid {
     unsigned keepActive;
 
   private:
-    const char *pName;
+    friend class State;
+
+    const char *const pName;
     string terminalType;
     BOOL suppressEcho;
 
@@ -176,15 +186,10 @@ class Filter : public Valid {
       comport_client,
       comport_server
     } comport;
-
-    typedef map<HMASTERPORT, State*> PortsMap;
-    typedef pair<HMASTERPORT, State*> PortPair;
-
-    PortsMap portsMap;
 };
 
-Filter::Filter(int argc, const char *const argv[])
-  : pName(NULL),
+Filter::Filter(const char *_pName, int argc, const char *const argv[])
+  : pName(_pName),
     terminalType("UNKNOWN"),
     suppressEcho(FALSE),
     keepActive(0),
@@ -273,41 +278,20 @@ Filter::Filter(int argc, const char *const argv[])
       goMask[1] = 0;
   }
 }
-
-State *Filter::GetState(HMASTERPORT hPort)
+///////////////////////////////////////////////////////////////
+TelnetProtocol *State::CreateProtocol(const Filter &filter)
 {
-  PortsMap::iterator iPair = portsMap.find(hPort);
+  _ASSERTE(pTelnetProtocol == NULL);
 
-  if (iPair == portsMap.end()) {
-      portsMap.insert(PortPair(hPort, NULL));
-
-      iPair = portsMap.find(hPort);
-
-      if (iPair == portsMap.end())
-        return NULL;
-  }
-
-  if (!iPair->second)
-    iPair->second = new State();
-
-  return iPair->second;
-}
-
-TelnetProtocol *Filter::CreateProtocol(State *pState, const char *pName)
-{
-  _ASSERTE(pState->pTelnetProtocol == NULL);
-
-  TelnetProtocol *pTelnetProtocol = new TelnetProtocol(pName);
+  pTelnetProtocol = new TelnetProtocol(pName);
 
   if (!pTelnetProtocol)
     return NULL;
 
-  pState->SetProtocol(pTelnetProtocol);
-
   TelnetOption *pTo;
 
-  if (!terminalType.empty()) {
-    pTo = new TelnetOptionTerminalType(*pTelnetProtocol, terminalType.c_str());
+  if (!filter.terminalType.empty()) {
+    pTo = new TelnetOptionTerminalType(*pTelnetProtocol, filter.terminalType.c_str());
 
     if (pTo)
       pTo->LocalCan();
@@ -325,7 +309,7 @@ TelnetProtocol *Filter::CreateProtocol(State *pState, const char *pName)
   if (pTo) {
     pTo->RemoteMay();
 
-    if (suppressEcho)
+    if (filter.suppressEcho)
       pTo->LocalWill();
   }
 
@@ -336,37 +320,28 @@ TelnetProtocol *Filter::CreateProtocol(State *pState, const char *pName)
     pTo->LocalCan();
   }
 
-  if (comport == comport_client) {
-    pTo = new TelnetOptionComPortClient(*pTelnetProtocol, pState->goMask, pState->soMask);
+  if (filter.comport == filter.comport_client) {
+    pTo = new TelnetOptionComPortClient(*pTelnetProtocol, goMask, soMask);
 
     if (pTo) {
       pTo->LocalWill();
-      pState->SetOption((TelnetOptionComPortClient *)pTo);
+      pComPort = (TelnetOptionComPortClient *)pTo;
     }
   }
   else
-  if (comport == comport_server) {
-    pTo = new TelnetOptionComPortServer(*pTelnetProtocol, pState->goMask, pState->soMask);
+  if (filter.comport == filter.comport_server) {
+    pTo = new TelnetOptionComPortServer(*pTelnetProtocol, goMask, soMask);
 
     if (pTo) {
       pTo->RemoteDo();
-      pState->SetOption((TelnetOptionComPortServer *)pTo);
+      pComPort = (TelnetOptionComPortServer *)pTo;
     }
+  }
+  else {
+    pComPort = NULL;
   }
 
   return pTelnetProtocol;
-}
-
-BOOL Filter::DelProtocol(State *pState)
-{
-  _ASSERTE(pState->pTelnetProtocol != NULL);
-
-  if (!pState->pTelnetProtocol)
-    return FALSE;
-
-  pState->SetProtocol(NULL);
-
-  return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 static PLUGIN_TYPE CALLBACK GetPluginType()
@@ -464,14 +439,19 @@ static void CALLBACK Help(const char *pProgPath)
 }
 ///////////////////////////////////////////////////////////////
 static HFILTER CALLBACK Create(
+    HMASTERFILTER hMasterFilter,
     HCONFIG /*hConfig*/,
     int argc,
     const char *const argv[])
 {
-  Filter *pFilter = new Filter(argc, argv);
+  _ASSERTE(hMasterFilter != NULL);
 
-  if (!pFilter)
-    return NULL;
+  Filter *pFilter = new Filter(pFilterName(hMasterFilter), argc, argv);
+
+  if (!pFilter) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
 
   if (!pFilter->IsValid()) {
     delete pFilter;
@@ -481,26 +461,42 @@ static HFILTER CALLBACK Create(
   return (HFILTER)pFilter;
 }
 ///////////////////////////////////////////////////////////////
-static BOOL CALLBACK Init(
-    HFILTER hFilter,
-    HMASTERFILTER hMasterFilter)
+static void CALLBACK Delete(
+    HFILTER hFilter)
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hMasterFilter != NULL);
 
-  ((Filter *)hFilter)->SetFilterName(pFilterName(hMasterFilter));
+  delete (Filter *)hFilter;
+}
+///////////////////////////////////////////////////////////////
+static HFILTERINSTANCE CALLBACK CreateInstance(
+    HMASTERFILTERINSTANCE hMasterFilterInstance)
+{
+  _ASSERTE(hMasterFilterInstance != NULL);
 
-  return TRUE;
+  HMASTERPORT hMasterPort = pFilterPort(hMasterFilterInstance);
+
+  _ASSERTE(hMasterPort != NULL);
+
+  return (HFILTERINSTANCE)new State(hMasterPort);
+}
+///////////////////////////////////////////////////////////////
+static void CALLBACK DeleteInstance(
+    HFILTERINSTANCE hFilterInstance)
+{
+  _ASSERTE(hFilterInstance != NULL);
+
+  delete (State *)hFilterInstance;
 }
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK InMethod(
     HFILTER hFilter,
-    HMASTERPORT hFromPort,
+    HFILTERINSTANCE hFilterInstance,
     HUB_MSG *pInMsg,
     HUB_MSG **ppEchoMsg)
 {
   _ASSERTE(hFilter != NULL);
-  _ASSERTE(hFromPort != NULL);
+  _ASSERTE(hFilterInstance != NULL);
   _ASSERTE(pInMsg != NULL);
   _ASSERTE(ppEchoMsg != NULL);
   _ASSERTE(*ppEchoMsg == NULL);
@@ -515,11 +511,6 @@ static BOOL CALLBACK InMethod(
       if (!((Filter *)hFilter)->goMask[iGo == 0 ? 0 : 1])
         break;
 
-      State *pState = ((Filter *)hFilter)->GetState(hFromPort);
-
-      if (!pState)
-        return FALSE;
-
       // get interceptable options from subsequent filters separately
 
       DWORD interceptable_options = (pInMsg->u.pv.val & ((Filter *)hFilter)->goMask[iGo == 0 ? 0 : 1]);
@@ -532,7 +523,7 @@ static BOOL CALLBACK InMethod(
         return FALSE;
 
       pInMsg->type = HUB_MSG_TYPE_GET_IN_OPTS;
-      pInMsg->u.pv.pVal = &pState->goMask[iGo == 0 ? 0 : 1];
+      pInMsg->u.pv.pVal = &((State *)hFilterInstance)->goMask[iGo == 0 ? 0 : 1];
       _ASSERTE((interceptable_options & GO_I2O(-1)) == 0);
       pInMsg->u.pv.val = interceptable_options | GO_I2O(iGo);
 
@@ -544,7 +535,7 @@ static BOOL CALLBACK InMethod(
       if (pInMsg->u.buf.size == 0)
         break;
 
-      TelnetProtocol *pTelnetProtocol = ((Filter *)hFilter)->GetProtocol(hFromPort);
+      TelnetProtocol *pTelnetProtocol = ((State *)hFilterInstance)->pTelnetProtocol;
 
       if (!pTelnetProtocol) {
         // discard data
@@ -562,84 +553,78 @@ static BOOL CALLBACK InMethod(
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_CONNECT): {
-      State *pState = ((Filter *)hFilter)->GetState(hFromPort);
-
-      if (!pState)
-        return FALSE;
-
       if (!pInMsg->u.val) {
         // CONNECT(FALSE)
 
-        if (pState->hKeepActiveTimer) {
-          pTimerDelete(pState->hKeepActiveTimer);
-          pState->hKeepActiveTimer = NULL;
+        if (((State *)hFilterInstance)->hKeepActiveTimer) {
+          pTimerDelete(((State *)hFilterInstance)->hKeepActiveTimer);
+          ((State *)hFilterInstance)->hKeepActiveTimer = NULL;
         }
 
-        if (pState->pComPort) {
-          if (pState->goMask[1] & GO1_BREAK_STATUS) {
+        if (((State *)hFilterInstance)->pComPort) {
+          if (((State *)hFilterInstance)->goMask[1] & GO1_BREAK_STATUS) {
             pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_BREAK_STATUS, FALSE);
 
             if (!pInMsg)
               return FALSE;
           }
 
-          if (pState->goMask[1] & GO1_V2O_MODEM_STATUS(-1)) {
+          if (((State *)hFilterInstance)->goMask[1] & GO1_V2O_MODEM_STATUS(-1)) {
             pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_MODEM_STATUS,
-                 0 | VAL2MASK(GO1_O2V_MODEM_STATUS(pState->goMask[1])));
+                 0 | VAL2MASK(GO1_O2V_MODEM_STATUS(((State *)hFilterInstance)->goMask[1])));
 
             if (!pInMsg)
               return FALSE;
           }
         }
 
-        if (!((Filter *)hFilter)->DelProtocol(pState))
-          return FALSE;
+        ((State *)hFilterInstance)->DelProtocol();
 
         break;
       }
 
       // CONNECT(TRUE)
 
-      TelnetProtocol *pTelnetProtocol = ((Filter *)hFilter)->CreateProtocol(pState, pPortName(hFromPort));
+      TelnetProtocol *pTelnetProtocol = ((State *)hFilterInstance)->CreateProtocol(*(Filter *)hFilter);
 
       if (!pTelnetProtocol)
         return FALSE;
 
       pTelnetProtocol->Start();
 
-      if (pState->pComPort) {
+      if (((State *)hFilterInstance)->pComPort) {
         // Set current state
 
-        if ((pState->soMask & SO_SET_BR) && pState->br != 0)
-          pState->pComPort->SetBR(pState->br);
+        if ((((State *)hFilterInstance)->soMask & SO_SET_BR) && ((State *)hFilterInstance)->br != 0)
+          ((State *)hFilterInstance)->pComPort->SetBR(((State *)hFilterInstance)->br);
 
-        if (pState->soMask & SO_SET_LC)
-          pState->pComPort->SetLC(pState->lc);
+        if (((State *)hFilterInstance)->soMask & SO_SET_LC)
+          ((State *)hFilterInstance)->pComPort->SetLC(((State *)hFilterInstance)->lc);
 
-        if (pState->soMask & SO_V2O_PIN_STATE(SPS_V2P_MST(-1)))
-          pState->pComPort->NotifyMST(SPS_P2V_MST(pState->pinState));
+        if (((State *)hFilterInstance)->soMask & SO_V2O_PIN_STATE(SPS_V2P_MST(-1)))
+          ((State *)hFilterInstance)->pComPort->NotifyMST(SPS_P2V_MST(((State *)hFilterInstance)->pinState));
 
-        if (pState->soMask & SO_V2O_PIN_STATE(SPS_V2P_MCR(-1)))
-          pState->pComPort->SetMCR(SPS_P2V_MCR(pState->pinState), SPS_P2V_MCR(SO_O2V_PIN_STATE(pState->soMask)));
+        if (((State *)hFilterInstance)->soMask & SO_V2O_PIN_STATE(SPS_V2P_MCR(-1)))
+          ((State *)hFilterInstance)->pComPort->SetMCR(SPS_P2V_MCR(((State *)hFilterInstance)->pinState), SPS_P2V_MCR(SO_O2V_PIN_STATE(((State *)hFilterInstance)->soMask)));
 
-        if (pState->soMask & SO_V2O_PIN_STATE(PIN_STATE_BREAK))
-          pState->pComPort->SetBreak((pState->pinState & PIN_STATE_BREAK) != 0);
+        if (((State *)hFilterInstance)->soMask & SO_V2O_PIN_STATE(PIN_STATE_BREAK))
+          ((State *)hFilterInstance)->pComPort->SetBreak((((State *)hFilterInstance)->pinState & PIN_STATE_BREAK) != 0);
 
-        if (pState->soMask & SO_V2O_LINE_STATUS(-1))
-          pState->pComPort->NotifyLSR(0);
+        if (((State *)hFilterInstance)->soMask & SO_V2O_LINE_STATUS(-1))
+          ((State *)hFilterInstance)->pComPort->NotifyLSR(0);
       }
 
       if (((Filter *)hFilter)->keepActive) {
-        _ASSERTE(pState->hKeepActiveTimer == NULL);
+        _ASSERTE(((State *)hFilterInstance)->hKeepActiveTimer == NULL);
 
-        pState->hKeepActiveTimer = pTimerCreate();
+        ((State *)hFilterInstance)->hKeepActiveTimer = pTimerCreate();
 
-        if (pState->hKeepActiveTimer) {
+        if (((State *)hFilterInstance)->hKeepActiveTimer) {
           LARGE_INTEGER firstReportTime;
 
           firstReportTime.QuadPart = -10000000LL * ((Filter *)hFilter)->keepActive;
 
-          pTimerSet(pState->hKeepActiveTimer, hFromPort, &firstReportTime, ((Filter *)hFilter)->keepActive * 1000L);
+          pTimerSet(((State *)hFilterInstance)->hKeepActiveTimer, ((State *)hFilterInstance)->hMasterPort, &firstReportTime, ((Filter *)hFilter)->keepActive * 1000L);
         }
       }
 
@@ -653,13 +638,8 @@ static BOOL CALLBACK InMethod(
       if (!hTimer)
         break;
 
-      State *pState = ((Filter *)hFilter)->GetState(hFromPort);
-
-      if (!pState)
-        return FALSE;
-
-      if (hTimer == pState->hKeepActiveTimer) {
-        TelnetProtocol *pTelnetProtocol = ((Filter *)hFilter)->GetProtocol(hFromPort);
+      if (hTimer == ((State *)hFilterInstance)->hKeepActiveTimer) {
+        TelnetProtocol *pTelnetProtocol = ((State *)hFilterInstance)->pTelnetProtocol;
 
         if (pTelnetProtocol) {
           pTelnetProtocol->KeepActive();
@@ -676,13 +656,13 @@ static BOOL CALLBACK InMethod(
 ///////////////////////////////////////////////////////////////
 static BOOL CALLBACK OutMethod(
     HFILTER hFilter,
+    HFILTERINSTANCE hFilterInstance,
     HMASTERPORT DEBUG_PARAM(hFromPort),
-    HMASTERPORT hToPort,
     HUB_MSG *pOutMsg)
 {
   _ASSERTE(hFilter != NULL);
+  _ASSERTE(hFilterInstance != NULL);
   _ASSERTE(hFromPort != NULL);
-  _ASSERTE(hToPort != NULL);
   _ASSERTE(pOutMsg != NULL);
 
   switch (HUB_MSG_T2N(pOutMsg->type)) {
@@ -692,37 +672,27 @@ static BOOL CALLBACK OutMethod(
       // discard supported options
       pOutMsg->u.val &= ~((Filter *)hFilter)->soMask;
 
-      State *pState = ((Filter *)hFilter)->GetState(hToPort);
-
-      if (!pState)
-        return FALSE;
-
-      pState->soMask |= soMask;
+      ((State *)hFilterInstance)->soMask |= soMask;
 
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_SET_BR): {
-      State *pState = ((Filter *)hFilter)->GetState(hToPort);
+      _ASSERTE(((((State *)hFilterInstance)->soMask | ~((Filter *)hFilter)->soMask) & SO_SET_BR) != 0);
 
-      if (!pState)
-        return FALSE;
-
-      _ASSERTE(((pState->soMask | ~((Filter *)hFilter)->soMask) & SO_SET_BR) != 0);
-
-      if (pState->soMask & SO_SET_BR) {
+      if (((State *)hFilterInstance)->soMask & SO_SET_BR) {
         DWORD val = pOutMsg->u.val;
 
         // discard messages for supported options
         if (!pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY))
           return FALSE;
 
-        if (pState->br != val) {
-          pState->br = val;
+        if (((State *)hFilterInstance)->br != val) {
+          ((State *)hFilterInstance)->br = val;
 
-          if (pState->pComPort) {
-            pState->pComPort->SetBR(pState->br);
-            _ASSERTE(pState->pTelnetProtocol != NULL);
-            pState->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
+          if (((State *)hFilterInstance)->pComPort) {
+            ((State *)hFilterInstance)->pComPort->SetBR(((State *)hFilterInstance)->br);
+            _ASSERTE(((State *)hFilterInstance)->pTelnetProtocol != NULL);
+            ((State *)hFilterInstance)->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
           }
         }
       }
@@ -734,14 +704,9 @@ static BOOL CALLBACK OutMethod(
                                   |VAL2LC_PARITY(-1)|LC_MASK_PARITY
                                   |VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS)) == 0);
 
-      State *pState = ((Filter *)hFilter)->GetState(hToPort);
+      _ASSERTE(((((State *)hFilterInstance)->soMask | ~((Filter *)hFilter)->soMask) & SO_SET_LC) != 0);
 
-      if (!pState)
-        return FALSE;
-
-      _ASSERTE(((pState->soMask | ~((Filter *)hFilter)->soMask) & SO_SET_LC) != 0);
-
-      if (pState->soMask & SO_SET_LC) {
+      if (((State *)hFilterInstance)->soMask & SO_SET_LC) {
         DWORD val = pOutMsg->u.val;
 
         // discard messages for supported options
@@ -750,26 +715,26 @@ static BOOL CALLBACK OutMethod(
 
         if ((val & LC_MASK_BYTESIZE) == 0) {
           _ASSERTE((val & VAL2LC_BYTESIZE(-1)) == 0);
-          val |= (pState->lc & (VAL2LC_BYTESIZE(-1)|LC_MASK_BYTESIZE));
+          val |= (((State *)hFilterInstance)->lc & (VAL2LC_BYTESIZE(-1)|LC_MASK_BYTESIZE));
         }
 
         if ((val & LC_MASK_PARITY) == 0) {
           _ASSERTE((val & VAL2LC_PARITY(-1)) == 0);
-          val |= (pState->lc & (VAL2LC_PARITY(-1)|LC_MASK_PARITY));
+          val |= (((State *)hFilterInstance)->lc & (VAL2LC_PARITY(-1)|LC_MASK_PARITY));
         }
 
         if ((val & LC_MASK_STOPBITS) == 0) {
           _ASSERTE((val & VAL2LC_STOPBITS(-1)) == 0);
-          val |= (pState->lc & (VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS));
+          val |= (((State *)hFilterInstance)->lc & (VAL2LC_STOPBITS(-1)|LC_MASK_STOPBITS));
         }
 
-        if (pState->lc != val) {
-          pState->lc = val;
+        if (((State *)hFilterInstance)->lc != val) {
+          ((State *)hFilterInstance)->lc = val;
 
-          if (pState->pComPort) {
-            pState->pComPort->SetLC(pState->lc);
-            _ASSERTE(pState->pTelnetProtocol != NULL);
-            pState->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
+          if (((State *)hFilterInstance)->pComPort) {
+            ((State *)hFilterInstance)->pComPort->SetLC(((State *)hFilterInstance)->lc);
+            _ASSERTE(((State *)hFilterInstance)->pTelnetProtocol != NULL);
+            ((State *)hFilterInstance)->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
           }
         }
       }
@@ -777,14 +742,9 @@ static BOOL CALLBACK OutMethod(
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_SET_PIN_STATE): {
-      State *pState = ((Filter *)hFilter)->GetState(hToPort);
+      _ASSERTE(((((State *)hFilterInstance)->soMask | ~((Filter *)hFilter)->soMask) & SO_V2O_PIN_STATE(-1)) != 0);
 
-      if (!pState)
-        return FALSE;
-
-      _ASSERTE(((pState->soMask | ~((Filter *)hFilter)->soMask) & SO_V2O_PIN_STATE(-1)) != 0);
-
-      WORD mask = MASK2VAL(pOutMsg->u.val) & SO_O2V_PIN_STATE(pState->soMask);
+      WORD mask = MASK2VAL(pOutMsg->u.val) & SO_O2V_PIN_STATE(((State *)hFilterInstance)->soMask);
 
       if (!mask)
         break;
@@ -794,89 +754,74 @@ static BOOL CALLBACK OutMethod(
       // discard settings for supported options
       pOutMsg->u.val &= ~VAL2MASK(mask);
 
-      pinState = ((pinState & mask) | (pState->pinState & ~mask));
-      mask = pState->pinState ^ pinState;
+      pinState = ((pinState & mask) | (((State *)hFilterInstance)->pinState & ~mask));
+      mask = ((State *)hFilterInstance)->pinState ^ pinState;
 
       if (mask) {
-        if (pState->pComPort) {
+        if (((State *)hFilterInstance)->pComPort) {
           if (SPS_P2V_MST(mask))
-            pState->pComPort->NotifyMST(SPS_P2V_MST(pinState));
+            ((State *)hFilterInstance)->pComPort->NotifyMST(SPS_P2V_MST(pinState));
 
           if (SPS_P2V_MCR(mask))
-            pState->pComPort->SetMCR(SPS_P2V_MCR(pinState), SPS_P2V_MCR(mask));
+            ((State *)hFilterInstance)->pComPort->SetMCR(SPS_P2V_MCR(pinState), SPS_P2V_MCR(mask));
 
           if (mask & PIN_STATE_BREAK)
-            pState->pComPort->SetBreak((pinState & PIN_STATE_BREAK) != 0);
+            ((State *)hFilterInstance)->pComPort->SetBreak((pinState & PIN_STATE_BREAK) != 0);
 
-          _ASSERTE(pState->pTelnetProtocol != NULL);
-          pState->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
+          _ASSERTE(((State *)hFilterInstance)->pTelnetProtocol != NULL);
+          ((State *)hFilterInstance)->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
         }
 
-        pState->pinState = pinState;
+        ((State *)hFilterInstance)->pinState = pinState;
       }
 
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_SET_LSR): {
-      State *pState = ((Filter *)hFilter)->GetState(hToPort);
-
-      if (!pState)
-        return FALSE;
-
-      _ASSERTE(((pState->soMask | ~((Filter *)hFilter)->soMask) & SO_V2O_LINE_STATUS(-1)) != 0);
+      _ASSERTE(((((State *)hFilterInstance)->soMask | ~((Filter *)hFilter)->soMask) & SO_V2O_LINE_STATUS(-1)) != 0);
 
       BYTE lsr;
 
-      lsr = (BYTE)pOutMsg->u.val & (BYTE)MASK2VAL(pOutMsg->u.val) & SO_O2V_LINE_STATUS(pState->soMask);
+      lsr = (BYTE)pOutMsg->u.val & (BYTE)MASK2VAL(pOutMsg->u.val) & SO_O2V_LINE_STATUS(((State *)hFilterInstance)->soMask);
 
       // discard settings for supported options
-      pOutMsg->u.val &= ~VAL2MASK(SO_O2V_LINE_STATUS(pState->soMask));
+      pOutMsg->u.val &= ~VAL2MASK(SO_O2V_LINE_STATUS(((State *)hFilterInstance)->soMask));
 
       if (!lsr)
         break;
 
-      if (pState->pComPort) {
-        pState->pComPort->NotifyLSR(lsr);
-        _ASSERTE(pState->pTelnetProtocol != NULL);
-        pState->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
+      if (((State *)hFilterInstance)->pComPort) {
+        ((State *)hFilterInstance)->pComPort->NotifyLSR(lsr);
+        _ASSERTE(((State *)hFilterInstance)->pTelnetProtocol != NULL);
+        ((State *)hFilterInstance)->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
       }
 
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_PURGE_TX): {
-      State *pState = ((Filter *)hFilter)->GetState(hToPort);
+      _ASSERTE(((((State *)hFilterInstance)->soMask | ~((Filter *)hFilter)->soMask) & SO_PURGE_TX) != 0);
 
-      if (!pState)
-        return FALSE;
-
-      _ASSERTE(((pState->soMask | ~((Filter *)hFilter)->soMask) & SO_PURGE_TX) != 0);
-
-      if (pState->soMask & SO_PURGE_TX) {
+      if (((State *)hFilterInstance)->soMask & SO_PURGE_TX) {
         _ASSERTE(pOutMsg->u.val == (BYTE)pOutMsg->u.val);
 
         // discard messages for supported options
         if (!pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY))
           return FALSE;
 
-        if (pState->pComPort) {
-          pState->pComPort->PurgeTx();
-          _ASSERTE(pState->pTelnetProtocol != NULL);
-          pState->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
+        if (((State *)hFilterInstance)->pComPort) {
+          ((State *)hFilterInstance)->pComPort->PurgeTx();
+          _ASSERTE(((State *)hFilterInstance)->pTelnetProtocol != NULL);
+          ((State *)hFilterInstance)->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
         }
       }
 
       break;
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_ADD_XOFF_XON): {
-      State *pState = ((Filter *)hFilter)->GetState(hToPort);
-
-      if (!pState)
-        break;
-
-      if (pState->pComPort) {
-        pState->pComPort->AddXoffXon(pOutMsg->u.val);
-        _ASSERTE(pState->pTelnetProtocol != NULL);
-        pState->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
+      if (((State *)hFilterInstance)->pComPort) {
+        ((State *)hFilterInstance)->pComPort->AddXoffXon(pOutMsg->u.val);
+        _ASSERTE(((State *)hFilterInstance)->pTelnetProtocol != NULL);
+        ((State *)hFilterInstance)->pTelnetProtocol->FlushEncodedStream(&pOutMsg);
       }
 
       break;
@@ -887,7 +832,7 @@ static BOOL CALLBACK OutMethod(
       if (pOutMsg->u.buf.size == 0)
         break;
 
-      TelnetProtocol *pTelnetProtocol = ((Filter *)hFilter)->GetProtocol(hToPort);
+      TelnetProtocol *pTelnetProtocol = ((State *)hFilterInstance)->pTelnetProtocol;
 
       if (!pTelnetProtocol) {
         // discard data
@@ -916,7 +861,9 @@ static const FILTER_ROUTINES_A routines = {
   NULL,           // Config
   NULL,           // ConfigStop
   Create,
-  Init,
+  Delete,
+  CreateInstance,
+  DeleteInstance,
   InMethod,
   OutMethod,
 };
@@ -945,7 +892,8 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
       !ROUTINE_IS_VALID(pHubRoutines, pFilterName) ||
       !ROUTINE_IS_VALID(pHubRoutines, pTimerCreate) ||
       !ROUTINE_IS_VALID(pHubRoutines, pTimerSet) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pTimerDelete))
+      !ROUTINE_IS_VALID(pHubRoutines, pTimerDelete) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pFilterPort))
   {
     return NULL;
   }
@@ -960,6 +908,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   pTimerCreate = pHubRoutines->pTimerCreate;
   pTimerSet = pHubRoutines->pTimerSet;
   pTimerDelete = pHubRoutines->pTimerDelete;
+  pFilterPort = pHubRoutines->pFilterPort;
 
   return plugins;
 }
