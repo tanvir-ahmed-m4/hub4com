@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.22  2009/02/04 12:26:54  vfrolov
+ * Implemented --load option for filters
+ *
  * Revision 1.21  2009/02/02 15:21:42  vfrolov
  * Optimized filter's API
  *
@@ -103,7 +106,7 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "  " << pProgPath << " [options] <port0> [options] [<port1> ...]" << endl
   << endl
   << "Common options:" << endl
-  << "  --load=[<file>][,<begin>[,<end>]][:<prms>]" << endl
+  << "  " << Args::LoadPrefix() << "[<file>][,<begin>[,<end>]][:<prms>]" << endl
   << "                           - load arguments (one argument per line) between" << endl
   << "                             <begin> and <end> lines from a file <file> (use" << endl
   << "                             standard input if empty) and insert them into the" << endl
@@ -113,6 +116,7 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "                             if <begin> is empty. Do loading till end-of-file" << endl
   << "                             if <end> is empty. Ignore arguments begining with" << endl
   << "                             '#'. <file> will replace %%0%% in the arguments." << endl
+  << "                             It is possible up to " << Args::RecursiveMax() << " recursive loads." << endl
   << "  --help                   - show this help." << endl
   << "  --help=*                 - show help for all modules." << endl
   << "  --help=<LstM>            - show help for modules listed in <LstM>." << endl
@@ -150,6 +154,7 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "                             and put arguments <Args> (if any) to the filter." << endl
   << "                             Add filter to the end of filter group <FGID>" << endl
   << "                             (<FGID> is <MID> by default)." << endl
+  << "                             Any filter can accept " << Args::LoadPrefix() << "... option." << endl
   << "  --add-filters=<Lst>:<LstF>" << endl
   << "                           - attach the filters listed in <LstF> to the ports" << endl
   << "                             listed in <Lst>. These filters will handle the" << endl
@@ -181,12 +186,12 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "      receive data from CNCB2 and send it to CNCB0 and CNCB1." << endl
   << "  " << pProgPath << " --echo-route=0 COM2" << endl
   << "    - receive data from COM2 and send it back to COM2." << endl
-  << "  " << pProgPath << " --load=" << endl
+  << "  " << pProgPath << " " << Args::LoadPrefix() << endl
   << "      --echo-route=0" << endl
   << "      COM2" << endl
   << "      ^Z" << endl
   << "    - the same as above." << endl
-  << "  " << pProgPath << " --load=,_BEGIN_,_END_" << endl
+  << "  " << pProgPath << " " << Args::LoadPrefix() << ",_BEGIN_,_END_" << endl
   << "      blah blah blah" << endl
   << "      _BEGIN_" << endl
   << "      --echo-route=0" << endl

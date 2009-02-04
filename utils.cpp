@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2008 Vyacheslav Frolov
+ * Copyright (c) 2006-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2009/02/04 12:26:54  vfrolov
+ * Implemented --load option for filters
+ *
  * Revision 1.6  2008/10/02 07:52:38  vfrolov
  * Added removing macroses for undefined parameters of --load option
  *
@@ -52,6 +55,12 @@ Args::Args(int argc, const char *const argv[])
 {
   for (int i = 0 ; i < argc ; i++)
     Add(argv[i]);
+}
+
+void Args::Add(const vector<string> &args)
+{
+  for (vector<string>::const_iterator i = args.begin() ; i != args.end() ; i++)
+    Add(*i);
 }
 
 static void SubstParams(string &argBuf, const vector<string> &params)
@@ -97,7 +106,7 @@ static void SubstParams(string &argBuf, const vector<string> &params)
 
 void Args::Add(const string &arg)
 {
-  const char *pLoad = GetParam(arg.c_str(), "--load=");
+  const char *pLoad = GetParam(arg.c_str(), LoadPrefix());
 
   if (!pLoad) {
     //cout << "<" << arg << ">" << endl;
@@ -192,7 +201,7 @@ void Args::Add(const string &arg)
         if (str[0] == '#')
           continue;
 
-        if (num_recursive > 256) {
+        if (num_recursive > RecursiveMax()) {
           cerr << "Too many recursive options " << arg << endl;
           exit(1);
         }
@@ -366,24 +375,14 @@ const char *GetParam(const char *pArg, const char *pPattern)
 void CreateArgsVector(
     const char *pName,
     const char *pArgs,
+    Args &args,
     int *pArgc,
-    const char ***pArgv,
-    void **ppTmp)
+    const char ***pArgv)
 {
-  int argc = 1;
-  const char **argv = (const char **)malloc((argc + 1) * sizeof(argv[0]));
-
-  if (!argv) {
-    cerr << "No enough memory." << endl;
-    exit(2);
-  }
-
-  argv[0] = pName;
-
-  char *pTmp;
+  vector<string> tokens;
 
   if (pArgs) {
-    pTmp = _strdup(pArgs);
+    char *pTmp = _strdup(pArgs);
 
     if (!pTmp) {
       cerr << "No enough memory." << endl;
@@ -391,37 +390,39 @@ void CreateArgsVector(
     }
 
     char *pSave;
+    const char *pToken;
 
-    for (argv[argc] = STRQTOK_R(pTmp, " ", &pSave, "\"\"", TRUE, TRUE) ;
-         argv[argc] ;
-         argv[argc] = STRQTOK_R(NULL, " ", &pSave, "\"\"", TRUE, TRUE))
+    for (pToken = STRQTOK_R(pTmp, " ", &pSave, "\"\"", TRUE, TRUE) ;
+         pToken ;
+         pToken = STRQTOK_R(NULL, " ", &pSave, "\"\"", TRUE, TRUE))
     {
-      argc++;
-      argv = (const char **)realloc(argv, (argc + 1) * sizeof(argv[0]));
-
-      if (!argv) {
-        cerr << "No enough memory." << endl;
-        exit(2);
-      }
+      tokens.push_back(pToken);
     }
-  } else {
-    pTmp = NULL;
-    argv[argc] = NULL;
+
+    free(pTmp);
   }
 
-  *pArgc = argc;
-  *pArgv = argv;
-  *ppTmp = pTmp;
+  args.Add(tokens);
+
+  *pArgc = int(args.size() + 1);
+  *pArgv = (const char **)malloc((*pArgc + 1) * sizeof((*pArgv)[0]));
+
+  if (!*pArgv) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
+
+  (*pArgv)[0] = pName;
+
+  for (int i = 1 ; i < *pArgc ; i++)
+    (*pArgv)[i] = args[i - 1].c_str();
+
+  (*pArgv)[*pArgc] = NULL;
 }
 
-void FreeArgsVector(
-    const char **argv,
-    void *pTmp)
+void FreeArgsVector(const char **argv)
 {
   if (argv)
     free(argv);
-
-  if (pTmp)
-    free(pTmp);
 }
 ///////////////////////////////////////////////////////////////
