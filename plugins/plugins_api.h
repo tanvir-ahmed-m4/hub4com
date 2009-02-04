@@ -155,6 +155,7 @@ DECLARE_HANDLE(HMASTERPORT);
 DECLARE_HANDLE(HMASTERFILTER);
 DECLARE_HANDLE(HMASTERFILTERINSTANCE);
 DECLARE_HANDLE(HMASTERTIMER);
+DECLARE_HANDLE(HFILTER);
 /*******************************************************************/
 typedef BYTE *(CALLBACK ROUTINE_BUF_ALLOC)(
         DWORD size);
@@ -209,6 +210,8 @@ typedef void (CALLBACK ROUTINE_TIMER_DELETE)(
         HMASTERTIMER hMasterTimer);
 typedef HMASTERPORT (CALLBACK ROUTINE_FILTERPORT)(
         HMASTERFILTERINSTANCE hMasterFilterInstance);
+typedef HFILTER (CALLBACK ROUTINE_GET_FILTER)(
+        HMASTERFILTERINSTANCE hMasterFilterInstance);
 /*******************************************************************/
 typedef struct _HUB_ROUTINES_A {
   size_t size;
@@ -229,6 +232,7 @@ typedef struct _HUB_ROUTINES_A {
   ROUTINE_TIMER_CANCEL *pTimerCancel;
   ROUTINE_TIMER_DELETE *pTimerDelete;
   ROUTINE_FILTERPORT *pFilterPort;
+  ROUTINE_GET_FILTER *pGetFilter;
 } HUB_ROUTINES_A;
 /*******************************************************************/
 typedef enum _PLUGIN_TYPE {
@@ -277,7 +281,6 @@ typedef struct _PLUGIN_ROUTINES_A {
 typedef const PLUGIN_ROUTINES_A *const *(CALLBACK PLUGIN_INIT_A)(
         const HUB_ROUTINES_A *pHubRoutines);
 /*******************************************************************/
-DECLARE_HANDLE(HFILTER);
 DECLARE_HANDLE(HFILTERINSTANCE);
 /*******************************************************************/
 typedef HFILTER (CALLBACK FILTER_CREATE_A)(

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.13  2009/02/04 15:41:16  vfrolov
+ * Added pGetFilter()
+ *
  * Revision 1.12  2009/02/02 15:21:42  vfrolov
  * Optimized filter's API
  *
@@ -68,9 +71,10 @@ namespace FilterAwakSeq {
   #define DEBUG_PARAM(par) par
 #endif  /* _DEBUG */
 ///////////////////////////////////////////////////////////////
-static ROUTINE_MSG_REPLACE_VAL *pMsgReplaceVal = NULL;
-static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone = NULL;
-static ROUTINE_MSG_INSERT_NONE *pMsgInsertNone = NULL;
+static ROUTINE_MSG_REPLACE_VAL *pMsgReplaceVal;
+static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone;
+static ROUTINE_MSG_INSERT_NONE *pMsgInsertNone;
+static ROUTINE_GET_FILTER *pGetFilter;
 ///////////////////////////////////////////////////////////////
 const char *GetParam(const char *pArg, const char *pPattern)
 {
@@ -93,11 +97,12 @@ class Valid {
 ///////////////////////////////////////////////////////////////
 class State {
   public:
-    State()
-      : waitAwakSeq(FALSE),
-        pAwakSeqNext(NULL),
-        connectSent(FALSE),
-        connectionCounter(0) {}
+    State(const BYTE *pAwakSeq)
+      : connectSent(FALSE),
+        connectionCounter(0)
+    {
+      StartAwakSeq(pAwakSeq);
+    }
 
     void StartAwakSeq(const BYTE *pAwakSeq) {
       waitAwakSeq = TRUE;
@@ -250,11 +255,15 @@ static void CALLBACK Delete(
 }
 ///////////////////////////////////////////////////////////////
 static HFILTERINSTANCE CALLBACK CreateInstance(
-    HMASTERFILTERINSTANCE DEBUG_PARAM(hMasterFilterInstance))
+    HMASTERFILTERINSTANCE hMasterFilterInstance)
 {
   _ASSERTE(hMasterFilterInstance != NULL);
 
-  return (HFILTERINSTANCE)new State();
+  Filter *pFilter = (Filter *)pGetFilter(hMasterFilterInstance);
+
+  _ASSERTE(pFilter != NULL);
+
+  return (HFILTERINSTANCE)new State(pFilter->pAwakSeq);
 }
 ///////////////////////////////////////////////////////////////
 static void CALLBACK DeleteInstance(
@@ -285,9 +294,6 @@ static BOOL CALLBACK InMethod(
 
     if (size == 0)
       return TRUE;
-
-    if (((State *)hFilterInstance)->pAwakSeqNext == NULL)
-      ((State *)hFilterInstance)->StartAwakSeq(((Filter *)hFilter)->pAwakSeq);
 
     if (!((State *)hFilterInstance)->waitAwakSeq)
       return TRUE;
@@ -418,7 +424,8 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
 {
   if (!ROUTINE_IS_VALID(pHubRoutines, pMsgReplaceVal) ||
       !ROUTINE_IS_VALID(pHubRoutines, pMsgReplaceNone) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pMsgInsertNone))
+      !ROUTINE_IS_VALID(pHubRoutines, pMsgInsertNone) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pGetFilter))
   {
     return NULL;
   }
@@ -426,6 +433,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   pMsgReplaceVal = pHubRoutines->pMsgReplaceVal;
   pMsgReplaceNone = pHubRoutines->pMsgReplaceNone;
   pMsgInsertNone = pHubRoutines->pMsgInsertNone;
+  pGetFilter = pHubRoutines->pGetFilter;
 
   return plugins;
 }

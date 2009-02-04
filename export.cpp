@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.13  2009/02/04 15:41:15  vfrolov
+ * Added pGetFilter()
+ *
  * Revision 1.12  2009/02/02 15:21:42  vfrolov
  * Optimized filter's API
  *
@@ -287,6 +290,14 @@ static HMASTERPORT CALLBACK filter_port(HMASTERFILTERINSTANCE hMasterFilterInsta
   return (HMASTERPORT)&((FilterInstance *)hMasterFilterInstance)->port;
 }
 ///////////////////////////////////////////////////////////////
+static HFILTER CALLBACK get_filter(HMASTERFILTERINSTANCE hMasterFilterInstance)
+{
+  _ASSERTE(hMasterFilterInstance != NULL);
+  _ASSERTE(((FilterInstance *)hMasterFilterInstance)->IsValid());
+
+  return ((FilterInstance *)hMasterFilterInstance)->HFilter();
+}
+///////////////////////////////////////////////////////////////
 HUB_ROUTINES_A hubRoutines = {
   sizeof(HUB_ROUTINES_A),
   buf_alloc,
@@ -306,5 +317,6 @@ HUB_ROUTINES_A hubRoutines = {
   timer_cancel,
   timer_delete,
   filter_port,
+  get_filter,
 };
 ///////////////////////////////////////////////////////////////
