@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.15  2009/02/17 14:17:37  vfrolov
+ * Redesigned timer's API
+ *
  * Revision 1.14  2009/01/23 16:55:05  vfrolov
  * Utilized timer routines
  *
@@ -272,12 +275,10 @@ BOOL ComPort::FakeReadFilter(HUB_MSG *pInMsg)
 
   switch (HUB_MSG_T2N(pInMsg->type)) {
     case HUB_MSG_T2N(HUB_MSG_TYPE_TICK): {
-      HMASTERTIMER hTimer = (HMASTERTIMER)pInMsg->u.hVal;
-
-      if (!hTimer)
+      if (pInMsg->u.hv2.hVal0 != this)
         break;
 
-      if (hTimer == hReconnectTimer) {
+      if (pInMsg->u.hv2.hVal1 == hReconnectTimer) {
         if (CanConnect())
           StartConnect();
       }
@@ -578,14 +579,18 @@ void ComPort::OnDisconnect()
     else
     if (reconnectTime > 0) {
       if (!hReconnectTimer)
-        hReconnectTimer = pTimerCreate();
+        hReconnectTimer = pTimerCreate((HTIMEROWNER)this);
 
       if (hReconnectTimer) {
         LARGE_INTEGER firstReportTime;
 
         firstReportTime.QuadPart = -10000LL * reconnectTime;
 
-        pTimerSet(hReconnectTimer, hMasterPort, &firstReportTime, 0);
+        pTimerSet(
+            hReconnectTimer,
+            hMasterPort,
+            &firstReportTime, 0,
+            (HTIMERPARAM)hReconnectTimer);
       }
     }
   }

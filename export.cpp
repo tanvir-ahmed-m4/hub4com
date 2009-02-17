@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.14  2009/02/17 14:17:36  vfrolov
+ * Redesigned timer's API
+ *
  * Revision 1.13  2009/02/04 15:41:15  vfrolov
  * Added pGetFilter()
  *
@@ -242,9 +245,9 @@ static void CALLBACK on_read(HMASTERPORT hMasterPort, HUB_MSG *pMsg)
   ((Port *)hMasterPort)->hub.OnRead((Port *)hMasterPort, &msg);
 }
 ///////////////////////////////////////////////////////////////
-static HMASTERTIMER CALLBACK timer_create()
+static HMASTERTIMER CALLBACK timer_create(HTIMEROWNER hTimerOwner)
 {
-  Timer *pTimer = new Timer();
+  Timer *pTimer = new Timer(hTimerOwner);
 
   if (!pTimer)
     cerr << "No enough memory." << endl;
@@ -256,14 +259,15 @@ static BOOL CALLBACK timer_set(
   HMASTERTIMER hMasterTimer,
   HMASTERPORT hMasterPort,
   const LARGE_INTEGER *pDueTime,
-  LONG period)
+  LONG period,
+  HTIMERPARAM hTimerParam)
 {
   _ASSERTE(hMasterTimer != NULL);
   _ASSERTE(((Timer *)hMasterTimer)->IsValid());
   _ASSERTE(hMasterPort != NULL);
   _ASSERTE(((Port *)hMasterPort)->IsValid());
 
-  return ((Timer *)hMasterTimer)->Set((Port *)hMasterPort, pDueTime, period);
+  return ((Timer *)hMasterTimer)->Set((Port *)hMasterPort, pDueTime, period, hTimerParam);
 }
 ///////////////////////////////////////////////////////////////
 static void CALLBACK timer_cancel(HMASTERTIMER hMasterTimer)

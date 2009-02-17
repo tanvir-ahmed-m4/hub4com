@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.18  2009/02/17 14:17:37  vfrolov
+ * Redesigned timer's API
+ *
  * Revision 1.17  2009/02/02 15:21:43  vfrolov
  * Optimized filter's API
  *
@@ -701,6 +704,9 @@ static void PrintMsgBody(ostream &tout, HUB_MSG *pMsg)
       break;
     case HUB_MSG_UNION_TYPE_HVAL:
       tout << pMsg->u.hVal;
+      break;
+    case HUB_MSG_UNION_TYPE_HVAL2:
+      tout << pMsg->u.hv2.hVal0 << " " << pMsg->u.hv2.hVal1;
       break;
     default:
       tout  << "???";

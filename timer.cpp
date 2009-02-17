@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.3  2009/02/17 14:17:36  vfrolov
+ * Redesigned timer's API
+ *
  * Revision 1.2  2009/01/26 14:55:29  vfrolov
  * Added signature checking for Timer
  *
@@ -35,7 +38,8 @@
 #include "port.h"
 #include "hubmsg.h"
 ///////////////////////////////////////////////////////////////
-Timer::Timer()
+Timer::Timer(HTIMEROWNER _hTimerOwner)
+  : hTimerOwner(_hTimerOwner)
 {
 #ifdef _DEBUG
   signature = TIMER_SIGNATURE;
@@ -74,16 +78,18 @@ VOID CALLBACK Timer::TimerAPCProc(
   HubMsg msg;
 
   msg.type = HUB_MSG_TYPE_TICK;
-  msg.u.hVal = pArg;
+  msg.u.hv2.hVal0 = ((Timer *)pArg)->hTimerOwner;
+  msg.u.hv2.hVal1 = ((Timer *)pArg)->hTimerParam;
 
   ((Timer *)pArg)->pPort->hub.OnFakeRead(((Timer *)pArg)->pPort, &msg);
 }
 ///////////////////////////////////////////////////////////////
-BOOL Timer::Set(Port *_pPort, const LARGE_INTEGER *pDueTime, LONG period)
+BOOL Timer::Set(Port *_pPort, const LARGE_INTEGER *pDueTime, LONG period, HTIMERPARAM _hTimerParam)
 {
   _ASSERTE(signature == TIMER_SIGNATURE);
 
   pPort = _pPort;
+  hTimerParam = _hTimerParam;
 
   _ASSERTE(pPort != NULL);
 

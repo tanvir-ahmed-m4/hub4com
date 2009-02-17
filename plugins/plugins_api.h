@@ -33,6 +33,7 @@ extern "C" {
 #define HUB_MSG_UNION_TYPE_VAL     ((DWORD)0x02000000)
 #define HUB_MSG_UNION_TYPE_PVAL    ((DWORD)0x03000000)
 #define HUB_MSG_UNION_TYPE_HVAL    ((DWORD)0x04000000)
+#define HUB_MSG_UNION_TYPE_HVAL2   ((DWORD)0x05000000)
 /*******************************************************************/
 #define HUB_MSG_VAL_TYPES_MASK     ((DWORD)0x00FF0000)
 #define HUB_MSG_VAL_TYPE_MASK_VAL  ((DWORD)0x00010000)
@@ -133,7 +134,7 @@ extern "C" {
 #define HUB_MSG_TYPE_ADD_XOFF_XON  (21  | HUB_MSG_ROUTE_FLOW_CONTROL | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_BOOL)
 #define HUB_MSG_TYPE_PURGE_TX_IN   (22  | HUB_MSG_UNION_TYPE_NONE)
 #define HUB_MSG_TYPE_PURGE_TX      (23  | HUB_MSG_UNION_TYPE_NONE)
-#define HUB_MSG_TYPE_TICK          (24  | HUB_MSG_UNION_TYPE_HVAL)
+#define HUB_MSG_TYPE_TICK          (24  | HUB_MSG_UNION_TYPE_HVAL2)
 /*******************************************************************/
 typedef struct _HUB_MSG {
   DWORD type;
@@ -146,6 +147,10 @@ typedef struct _HUB_MSG {
       DWORD *pVal;
       DWORD val;
     } pv;
+    struct {
+      HANDLE hVal0;
+      HANDLE hVal1;
+    } hv2;
     DWORD val;
     HANDLE hVal;
   } u;
@@ -155,6 +160,8 @@ DECLARE_HANDLE(HMASTERPORT);
 DECLARE_HANDLE(HMASTERFILTER);
 DECLARE_HANDLE(HMASTERFILTERINSTANCE);
 DECLARE_HANDLE(HMASTERTIMER);
+DECLARE_HANDLE(HTIMEROWNER);
+DECLARE_HANDLE(HTIMERPARAM);
 DECLARE_HANDLE(HFILTER);
 /*******************************************************************/
 typedef BYTE *(CALLBACK ROUTINE_BUF_ALLOC)(
@@ -198,12 +205,13 @@ typedef void (CALLBACK ROUTINE_ON_READ)(
         HMASTERPORT hMasterPort,
         HUB_MSG *pMsg);
 typedef HMASTERTIMER (CALLBACK ROUTINE_TIMER_CREATE)(
-        );
+        HTIMEROWNER hTimerOwner);
 typedef BOOL (CALLBACK ROUTINE_TIMER_SET)(
         HMASTERTIMER hMasterTimer,
         HMASTERPORT hMasterPort,
         const LARGE_INTEGER *pDueTime,
-        LONG period);
+        LONG period,
+        HTIMERPARAM hTimerParam);
 typedef void (CALLBACK ROUTINE_TIMER_CANCEL)(
         HMASTERTIMER hMasterTimer);
 typedef void (CALLBACK ROUTINE_TIMER_DELETE)(
