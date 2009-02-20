@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.8  2009/02/20 18:32:35  vfrolov
+ * Added info about location of options
+ *
  * Revision 1.7  2009/02/04 12:26:54  vfrolov
  * Implemented --load option for filters
  *
@@ -47,19 +50,113 @@
  */
 
 #include "precomp.h"
+#include "plugins/plugins_api.h"
+
 #include "utils.h"
 
+///////////////////////////////////////////////////////////////
+#define ARG_SIGNATURE 'h4cA'
+
+void Arg::Init(
+    const char *_pArg,
+    const char *_pFile,
+    int _iLine,
+    const char *_pReference)
+{
+  pFile = ((_pFile && *_pFile) ? _strdup(_pFile) : NULL);
+  iLine = _iLine;
+  pReference = ((_pReference && *_pReference) ? _strdup(_pReference) : NULL);
+
+  pBuf = new BYTE[(strlen(_pArg) + 1) * sizeof(char)
+#ifdef _DEBUG
+                  + sizeof(DWORD)
+#endif
+                  + sizeof(Arg **)];
+
+  if (!pBuf) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
+
+#ifdef _DEBUG
+  *(DWORD *)pBuf = ARG_SIGNATURE;
+  pBuf += sizeof(DWORD);
+#endif
+
+  *(Arg **)pBuf = this;
+  pBuf += sizeof(Arg **);
+
+  strcpy((char *)pBuf, _pArg);
+}
+
+Arg::~Arg()
+{
+  if (pBuf) {
+    _ASSERTE(*(DWORD *)(pBuf - sizeof(DWORD) - sizeof(Arg **)) == ARG_SIGNATURE);
+
+#ifdef _DEBUG
+    *(DWORD *)(pBuf - sizeof(DWORD) - sizeof(Arg **)) = 0;
+#endif
+
+    delete [] (pBuf
+#ifdef _DEBUG
+               - sizeof(DWORD)
+#endif
+               - sizeof(Arg **));
+  }
+
+  if (pReference)
+    free((void *)pReference);
+
+  if (pFile)
+    free((void *)pFile);
+}
+
+ostream &Arg::OutReference(ostream &out, const string &prefix, const string &suffix) const
+{
+  string pref(prefix);
+  string suff;
+
+  if (pFile) {
+    out << pref << "file " << pFile;
+    pref = ", ";
+    suff = suffix;
+  }
+
+  if (iLine >= 0) {
+    out << pref << "line " << (iLine + 1);
+    pref = ", ";
+    suff = suffix;
+  }
+
+  out << suff;
+
+  if (pReference)
+    out << "," << endl << pReference;
+
+  return out;
+}
+
+Arg *Arg::GetArg(const char *_pArg)
+{
+  if (!_pArg)
+    return NULL;
+
+  _ASSERTE(*(DWORD *)((const BYTE *)_pArg - sizeof(DWORD) - sizeof(Arg **)) == ARG_SIGNATURE);
+
+  return *(Arg **)((const BYTE *)_pArg - sizeof(Arg **));
+}
 ///////////////////////////////////////////////////////////////
 Args::Args(int argc, const char *const argv[])
   : num_recursive(0)
 {
   for (int i = 0 ; i < argc ; i++)
-    Add(argv[i]);
+    Add(Arg(argv[i]));
 }
 
-void Args::Add(const vector<string> &args)
+void Args::Add(const vector<Arg> &args)
 {
-  for (vector<string>::const_iterator i = args.begin() ; i != args.end() ; i++)
+  for (vector<Arg>::const_iterator i = args.begin() ; i != args.end() ; i++)
     Add(*i);
 }
 
@@ -104,12 +201,12 @@ static void SubstParams(string &argBuf, const vector<string> &params)
   }
 }
 
-void Args::Add(const string &arg)
+void Args::Add(const Arg &arg)
 {
   const char *pLoad = GetParam(arg.c_str(), LoadPrefix());
 
   if (!pLoad) {
-    //cout << "<" << arg << ">" << endl;
+    //cout << "<" << arg.c_str() << ">" << endl;
     push_back(arg);
     return;
   }
@@ -150,6 +247,8 @@ void Args::Add(const string &arg)
 
     if (ifile.fail()) {
       cerr << "Can't open file " << pFile << endl;
+      cerr << "by '" << arg.c_str() << "'";
+      arg.OutReference(cerr, " (", ")") << endl;
       exit(1);
     }
 
@@ -163,12 +262,16 @@ void Args::Add(const string &arg)
   for (char *p = STRQTOK_R(NULL, ",", &pSave) ; p ; p = STRQTOK_R(NULL, ",", &pSave))
     paramsLoad.push_back(p);
 
-  while (pInStream->good()) {
+  for (int iLine = 0 ; pInStream->good() ; iLine++) {
     stringstream line;
 
     pInStream->get(*line.rdbuf());
 
     if (!pInStream->fail()) {
+      char ch;
+
+      pInStream->get(ch);
+
       string str = line.str();
 
       SubstParams(str, paramsLoad);
@@ -202,22 +305,31 @@ void Args::Add(const string &arg)
           continue;
 
         if (num_recursive > RecursiveMax()) {
-          cerr << "Too many recursive options " << arg << endl;
+          cerr << "Too many recursive options " << LoadPrefix() << endl;
           exit(1);
         }
 
         num_recursive++;
-        Add(str);
+
+        stringstream reference;
+
+        reference << "loaded by '" << arg.c_str() << "'";
+
+        arg.OutReference(reference, " (", ")");
+
+        Add(Arg(str.c_str(), pFile, iLine, reference.str().c_str()));
+
         num_recursive--;
       }
+      continue;
     } else {
       if (!pInStream->eof())
         pInStream->clear();
+
+      char ch;
+
+      pInStream->get(ch);
     }
-
-    char ch;
-
-    pInStream->get(ch);
   }
 
   free(pTmp);
@@ -379,9 +491,8 @@ void CreateArgsVector(
     int *pArgc,
     const char ***pArgv)
 {
-  vector<string> tokens;
-
   if (pArgs) {
+    vector<Arg> tokens;
     char *pTmp = _strdup(pArgs);
 
     if (!pTmp) {
@@ -396,13 +507,19 @@ void CreateArgsVector(
          pToken ;
          pToken = STRQTOK_R(NULL, " ", &pSave, "\"\"", TRUE, TRUE))
     {
-      tokens.push_back(pToken);
+      tokens.push_back(Arg(pToken));
     }
 
     free(pTmp);
-  }
 
-  args.Add(tokens);
+    args.Add(tokens);
+
+    //cout << pArgs << ":" << endl;
+    //for (vector<Arg>::const_iterator i = args.begin() ; i != args.end() ; i++) {
+    //  cout << "'" << i->c_str() << "'";
+    //  i->OutReference(cerr, " (", ")") << endl;
+    //}
+  }
 
   *pArgc = int(args.size() + 1);
   *pArgv = (const char **)malloc((*pArgc + 1) * sizeof((*pArgv)[0]));
@@ -412,7 +529,14 @@ void CreateArgsVector(
     exit(2);
   }
 
-  (*pArgv)[0] = pName;
+  Arg *pArgName = new Arg(pName);
+
+  if (!pArgName) {
+    cerr << "No enough memory." << endl;
+    exit(2);
+  }
+
+  (*pArgv)[0] = pArgName->c_str();
 
   for (int i = 1 ; i < *pArgc ; i++)
     (*pArgv)[i] = args[i - 1].c_str();
@@ -422,7 +546,13 @@ void CreateArgsVector(
 
 void FreeArgsVector(const char **argv)
 {
-  if (argv)
+  if (argv) {
+    Arg *pArgName = Arg::GetArg(argv[0]);
+
+    if (pArgName)
+      delete pArgName;
+
     free(argv);
+  }
 }
 ///////////////////////////////////////////////////////////////

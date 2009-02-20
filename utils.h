@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2009/02/20 18:32:35  vfrolov
+ * Added info about location of options
+ *
  * Revision 1.6  2009/02/04 12:26:54  vfrolov
  * Implemented --load option for filters
  *
@@ -47,19 +50,52 @@
 #define _UTILS_H_
 
 ///////////////////////////////////////////////////////////////
-class Args : public vector<string>
+class Arg : protected ARG_INFO_A
+{
+  public:
+    Arg(const char *_pArg,
+        const char *_pFile = NULL,
+        int _iLine = -1,
+        const char *_pReference = NULL)
+    {
+      Init(_pArg, _pFile, _iLine, _pReference);
+    }
+
+    Arg(const Arg &arg) {
+      Init(arg.c_str(), arg.pFile, arg.iLine, arg.pReference);
+    }
+
+    Arg::~Arg();
+
+    const char *c_str() const { return (const char *)pBuf; }
+    ostream &Arg::OutReference(ostream &out, const string &prefix, const string &suffix) const;
+
+    static Arg *Arg::GetArg(const char *_pArg);
+    static const ARG_INFO_A *Arg::GetArgInfo(const char *_pArg) { return GetArg(_pArg); }
+
+  protected:
+    void Init(
+        const char *_pArg,
+        const char *_pFile,
+        int _iLine,
+        const char *_pReference);
+
+    BYTE *pBuf;
+};
+///////////////////////////////////////////////////////////////
+class Args : public vector<Arg>
 {
   public:
     Args() : num_recursive(0) {}
     Args(int argc, const char *const argv[]);
 
-    void Add(const vector<string> &args);
+    void Add(const vector<Arg> &args);
 
     static const char *LoadPrefix() { return "--load="; }
     static int RecursiveMax() { return 256; }
 
   private:
-    void Add(const string &arg);
+    void Add(const Arg &arg);
 
     int num_recursive;
 };

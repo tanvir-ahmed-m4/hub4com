@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.14  2009/02/20 18:32:35  vfrolov
+ * Added info about location of options
+ *
  * Revision 1.13  2008/11/27 16:25:08  vfrolov
  * Improved write buffering
  *
@@ -69,6 +72,8 @@ namespace PortSerial {
 #include "comport.h"
 #include "import.h"
 ///////////////////////////////////////////////////////////////
+static ROUTINE_GET_ARG_INFO_A *pGetArgInfo;
+///////////////////////////////////////////////////////////////
 static const char *GetParam(const char *pArg, const char *pPattern)
 {
   size_t lenPattern = strlen(pPattern);
@@ -77,6 +82,35 @@ static const char *GetParam(const char *pArg, const char *pPattern)
     return NULL;
 
   return pArg + lenPattern;
+}
+///////////////////////////////////////////////////////////////
+static void Diag(const char *pPref, const char *pArg)
+{
+  cerr << pPref << "'" << pArg << "'";
+
+  string pref(" (");
+  string suff;
+
+  const ARG_INFO_A *pInfo = pGetArgInfo(pArg);
+
+  if (ITEM_IS_VALID(pInfo, pFile) && pInfo->pFile != NULL) {
+    cerr << pref << "file " << pInfo->pFile;
+    pref = ", ";
+    suff = ")";
+  }
+
+  if (ITEM_IS_VALID(pInfo, iLine) && pInfo->iLine >= 0) {
+    cerr << pref << "line " << (pInfo->iLine + 1);
+    pref = ", ";
+    suff = ")";
+  }
+
+  cerr << suff;
+
+  if (ITEM_IS_VALID(pInfo, pReference) && pInfo->pReference != NULL)
+    cerr << "," << endl << pInfo->pReference;
+
+  cerr << endl;
 }
 ///////////////////////////////////////////////////////////////
 static PLUGIN_TYPE CALLBACK GetPluginType()
@@ -195,67 +229,67 @@ static BOOL CALLBACK Config(
 
   if ((pParam = GetParam(pArg, "--baud=")) != NULL) {
     if (!comParams.SetBaudRate(pParam)) {
-      cerr << "Invalid baud rate value in " << pArg << endl;
+      Diag("Invalid baud rate value in ", pArg);
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--data=")) != NULL) {
     if (!comParams.SetByteSize(pParam)) {
-      cerr << "Invalid data bits value in " << pArg << endl;
+      Diag("Invalid data bits value in ", pArg);
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--parity=")) != NULL) {
     if (!comParams.SetParity(pParam)) {
-      cerr << "Invalid parity value in " << pArg << endl;
+      Diag("Invalid parity value in ", pArg);
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--stop=")) != NULL) {
     if (!comParams.SetStopBits(pParam)) {
-      cerr << "Invalid stop bits value in " << pArg << endl;
+      Diag("Invalid stop bits value in ", pArg);
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--octs=")) != NULL) {
     if (!comParams.SetOutCts(pParam)) {
-      cerr << "Invalid CTS handshaking on output value in " << pArg << endl;
+      Diag("Invalid CTS handshaking on output value in ", pArg);
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--odsr=")) != NULL) {
     if (!comParams.SetOutDsr(pParam)) {
-      cerr << "Invalid DSR handshaking on output value in " << pArg << endl;
+      Diag("Invalid DSR handshaking on output value in ", pArg);
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--ox=")) != NULL) {
     if (!comParams.SetOutX(pParam)) {
-      cerr << "Invalid XON/XOFF handshaking on output value in " << pArg << endl;
+      Diag("Invalid XON/XOFF handshaking on output value in ", pArg);
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--ix=")) != NULL) {
     if (!comParams.SetInX(pParam)) {
-      cerr << "Invalid XON/XOFF handshaking on input value in " << pArg << endl;
+      Diag("Invalid XON/XOFF handshaking on input value in ", pArg);
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--idsr=")) != NULL) {
     if (!comParams.SetInDsr(pParam)) {
-      cerr << "Invalid DSR sensitivity value in " << pArg << endl;
+      Diag("Invalid DSR sensitivity value in ", pArg);
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--ito=")) != NULL) {
     if (!comParams.SetIntervalTimeout(pParam)) {
-      cerr << "Invalid read interval timeout value in " << pArg << endl;
+      Diag("Invalid read interval timeout value in ", pArg);
       exit(1);
     }
   } else
   if ((pParam = GetParam(pArg, "--write-limit=")) != NULL) {
     if (!comParams.SetWriteQueueLimit(pParam)) {
-      cerr << "Invalid write limit value in " << pArg << endl;
+      Diag("Invalid write limit value in ", pArg);
       exit(1);
     }
   } else {
@@ -387,7 +421,8 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
       !ROUTINE_IS_VALID(pHubRoutines, pBufFree) ||
       !ROUTINE_IS_VALID(pHubRoutines, pBufAppend) ||
       !ROUTINE_IS_VALID(pHubRoutines, pMsgInsertNone) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pOnRead))
+      !ROUTINE_IS_VALID(pHubRoutines, pOnRead) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pGetArgInfo))
   {
     return NULL;
   }
@@ -397,6 +432,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   pBufAppend = pHubRoutines->pBufAppend;
   pMsgInsertNone = pHubRoutines->pMsgInsertNone;
   pOnRead = pHubRoutines->pOnRead;
+  pGetArgInfo = pHubRoutines->pGetArgInfo;
 
   return plugins;
 }

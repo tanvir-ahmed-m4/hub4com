@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.23  2009/02/20 18:32:35  vfrolov
+ * Added info about location of options
+ *
  * Revision 1.22  2009/02/04 12:26:54  vfrolov
  * Implemented --load option for filters
  *
@@ -153,8 +156,8 @@ static void Usage(const char *pProgPath, Plugins &plugins)
   << "                             filter with name <FN> (<FN> is <FGID> by default)" << endl
   << "                             and put arguments <Args> (if any) to the filter." << endl
   << "                             Add filter to the end of filter group <FGID>" << endl
-  << "                             (<FGID> is <MID> by default)." << endl
-  << "                             Any filter can accept " << Args::LoadPrefix() << "... option." << endl
+  << "                             (<FGID> is <MID> by default). Any filter can" << endl
+  << "                             accept described above option " << Args::LoadPrefix() << "[...]." << endl
   << "  --add-filters=<Lst>:<LstF>" << endl
   << "                           - attach the filters listed in <LstF> to the ports" << endl
   << "                             listed in <Lst>. These filters will handle the" << endl
@@ -321,7 +324,7 @@ static void Route(
   free(pTmp);
 }
 ///////////////////////////////////////////////////////////////
-static void CreateFilter(
+static BOOL CreateFilter(
     const Plugins &plugins,
     Filters &filter,
     const char *pParam)
@@ -340,14 +343,16 @@ static void CreateFilter(
 
   if (!pPlugin || !*pPlugin) {
     cerr << "No module name." << endl;
-    exit(1);
+    free(pTmp);
+    return FALSE;
   }
 
   const char *pPluginName = STRTOK_R(pPlugin, ",", &pSave);
 
   if (!pPluginName || !*pPluginName) {
     cerr << "No module name." << endl;
-    exit(1);
+    free(pTmp);
+    return FALSE;
   }
 
   HCONFIG hConfig;
@@ -357,7 +362,8 @@ static void CreateFilter(
 
   if (!pFltRoutines) {
     cerr << "No filter module " << pPluginName << endl;
-    exit(1);
+    free(pTmp);
+    return FALSE;
   }
 
   const char *pFilterGroup = STRTOK_R(NULL, ",", &pSave);
@@ -371,11 +377,12 @@ static void CreateFilter(
     pFilterName = pFilterGroup;
 
   if (!filter.CreateFilter(pFltRoutines, pFilterGroup, pFilterName, hConfig, pArgs)) {
-    cerr << "Invalid filter " << pParam << endl;
-    exit(1);
+    free(pTmp);
+    return FALSE;
   }
 
   free(pTmp);
+  return TRUE;
 }
 ///////////////////////////////////////////////////////////////
 static BOOL AddFilters(ComHub &hub, Port *pPort, HPRM0 pFilters, HPRM1 pListFlt, HPRM2 /*p2*/)
@@ -487,7 +494,7 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
 {
   Args args(argc - 1, argv + 1);
 
-  for (vector<string>::const_iterator i = args.begin() ; i != args.end() ; i++) {
+  for (vector<Arg>::const_iterator i = args.begin() ; i != args.end() ; i++) {
     if (!GetParam(i->c_str(), "--"))
       hub.Add();
   }
@@ -511,7 +518,7 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
 
   const char *pUseDriver = "serial";
 
-  for (vector<string>::const_iterator i = args.begin() ; i != args.end() ; i++) {
+  for (vector<Arg>::const_iterator i = args.begin() ; i != args.end() ; i++) {
     BOOL ok = pPlugins->Config(i->c_str());
     const char *pArg = GetParam(i->c_str(), "--");
 
@@ -587,11 +594,16 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
         exit(2);
       }
 
-      CreateFilter(*pPlugins, *pFilters, pParam);
+      if (!CreateFilter(*pPlugins, *pFilters, pParam)) {
+        cerr << "Can't create filter by '" << i->c_str() << "'";
+        i->OutReference(cerr, " (", ")") << endl;
+        exit(1);
+      }
     } else
     if ((pParam = GetParam(pArg, "add-filters=")) != NULL) {
       if (!pFilters) {
-        cerr << "No create-filter option before " << i->c_str() << endl;
+        cerr << "There is not any --create-filter option before '" << i->c_str() << "'";
+        i->OutReference(cerr, " (", ")") << endl;
         exit(1);
       }
 
@@ -601,7 +613,8 @@ static void Init(ComHub &hub, int argc, const char *const argv[])
       pUseDriver = pParam;
     } else {
       if (!ok) {
-        cerr << "Unknown option " << i->c_str() << endl;
+        cerr << "Unknown option '" << i->c_str() << "'";
+        i->OutReference(cerr, " (", ")") << endl;
         exit(1);
       }
     }

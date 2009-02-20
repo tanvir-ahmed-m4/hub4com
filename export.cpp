@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.15  2009/02/20 18:32:35  vfrolov
+ * Added info about location of options
+ *
  * Revision 1.14  2009/02/17 14:17:36  vfrolov
  * Redesigned timer's API
  *
@@ -73,6 +76,7 @@
 #include "hubmsg.h"
 #include "filter.h"
 #include "timer.h"
+#include "utils.h"
 
 ///////////////////////////////////////////////////////////////
 static BYTE * CALLBACK buf_alloc(DWORD size)
@@ -302,6 +306,11 @@ static HFILTER CALLBACK get_filter(HMASTERFILTERINSTANCE hMasterFilterInstance)
   return ((FilterInstance *)hMasterFilterInstance)->HFilter();
 }
 ///////////////////////////////////////////////////////////////
+static const ARG_INFO_A * CALLBACK get_arg_info(const char *pArg)
+{
+  return Arg::GetArgInfo(pArg);
+}
+///////////////////////////////////////////////////////////////
 HUB_ROUTINES_A hubRoutines = {
   sizeof(HUB_ROUTINES_A),
   buf_alloc,
@@ -322,5 +331,6 @@ HUB_ROUTINES_A hubRoutines = {
   timer_delete,
   filter_port,
   get_filter,
+  get_arg_info,
 };
 ///////////////////////////////////////////////////////////////

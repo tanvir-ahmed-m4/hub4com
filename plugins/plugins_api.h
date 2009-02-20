@@ -164,6 +164,13 @@ DECLARE_HANDLE(HTIMEROWNER);
 DECLARE_HANDLE(HTIMERPARAM);
 DECLARE_HANDLE(HFILTER);
 /*******************************************************************/
+typedef struct _ARG_INFO_A {
+  size_t size;
+  const char *pFile;
+  int iLine;
+  const char *pReference;
+} ARG_INFO_A;
+/*******************************************************************/
 typedef BYTE *(CALLBACK ROUTINE_BUF_ALLOC)(
         DWORD size);
 typedef VOID (CALLBACK ROUTINE_BUF_FREE)(
@@ -220,6 +227,8 @@ typedef HMASTERPORT (CALLBACK ROUTINE_FILTERPORT)(
         HMASTERFILTERINSTANCE hMasterFilterInstance);
 typedef HFILTER (CALLBACK ROUTINE_GET_FILTER)(
         HMASTERFILTERINSTANCE hMasterFilterInstance);
+typedef const ARG_INFO_A *(CALLBACK ROUTINE_GET_ARG_INFO_A)(
+        const char *pArg);
 /*******************************************************************/
 typedef struct _HUB_ROUTINES_A {
   size_t size;
@@ -241,6 +250,7 @@ typedef struct _HUB_ROUTINES_A {
   ROUTINE_TIMER_DELETE *pTimerDelete;
   ROUTINE_FILTERPORT *pFilterPort;
   ROUTINE_GET_FILTER *pGetFilter;
+  ROUTINE_GET_ARG_INFO_A *pGetArgInfo;
 } HUB_ROUTINES_A;
 /*******************************************************************/
 typedef enum _PLUGIN_TYPE {
@@ -359,8 +369,11 @@ typedef struct _PORT_ROUTINES_A {
   PORT_LOST_REPORT *pLostReport;
 } PORT_ROUTINES_A;
 /*******************************************************************/
+#define ITEM_IS_VALID(pStruct, item) \
+        (((BYTE *)(&(pStruct)->item + 1)) <= ((BYTE *)(pStruct) + (pStruct)->size))
+
 #define ROUTINE_GET(pStruct, pRoutine) \
-        ((((BYTE *)(&(pStruct)->pRoutine + 1)) <= ((BYTE *)(pStruct) + (pStruct)->size)) \
+        (ITEM_IS_VALID(pStruct, pRoutine) \
           ? (pStruct)->pRoutine \
           : NULL)
 

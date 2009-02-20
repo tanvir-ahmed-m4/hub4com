@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.18  2009/02/20 18:32:35  vfrolov
+ * Added info about location of options
+ *
  * Revision 1.17  2009/02/17 14:17:37  vfrolov
  * Redesigned timer's API
  *
@@ -87,6 +90,7 @@ static ROUTINE_TIMER_CREATE *pTimerCreate;
 static ROUTINE_TIMER_SET *pTimerSet;
 static ROUTINE_TIMER_DELETE *pTimerDelete;
 static ROUTINE_FILTERPORT *pFilterPort;
+static ROUTINE_GET_ARG_INFO_A *pGetArgInfo;
 ///////////////////////////////////////////////////////////////
 #ifndef _DEBUG
   #define DEBUG_PARAM(par)
@@ -102,6 +106,35 @@ const char *GetParam(const char *pArg, const char *pPattern)
     return NULL;
 
   return pArg + lenPattern;
+}
+///////////////////////////////////////////////////////////////
+static void Diag(const char *pPref, const char *pArg)
+{
+  cerr << pPref << "'" << pArg << "'";
+
+  string pref(" (");
+  string suff;
+
+  const ARG_INFO_A *pInfo = pGetArgInfo(pArg);
+
+  if (ITEM_IS_VALID(pInfo, pFile) && pInfo->pFile != NULL) {
+    cerr << pref << "file " << pInfo->pFile;
+    pref = ", ";
+    suff = ")";
+  }
+
+  if (ITEM_IS_VALID(pInfo, iLine) && pInfo->iLine >= 0) {
+    cerr << pref << "line " << (pInfo->iLine + 1);
+    pref = ", ";
+    suff = ")";
+  }
+
+  cerr << suff;
+
+  if (ITEM_IS_VALID(pInfo, pReference) && pInfo->pReference != NULL)
+    cerr << "," << endl << pInfo->pReference;
+
+  cerr << endl;
 }
 ///////////////////////////////////////////////////////////////
 class Valid {
@@ -202,7 +235,7 @@ Filter::Filter(const char *_pName, int argc, const char *const argv[])
     const char *pArg = GetParam(*pArgs, "--");
 
     if (!pArg) {
-      cerr << "Unknown option " << *pArgs << endl;
+      Diag("Unknown option ", *pArgs);
       Invalidate();
       continue;
     }
@@ -225,7 +258,7 @@ Filter::Filter(const char *_pName, int argc, const char *const argv[])
           comport = comport_server;
           break;
         default:
-          cerr << "Unknown value in " << *pArgs << endl;
+          Diag("Unknown value in ", *pArgs);
           Invalidate();
       }
     }
@@ -239,7 +272,7 @@ Filter::Filter(const char *_pName, int argc, const char *const argv[])
           suppressEcho = FALSE;
           break;
         default:
-          cerr << "Unknown value in " << *pArgs << endl;
+          Diag("Unknown value in ", *pArgs);
           Invalidate();
       }
     }
@@ -248,12 +281,12 @@ Filter::Filter(const char *_pName, int argc, const char *const argv[])
       if (isdigit(*pParam)) {
         keepActive = (unsigned)atol(pParam);
       } else {
-        cerr << "Invalid value in " << *pArgs << endl;
+        Diag("Invalid value in ", *pArgs);
         Invalidate();
       }
     }
     else {
-      cerr << "Unknown option " << *pArgs << endl;
+      Diag("Unknown option ", *pArgs);
       Invalidate();
     }
   }
@@ -899,7 +932,8 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
       !ROUTINE_IS_VALID(pHubRoutines, pTimerCreate) ||
       !ROUTINE_IS_VALID(pHubRoutines, pTimerSet) ||
       !ROUTINE_IS_VALID(pHubRoutines, pTimerDelete) ||
-      !ROUTINE_IS_VALID(pHubRoutines, pFilterPort))
+      !ROUTINE_IS_VALID(pHubRoutines, pFilterPort) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pGetArgInfo))
   {
     return NULL;
   }
@@ -915,6 +949,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   pTimerSet = pHubRoutines->pTimerSet;
   pTimerDelete = pHubRoutines->pTimerDelete;
   pFilterPort = pHubRoutines->pFilterPort;
+  pGetArgInfo = pHubRoutines->pGetArgInfo;
 
   return plugins;
 }
