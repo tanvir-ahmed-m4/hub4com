@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.13  2009/03/06 07:56:28  vfrolov
+ * Fixed assertion with non ascii chars
+ *
  * Revision 1.12  2009/01/23 16:55:05  vfrolov
  * Utilized timer routines
  *
@@ -186,7 +189,7 @@ static BOOL CALLBACK Config(
       reconnectTime = comParams.rtDisable;
     }
     else
-    if (isdigit(*pParam)) {
+    if (isdigit((unsigned char)*pParam)) {
       reconnectTime = atoi(pParam);
     }
     else {

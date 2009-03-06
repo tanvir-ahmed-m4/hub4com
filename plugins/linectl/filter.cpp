@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.12  2009/03/06 07:56:28  vfrolov
+ * Fixed assertion with non ascii chars
+ *
  * Revision 1.11  2009/02/02 15:21:42  vfrolov
  * Optimized filter's API
  *
@@ -136,7 +139,7 @@ void Filter::Parse(const char *pArg)
   if ((pParam = GetParam(pArg, "br=")) != NULL) {
     soOutMask |= SO_SET_BR;
 
-    switch (tolower(*pParam)) {
+    switch (tolower((unsigned char)*pParam)) {
       case 'l':
         goInMask[0] |= GO0_LBR_STATUS;
         break;
@@ -152,7 +155,7 @@ void Filter::Parse(const char *pArg)
   if ((pParam = GetParam(pArg, "lc=")) != NULL) {
     soOutMask |= SO_SET_LC;
 
-    switch (tolower(*pParam)) {
+    switch (tolower((unsigned char)*pParam)) {
       case 'l':
         goInMask[0] |= GO0_LLC_STATUS;
         break;

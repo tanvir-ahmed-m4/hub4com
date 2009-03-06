@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2008 Vyacheslav Frolov
+ * Copyright (c) 2006-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2009/03/06 07:56:28  vfrolov
+ * Fixed assertion with non ascii chars
+ *
  * Revision 1.6  2008/11/27 13:44:52  vfrolov
  * Added --write-limit option
  *
@@ -75,12 +78,12 @@ ComParams::ComParams()
 
 BOOL ComParams::SetBaudRate(const char *pBaudRate)
 {
-  if (tolower(*pBaudRate) == 'c') {
+  if (tolower((unsigned char)*pBaudRate) == 'c') {
     baudRate = -1;
     return TRUE;
   }
 
-  if (isdigit(*pBaudRate)) {
+  if (isdigit((unsigned char)*pBaudRate)) {
     baudRate = atol(pBaudRate);
     return TRUE;
   }
@@ -90,12 +93,12 @@ BOOL ComParams::SetBaudRate(const char *pBaudRate)
 
 BOOL ComParams::SetByteSize(const char *pByteSize)
 {
-  if (tolower(*pByteSize) == 'c') {
+  if (tolower((unsigned char)*pByteSize) == 'c') {
     byteSize = -1;
     return TRUE;
   }
 
-  if (isdigit(*pByteSize)) {
+  if (isdigit((unsigned char)*pByteSize)) {
     byteSize = atoi(pByteSize);
     return TRUE;
   }
@@ -105,7 +108,7 @@ BOOL ComParams::SetByteSize(const char *pByteSize)
 
 BOOL ComParams::SetParity(const char *pParity)
 {
-  switch (tolower(*pParity)) {
+  switch (tolower((unsigned char)*pParity)) {
     case 'n': parity = NOPARITY; break;
     case 'o': parity = ODDPARITY; break;
     case 'e': parity = EVENPARITY; break;
@@ -119,7 +122,7 @@ BOOL ComParams::SetParity(const char *pParity)
 
 BOOL ComParams::SetStopBits(const char *pStopBits)
 {
-  switch (tolower(*pStopBits)) {
+  switch (tolower((unsigned char)*pStopBits)) {
     case '1':
       if ((pStopBits[1] == '.' || pStopBits[1] == ',') && pStopBits[2] == '5')
         stopBits = ONE5STOPBITS;
@@ -135,7 +138,7 @@ BOOL ComParams::SetStopBits(const char *pStopBits)
 
 BOOL ComParams::SetIntervalTimeout(const char *pIntervalTimeout)
 {
-  if (isdigit(*pIntervalTimeout)) {
+  if (isdigit((unsigned char)*pIntervalTimeout)) {
     intervalTimeout = atol(pIntervalTimeout);
     return TRUE;
   }
@@ -145,7 +148,7 @@ BOOL ComParams::SetIntervalTimeout(const char *pIntervalTimeout)
 
 BOOL ComParams::SetWriteQueueLimit(const char *pWriteQueueLimit)
 {
-  if (isdigit(*pWriteQueueLimit)) {
+  if (isdigit((unsigned char)*pWriteQueueLimit)) {
     writeQueueLimit = atol(pWriteQueueLimit);
     return writeQueueLimit > 0;
   }
@@ -163,7 +166,7 @@ BOOL ComParams::SetFlag(const char *pFlagStr, int *pFlag)
     *pFlag = 0;
   }
   else
-  if (tolower(*pFlagStr) == 'c') {
+  if (tolower((unsigned char)*pFlagStr) == 'c') {
     *pFlag = -1;
   }
   else

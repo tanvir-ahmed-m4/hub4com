@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.9  2009/03/06 07:56:28  vfrolov
+ * Fixed assertion with non ascii chars
+ *
  * Revision 1.8  2009/02/20 18:32:35  vfrolov
  * Added info about location of options
  *
@@ -171,7 +174,7 @@ static void SubstParams(string &argBuf, const vector<string> &params)
       BOOL isToken = TRUE;
 
       for (string::size_type i = 0 ; i < var.length() ; i++) {
-        if (!isdigit(var[i])) {
+        if (!isdigit((unsigned char)var[i])) {
           isToken = FALSE;
           break;
         }
@@ -280,7 +283,7 @@ void Args::Add(const Arg &arg)
       string::size_type last_non_space = string::npos;
 
       for (string::size_type i = 0 ; i < str.length() ; i++) {
-        if (!isspace(str[i])) {
+        if (!isspace((unsigned char)str[i])) {
           if (first_non_space == string::npos)
             first_non_space = i;
 

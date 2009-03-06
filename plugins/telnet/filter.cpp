@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.19  2009/03/06 07:56:28  vfrolov
+ * Fixed assertion with non ascii chars
+ *
  * Revision 1.18  2009/02/20 18:32:35  vfrolov
  * Added info about location of options
  *
@@ -247,7 +250,7 @@ Filter::Filter(const char *_pName, int argc, const char *const argv[])
     }
     else
     if ((pParam = GetParam(pArg, "comport=")) != NULL) {
-      switch (tolower(*pParam)) {
+      switch (tolower((unsigned char)*pParam)) {
         case 'n':
           comport = comport_no;
           break;
@@ -264,7 +267,7 @@ Filter::Filter(const char *_pName, int argc, const char *const argv[])
     }
     else
     if ((pParam = GetParam(pArg, "suppress-echo=")) != NULL) {
-      switch (tolower(*pParam)) {
+      switch (tolower((unsigned char)*pParam)) {
         case 'y':
           suppressEcho = TRUE;
           break;
@@ -278,7 +281,7 @@ Filter::Filter(const char *_pName, int argc, const char *const argv[])
     }
     else
     if ((pParam = GetParam(pArg, "keep-active=")) != NULL) {
-      if (isdigit(*pParam)) {
+      if (isdigit((unsigned char)*pParam)) {
         keepActive = (unsigned)atol(pParam);
       } else {
         Diag("Invalid value in ", *pArgs);
