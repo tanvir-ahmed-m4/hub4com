@@ -85,7 +85,9 @@ telnet server. You can do so this way:
 
 BTW: com2tcp.bat is a wrapper to hub4com.exe. It works very similar to
      the "COM port to TCP redirector" (com2tcp). It supports all
-     com2tcp's options.
+     com2tcp's options. If you feel that com2tcp is what you need but
+     can't find any required functionality (for example RFC 2217 support)
+     then try use hub4com instead.
 
 
 RFC 2217 server (TCP to COM port redirector)
@@ -259,7 +261,7 @@ A. The file can be created by seting OPTIONS variable, for example:
       multiplexer --baud 115200 COM1 CNCB1 CNCB2 CNCB3 > my.txt
 
    2. Cut line "--create-filter=trace,_CUT_THIS_LINE_" from my.txt file.
-   
+
    Now the folloving two command lines are equal:
 
      multiplexer --baud 115200 COM1 CNCB1 CNCB2 CNCB3
