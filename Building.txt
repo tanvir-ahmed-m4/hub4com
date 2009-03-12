@@ -14,8 +14,28 @@ You will need the following to build hub4com from source code:
 BUILDING
 ========
 
+Building hub4com with dynamically linking modules
+-------------------------------------------------
+
 1.  Start Microsoft Visual C++ 2005 with hub4com.sln file.
 2.  Set Active Configuration to hub4com - Win32 Release.
 3.  Build solution (hub4com.exe and plugins\*.dll).
 
-    It will create hub4com.exe and plugins\*.dll files.
+    It will create Release\hub4com.exe and Release\plugins\*.dll
+    files. On start the hub4com.exe will load all modules from
+    plugins subfolder.
+
+
+Building hub4com with statically linked modules
+-----------------------------------------------
+
+1.  Start Microsoft Visual C++ 2005 with static\hub4com-static.vcproj
+    file.
+2.  Set Active Configuration to hub4com-static - Win32 Release.
+3.  Build solution (hub4com.exe).
+
+    It will create static\Release\hub4com.exe file.
+
+BTW: You can replace any statically linked module or add new module by
+     placing module's DLL file to plugins subfolder of hub4com.exe
+     file's folder.
