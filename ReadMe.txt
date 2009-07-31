@@ -266,3 +266,11 @@ A. The file can be created by seting OPTIONS variable, for example:
 
      multiplexer --baud 115200 COM1 CNCB1 CNCB2 CNCB3
      hub4com --load=my.txt,_BEGIN_,_END_
+
+Q. We've been using and experimenting with hub4com and came to the conclusion
+   that if you use a real com port in it, the real com port won't receive
+   anything from the other loopback ports. Is there some trick to getting a
+   physical com port to accept data with hub4com?
+A. By default hub4com use CTS handshaking on output so if CTS state is OFF
+   then no any data can be send to the port. To disable CTS handshaking add
+   --octs=off option before real com port.
