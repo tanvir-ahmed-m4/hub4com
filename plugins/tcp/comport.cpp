@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.17  2009/08/04 11:36:49  vfrolov
+ * Implemented priority and reject modifiers for <listen port>
+ *
  * Revision 1.16  2009/07/31 11:40:04  vfrolov
  * Fixed pending acception of incoming connections
  *
@@ -85,6 +88,13 @@ Listener::Listener(const struct sockaddr_in &_snLocal)
 {
 }
 
+void Listener::Push(ComPort *pPort)
+{
+  _ASSERTE(pPort != NULL);
+
+  ports.push(pPort);
+}
+
 BOOL Listener::Start()
 {
   if (hSockListen != INVALID_SOCKET)
@@ -118,23 +128,43 @@ BOOL Listener::OnEvent(ListenOverlapped * /*pOverlapped*/, long e, int /*err*/)
   //cout << "Listener::OnEvent " << hex << e << dec << " " << err << endl;
 
   if (e == FD_ACCEPT) {
-    if (!empty()) {
-      ComPort *pPort = front();
+    if (!ports.empty()) {
+      ComPort *pPort = ports.top().Ptr();
       _ASSERTE(pPort != NULL);
-      pop();
 
-      pPort->Accept();
+      if (pPort->Accept())
+        ports.pop();
     } else {
-      cout << "OnEvent(" << hex << hSockListen << dec << ", FD_ACCEPT) - pending" << endl;
+      PortTcp::Accept("Listener", hSockListen, CF_DEFER);
     }
   }
 
   return TRUE;
 }
 
-SOCKET Listener::Accept()
+void Listener::OnDisconnect(ComPort *pPort)
 {
-  return PortTcp::Accept(hSockListen);
+  Push(pPort);
+
+  _ASSERTE(!ports.empty());
+
+  for (;;) {
+    ComPort *pPort = ports.top().Ptr();
+    _ASSERTE(pPort != NULL);
+
+    if (!pPort->Accept())
+      break;
+
+    ports.pop();
+
+    if (ports.empty())
+      break;
+  }
+}
+
+SOCKET Listener::Accept(const ComPort &port, int cmd)
+{
+  return PortTcp::Accept(port.Name().c_str(), hSockListen, cmd);
 }
 ///////////////////////////////////////////////////////////////
 ComPort::ComPort(
@@ -142,10 +172,13 @@ ComPort::ComPort(
     const ComParams &comParams,
     const char *pPath)
   : pListener(NULL),
+    rejectZeroConnectionCounter(FALSE),
+    priority(0),
     hSock(INVALID_SOCKET),
     isConnected(FALSE),
     isDisconnected(FALSE),
     connectionCounter(0),
+    permanent(FALSE),
     reconnectTime(-1),
     hReconnectTimer(NULL),
     name("TCP"),
@@ -163,14 +196,18 @@ ComPort::ComPort(
   writeQueueLimitSendXoff = (writeQueueLimit*2)/3;
   writeQueueLimitSendXon = writeQueueLimit/3;
 
-  string path;
+  string path(pPath);
 
-  if (*pPath == '*') {
-    path = pPath + 1;
-    permanent = TRUE;
-  } else {
-    path = pPath;
-    permanent = FALSE;
+  for ( ;; path = path.substr(1)) {
+    switch (path[0]) {
+      case '*':
+        permanent = TRUE;
+        continue;
+      case '!':
+        rejectZeroConnectionCounter = TRUE;
+        continue;
+    }
+    break;
   }
 
   string::size_type iDelim = path.find(':');
@@ -192,7 +229,29 @@ ComPort::ComPort(
       reconnectTime = comParams.GetReconnectTime();
     }
   } else {
-    isValid = SetAddr(snLocal, comParams.GetIF(), path.c_str());
+    iDelim = path.find('/');
+
+    if (iDelim != path.npos) {
+      istringstream buf(path.substr(iDelim + 1));
+      path = path.substr(0, iDelim);
+
+      buf >> priority;
+
+      if (buf.fail())
+        isValid = FALSE;
+
+      string rest;
+      buf >> rest;
+
+      if (!rest.empty())
+        isValid = FALSE;
+
+      if (!isValid)
+        cerr << "ERROR: Invalid priority in " << pPath << endl;
+    }
+
+    if (isValid)
+      isValid = SetAddr(snLocal, comParams.GetIF(), path.c_str());
 
     if (isValid) {
       for (vector<Listener *>::iterator i = listeners.begin() ; i != listeners.end() ; i++) {
@@ -210,7 +269,7 @@ ComPort::ComPort(
       }
 
       if (pListener)
-        pListener->push(this);
+        pListener->Push(this);
       else
         isValid = FALSE;
     }
@@ -307,32 +366,33 @@ void ComPort::StartConnect()
   if (hSock == INVALID_SOCKET)
     return;
 
-  if (!StartWaitEvent(hSock) || !Connect(hSock, snRemote)) {
-    Close(hSock);
+  if (!StartWaitEvent(hSock) || !Connect(name.c_str(), hSock, snRemote)) {
+    Close(name.c_str(), hSock);
     hSock = INVALID_SOCKET;
   }
 }
 
-void ComPort::Accept()
+BOOL ComPort::Accept()
 {
   _ASSERTE(pListener);
   _ASSERTE(hSock == INVALID_SOCKET);
 
   for (;;) {
-    hSock = pListener->Accept();
+    hSock = pListener->Accept(*this,
+        (rejectZeroConnectionCounter && connectionCounter <= 0) ? CF_REJECT : CF_ACCEPT);
 
-    if (hSock == INVALID_SOCKET) {
-      pListener->push(this);
+    if (hSock == INVALID_SOCKET)
       break;
-    }
 
     if (StartWaitEvent(hSock)) {
       OnConnect();
-      break;
+      return TRUE;
     }
 
-    Close(hSock);
+    Close(name.c_str(), hSock);
   }
+
+  return FALSE;
 }
 
 void ComPort::FlowControlUpdate()
@@ -443,7 +503,7 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
       connectionCounter--;
 
       if (hSock != INVALID_SOCKET && !permanent && connectionCounter <= 0)
-        PortTcp::Disconnect(hSock);
+        PortTcp::Disconnect(name.c_str(), hSock);
     }
     break;
   }
@@ -548,7 +608,7 @@ void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)
 
 void ComPort::OnDisconnect()
 {
-  Close(hSock);
+  Close(name.c_str(), hSock);
   hSock = INVALID_SOCKET;
 
   if (isConnected) {
@@ -575,7 +635,7 @@ void ComPort::OnDisconnect()
   }
 
   if (pListener) {
-    Accept();
+    pListener->OnDisconnect(this);
   }
   else
   if (CanConnect()) {

@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2009/08/04 11:36:49  vfrolov
+ * Implemented priority and reject modifiers for <listen port>
+ *
  * Revision 1.5  2008/12/01 17:09:34  vfrolov
  * Improved write buffering
  *
@@ -45,11 +48,11 @@ class Listener;
 ///////////////////////////////////////////////////////////////
 extern BOOL SetAddr(struct sockaddr_in &sn, const char *pAddr, const char *pPort);
 extern SOCKET Socket(const struct sockaddr_in &sn);
-extern BOOL Connect(SOCKET hSock, const struct sockaddr_in &snRemote);
+extern BOOL Connect(const char *pName, SOCKET hSock, const struct sockaddr_in &snRemote);
 extern BOOL Listen(SOCKET hSock);
-extern SOCKET Accept(SOCKET hSockListen);
-extern void Disconnect(SOCKET hSock);
-extern void Close(SOCKET hSock);
+extern SOCKET Accept(const char *pName, SOCKET hSockListen, int cmd);
+extern void Disconnect(const char *pName, SOCKET hSock);
+extern void Close(const char *pName, SOCKET hSock);
 ///////////////////////////////////////////////////////////////
 class ReadOverlapped : private OVERLAPPED
 {

@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.14  2009/08/04 11:36:49  vfrolov
+ * Implemented priority and reject modifiers for <listen port>
+ *
  * Revision 1.13  2009/03/06 07:56:28  vfrolov
  * Fixed assertion with non ascii chars
  *
@@ -103,10 +106,14 @@ static void CALLBACK Help(const char *pProgPath)
   << "Usage  (client mode):" << endl
   << "  " << pProgPath << " ... [--use-driver=" << GetPluginAbout()->pName << "] [*]<host addr>:<host port> ..." << endl
   << "Usage  (server mode):" << endl
-  << "  " << pProgPath << " ... [--use-driver=" << GetPluginAbout()->pName << "] [*]<listen port> ..." << endl
+  << "  " << pProgPath << " ... [--use-driver=" << GetPluginAbout()->pName << "] [*][!]<listen port>[/<priority>] ..." << endl
   << endl
-  << "  The sign * above means that connection shold be permanent as it's possible." << endl
+  << "  The sign * above means that connection should be permanent as it's possible." << endl
   << "  In client mode it will force connection to remote host on start." << endl
+  << "  The sign ! above means that connection to <listen port> should be rejected if" << endl
+  << "  the connection counter is 0." << endl
+  << "  The <priority> above is an integer (default is 0). The port will be used only" << endl
+  << "  if all ports with the same <listen port> and higher <priority> are busy." << endl
   << endl
   << "Options:" << endl
   << "  --interface=<if>         - use interface <if>." << endl
@@ -137,18 +144,44 @@ static void CALLBACK Help(const char *pProgPath)
   << "  CONNECT(FALSE) - disconnected." << endl
   << endl
   << "Examples:" << endl
-  << "  " << pProgPath << " --use-driver=" << GetPluginAbout()->pName << " 1111 222.22.22.22:2222" << endl
+  << "  " << pProgPath << " --use-driver=tcp 1111 222.22.22.22:2222" << endl
   << "    - listen TCP port 1111 and on incoming connection connect to" << endl
   << "      222.22.22.22:2222, receive data from 1111 and send it to" << endl
   << "      222.22.22.22:2222, receive data from 222.22.22.22:2222 and send it to" << endl
   << "      1111, on disconnecting any connection disconnect paired connection." << endl
-  << "  " << pProgPath << " --use-driver=" << GetPluginAbout()->pName << " *111.11.11.11:1111 *222.22.22.22:2222" << endl
+  << "  " << pProgPath << " --use-driver=tcp *111.11.11.11:1111 *222.22.22.22:2222" << endl
   << "    - connect to 111.11.11.11:1111 and connect to 222.22.22.22:2222," << endl
   << "      receive data from 111.11.11.11:1111 and send it to 222.22.22.22:2222," << endl
   << "      receive data from 222.22.22.22:2222 and send it to 111.11.11.11:1111," << endl
   << "      on disconnecting any connection reconnect it." << endl
-  << "  " << pProgPath << " --route=All:All --use-driver=" << GetPluginAbout()->pName << " *1111 *1111 *1111" << endl
-  << "    - up to 3 clients can connect to port 2222 and talk each others." << endl
+  << "  " << pProgPath << " --route=All:All --use-driver=tcp *1111 *1111 *1111" << endl
+  << "    - up to 3 clients can connect to port 1111 and talk each others." << endl
+  << "  " << pProgPath << " --load=,,_END_" << endl
+  << "      COM1" << endl
+  << "      COM2" << endl
+  << "      --use-driver=tcp" << endl
+  << "      *1111" << endl
+  << "      --bi-route=0:2" << endl
+  << "      *1111" << endl
+  << "      --bi-route=1:3" << endl
+  << "      !1111/-1" << endl
+  << "      _END_" << endl
+  << "    - up to 2 clients can connect to COM1 or COM2 via port 1111." << endl
+  << "      The third client will be rejected." << endl
+  << "  " << pProgPath << " --load=,,_END_" << endl
+  << "      COM1" << endl
+  << "      COM2" << endl
+  << "      --use-driver=tcp" << endl
+  << "      *1111" << endl
+  << "      --bi-route=0:2" << endl
+  << "      *1111" << endl
+  << "      --bi-route=1:3" << endl
+  << "      1111/-1" << endl
+  << "      --bi-route=5:4" << endl
+  << "      127.0.0.1:2222" << endl
+  << "      _END_" << endl
+  << "    - up to 2 clients can connect to COM1 or COM2 via port 1111." << endl
+  << "      The third client will be routed to 127.0.0.1:2222." << endl
   ;
 }
 ///////////////////////////////////////////////////////////////

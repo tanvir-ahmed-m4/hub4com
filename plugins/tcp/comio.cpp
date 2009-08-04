@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008 Vyacheslav Frolov
+ * Copyright (c) 2008-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.9  2009/08/04 11:36:49  vfrolov
+ * Implemented priority and reject modifiers for <listen port>
+ *
  * Revision 1.8  2008/12/05 14:20:55  vfrolov
  * Fixed race conditions
  *
@@ -122,13 +125,13 @@ SOCKET Socket(const struct sockaddr_in &sn)
   return hSock;
 }
 ///////////////////////////////////////////////////////////////
-BOOL Connect(SOCKET hSock, const struct sockaddr_in &snRemote)
+BOOL Connect(const char *pName, SOCKET hSock, const struct sockaddr_in &snRemote)
 {
   if (connect(hSock, (struct sockaddr *)&snRemote, sizeof(snRemote)) == SOCKET_ERROR) {
     DWORD err = GetLastError();
 
     if (err != WSAEWOULDBLOCK) {
-      TraceError(err, "Connect(%x): connect()", hSock);
+      TraceError(err, "Connect(%x): connect() %s", hSock, pName);
       return FALSE;
     }
   }
@@ -136,7 +139,7 @@ BOOL Connect(SOCKET hSock, const struct sockaddr_in &snRemote)
   u_long addr = ntohl(snRemote.sin_addr.s_addr);
   u_short port  = ntohs(snRemote.sin_port);
 
-  cout << "Connect(" << hex << hSock << dec << ", "
+  cout << pName << ": Connect(" << hex << hSock << dec << ", "
        << ((addr >> 24) & 0xFF) << '.'
        << ((addr >> 16) & 0xFF) << '.'
        << ((addr >>  8) & 0xFF) << '.'
@@ -160,54 +163,112 @@ BOOL Listen(SOCKET hSock)
   return TRUE;
 }
 ///////////////////////////////////////////////////////////////
-SOCKET Accept(SOCKET hSockListen)
-{
-  struct sockaddr_in sn;
-  int snlen = sizeof(sn);
+struct ConditionProcData {
+  ConditionProcData(int _cmd) : cmd(_cmd) { ::memset(&sn, 0, sizeof(sn)); }
 
-  SOCKET hSock = accept(hSockListen, (struct sockaddr *)&sn, &snlen);
+  void SetSN(char FAR* pBuf, u_long len) {
+    if (pBuf != NULL && len != 0) {
+      if (len > sizeof(sn))
+        len = sizeof(sn);
 
-  if (hSock == INVALID_SOCKET) {
-    DWORD err = GetLastError();
-
-    if (err != WSAEWOULDBLOCK)
-      TraceError(err, "Accept(%x): accept()", hSockListen);
-
-    return INVALID_SOCKET;
+      ::memcpy(&sn, pBuf, len);
+    }
   }
 
-  u_long addr = ntohl(sn.sin_addr.s_addr);
-  u_short port  = ntohs(sn.sin_port);
+  int cmd;
+  struct sockaddr_in sn;
+};
 
-  cout << "Accept(" << hex << hSockListen << dec << ") = " << hex << hSock << dec
-       << " from "
-       << ((addr >> 24) & 0xFF) << '.'
-       << ((addr >> 16) & 0xFF) << '.'
-       << ((addr >>  8) & 0xFF) << '.'
-       << ( addr        & 0xFF) << ':'
-       << port
-       << endl;
+static int CALLBACK ConditionProc(
+    IN LPWSABUF lpCallerId,
+    IN LPWSABUF /*lpCallerData*/,
+    IN OUT LPQOS /*lpSQOS*/,
+    IN OUT LPQOS /*lpGQOS*/,
+    IN LPWSABUF /*lpCalleeId*/,
+    IN LPWSABUF /*lpCalleeData*/,
+    OUT GROUP FAR * /*g*/,
+    IN DWORD_PTR dwCallbackData)
+{
+  ConditionProcData *pCpd = (ConditionProcData *)dwCallbackData;
 
-  return hSock;
+  _ASSERTE(pCpd != NULL);
+
+  if (lpCallerId)
+    ((ConditionProcData *)dwCallbackData)->SetSN(lpCallerId->buf, lpCallerId->len);
+
+  return ((ConditionProcData *)dwCallbackData)->cmd;
+}
+
+SOCKET Accept(const char *pName, SOCKET hSockListen, int cmd)
+{
+  BOOL defered = FALSE;
+
+  for (;;) {
+    ConditionProcData cpd(cmd);
+
+    SOCKET hSock = WSAAccept(hSockListen, NULL, NULL, ConditionProc, (DWORD_PTR)&cpd);
+
+    stringstream buf;
+
+    if (hSock != INVALID_SOCKET) {
+      buf << hex << hSock << dec;
+    } else {
+      DWORD err = GetLastError();
+
+      switch (err) {
+        case WSAEWOULDBLOCK:
+          return INVALID_SOCKET;
+        case WSAECONNREFUSED:
+          buf << "rejected";
+          break;
+        case WSATRY_AGAIN:
+          defered = TRUE;
+          buf << "defered";
+          break;
+        case WSAECONNRESET:
+          buf << "forcibly closed by the remote host";
+          break;
+        default:
+          TraceError(err, "Accept(%x): accept() %s", hSockListen, pName);
+          return INVALID_SOCKET;
+      }
+    }
+
+    string result = buf.str();
+    u_long addr = ntohl(cpd.sn.sin_addr.s_addr);
+    u_short port  = ntohs(cpd.sn.sin_port);
+
+    cout << pName << ": Accept(" << hex << hSockListen << dec << ") = " << result
+         << " from "
+         << ((addr >> 24) & 0xFF) << '.'
+         << ((addr >> 16) & 0xFF) << '.'
+         << ((addr >>  8) & 0xFF) << '.'
+         << ( addr        & 0xFF) << ':'
+         << port
+         << endl;
+
+    if (hSock != INVALID_SOCKET || defered)
+      return hSock;
+  }
 }
 ///////////////////////////////////////////////////////////////
-void Disconnect(SOCKET hSock)
+void Disconnect(const char *pName, SOCKET hSock)
 {
   if (shutdown(hSock, SD_BOTH) != 0)
-    TraceError(GetLastError(), "Disconnect(%x): shutdown()", hSock);
+    TraceError(GetLastError(), "Disconnect(%x): shutdown() %s", hSock, pName);
   else
-    cout << "Disconnect(" << hex << hSock << dec << ") - OK" << endl;
+    cout << pName << ": Disconnect(" << hex << hSock << dec << ") - OK" << endl;
 }
 ///////////////////////////////////////////////////////////////
-void Close(SOCKET hSock)
+void Close(const char *pName, SOCKET hSock)
 {
   if (hSock == INVALID_SOCKET)
     return;
 
   if (closesocket(hSock) != 0)
-    TraceError(GetLastError(), "Close(): closesocket(%x)", hSock);
+    TraceError(GetLastError(), "Close(): closesocket(%x) %s", hSock, pName);
   else
-    cout << "Close(" << hex << hSock << dec << ") - OK" << endl;
+    cout << pName << ": Close(" << hex << hSock << dec << ") - OK" << endl;
 }
 ///////////////////////////////////////////////////////////////
 VOID CALLBACK WriteOverlapped::OnWrite(

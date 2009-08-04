@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.10  2009/08/04 11:36:49  vfrolov
+ * Implemented priority and reject modifiers for <listen port>
+ *
  * Revision 1.9  2009/01/23 16:55:05  vfrolov
  * Utilized timer routines
  *
@@ -59,22 +62,36 @@ class WaitEventOverlapped;
 class ListenOverlapped;
 class ComPort;
 ///////////////////////////////////////////////////////////////
-class Listener : public queue<ComPort *>
+class ComPortPtr
+{
+  public:
+    ComPortPtr(ComPort *_pPort = NULL) : pPort(_pPort) {}
+    ComPort *Ptr() const { return pPort; }
+    bool ComPortPtr::operator<(const ComPortPtr &p) const;
+
+  private:
+    ComPort *pPort;
+};
+///////////////////////////////////////////////////////////////
+class Listener
 {
   public:
     Listener(const struct sockaddr_in &_snLocal);
 
-    BOOL IsEqual(const struct sockaddr_in &_snLocal) {
+    BOOL IsEqual(const struct sockaddr_in &_snLocal) const {
       return memcmp(&snLocal, &_snLocal, sizeof(snLocal)) == 0;
     }
 
+    void Push(ComPort *pPort);
     BOOL Start();
     BOOL OnEvent(ListenOverlapped *pOverlapped, long e, int err);
-    SOCKET Accept();
+    void OnDisconnect(ComPort *pPort);
+    SOCKET Accept(const ComPort &port, int cmd);
 
   private:
     struct sockaddr_in snLocal;
     SOCKET hSockListen;
+    priority_queue<ComPortPtr> ports;
 };
 ///////////////////////////////////////////////////////////////
 class ComPort
@@ -85,6 +102,8 @@ class ComPort
       const ComParams &comParams,
       const char *pPath);
 
+    bool operator<(const ComPort &p) const { return priority < p.priority; }
+
     BOOL Init(HMASTERPORT _hMasterPort);
     BOOL Start();
     BOOL FakeReadFilter(HUB_MSG *pInMsg);
@@ -93,7 +112,7 @@ class ComPort
     void OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done);
     BOOL OnEvent(WaitEventOverlapped *pOverlapped, long e);
     void LostReport();
-    void Accept();
+    BOOL Accept();
 
     const string &Name() const { return name; }
     void Name(const char *pName) { name = pName; }
@@ -111,6 +130,8 @@ class ComPort
     struct sockaddr_in snLocal;
     struct sockaddr_in snRemote;
     Listener *pListener;
+    BOOL rejectZeroConnectionCounter;
+    int priority;
 
     BOOL isValid;
 
@@ -141,6 +162,11 @@ class ComPort
     BYTE *pWriteBuf;
     DWORD lenWriteBuf;
 };
+///////////////////////////////////////////////////////////////
+inline bool ComPortPtr::operator<(const ComPortPtr &p) const
+{
+  return *pPort < *p.pPort;
+}
 ///////////////////////////////////////////////////////////////
 
 #endif  // _COMPORT_H
