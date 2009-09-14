@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.10  2009/09/14 09:05:28  vfrolov
+ * Fixed data loss on disconnect.
+ *
  * Revision 1.9  2009/08/04 11:36:49  vfrolov
  * Implemented priority and reject modifiers for <listen port>
  *
@@ -254,7 +257,7 @@ SOCKET Accept(const char *pName, SOCKET hSockListen, int cmd)
 ///////////////////////////////////////////////////////////////
 void Disconnect(const char *pName, SOCKET hSock)
 {
-  if (shutdown(hSock, SD_BOTH) != 0)
+  if (shutdown(hSock, SD_SEND) != 0)
     TraceError(GetLastError(), "Disconnect(%x): shutdown() %s", hSock, pName);
   else
     cout << pName << ": Disconnect(" << hex << hSock << dec << ") - OK" << endl;
