@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2008 Vyacheslav Frolov
+ * Copyright (c) 2006-2009 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.16  2009/09/14 08:52:27  vfrolov
+ * Suppressed "IOCTL_SERIAL_GET_MODEM_CONTROL ERROR Unknown error (87)"
+ *
  * Revision 1.15  2008/12/18 16:50:52  vfrolov
  * Extended the number of possible IN options
  *
@@ -203,7 +206,11 @@ static BOOL HasExtendedModemControl(HANDLE handle)
                        outBuf, sizeof(outBuf), &returned,
                        NULL))
   {
-    TraceError(GetLastError(), "IOCTL_SERIAL_GET_MODEM_CONTROL");
+    DWORD err = GetLastError();
+
+    if (err != ERROR_INVALID_PARAMETER) // some drivers expect sizeof(outBuf)==sizeof(ULONG)
+      TraceError(err, "IOCTL_SERIAL_GET_MODEM_CONTROL");
+
     return FALSE;
   }
 
