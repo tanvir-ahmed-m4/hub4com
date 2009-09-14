@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.7  2009/09/14 09:08:48  vfrolov
+ * Added discarding owned tick (for optimization)
+ *
  * Revision 1.6  2009/01/23 16:55:05  vfrolov
  * Utilized timer routines
  *
@@ -43,6 +46,7 @@
 #define _IMPORT_H
 
 ///////////////////////////////////////////////////////////////
+extern ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone;
 extern ROUTINE_BUF_ALLOC *pBufAlloc;
 extern ROUTINE_BUF_FREE *pBufFree;
 extern ROUTINE_BUF_APPEND *pBufAppend;

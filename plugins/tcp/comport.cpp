@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.19  2009/09/14 09:08:48  vfrolov
+ * Added discarding owned tick (for optimization)
+ *
  * Revision 1.18  2009/08/11 06:12:45  vfrolov
  * Added missing initialization of isValid
  *
@@ -358,6 +361,10 @@ BOOL ComPort::FakeReadFilter(HUB_MSG *pInMsg)
         if (CanConnect())
           StartConnect();
       }
+
+      // discard owned tick
+      if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+        return FALSE;
 
       break;
     }
