@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008-2009 Vyacheslav Frolov
+ * Copyright (c) 2008-2010 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.17  2010/05/18 15:00:36  vfrolov
+ * Added connection counter
+ *
  * Revision 1.16  2009/02/02 15:21:42  vfrolov
  * Optimized filter's API
  *
@@ -136,10 +139,15 @@ static struct {
 ///////////////////////////////////////////////////////////////
 class State {
   public:
-    State(HMASTERPORT hMasterPort) : pName(pPortName(hMasterPort)), lmInVal(0) {}
+    State(HMASTERPORT hMasterPort)
+      : pName(pPortName(hMasterPort))
+      , lmInVal(0)
+      , connectionCounter(0)
+    {}
 
     const char *const pName;
     WORD lmInVal;
+    int connectionCounter;
 };
 ///////////////////////////////////////////////////////////////
 class Filter : public Valid {
@@ -258,7 +266,7 @@ static PLUGIN_TYPE CALLBACK GetPluginType()
 static const PLUGIN_ABOUT_A about = {
   sizeof(PLUGIN_ABOUT_A),
   "pinmap",
-  "Copyright (c) 2008 Vyacheslav Frolov",
+  "Copyright (c) 2008-2010 Vyacheslav Frolov",
   "GNU General Public License",
   "Pinouts mapping filter",
 };
@@ -293,7 +301,12 @@ static void CALLBACK Help(const char *pProgPath)
   << "OUT method input data stream description:" << endl
   << "  SET_PIN_STATE(<set>)  - pin settings controlled by this filter will be" << endl
   << "                          discarded from <set>." << endl
-  << "  CONNECT(<val>)        - current state of connect." << endl
+  << "  CONNECT(TRUE)         - increment connection counter. The incrementing of the" << endl
+  << "                          connection counter from 0 will raise wire input state" << endl
+  << "                          of connect" << endl
+  << "  CONNECT(FALSE)        - decrement connection counter. The decrementing of the" << endl
+  << "                          connection counter to 0 will clear wire input state" << endl
+  << "                          of connect" << endl
   << "  BREAK_STATUS(<val>)   - current state of break." << endl
   << "  MODEM_STATUS(<val>)   - current state of modem." << endl
   << endl
@@ -309,7 +322,7 @@ static void CALLBACK Help(const char *pProgPath)
   << "      _END_" << endl
   << "    - transfer data and signals between COM1 and COM2." << endl
   << "  " << pProgPath << " --load=,,_END_" << endl
-  << "      --create-filter=pinmap:\"--rts=cts\"" << endl
+  << "      --create-filter=pinmap:--rts=cts" << endl
   << "      --add-filters=0,1:pinmap" << endl
   << "      --octs=off" << endl
   << "      COM1" << endl
@@ -323,6 +336,21 @@ static void CALLBACK Help(const char *pProgPath)
   << "      COM2" << endl
   << "      _END_" << endl
   << "    - receive data and signals from COM2 and send it back to COM2." << endl
+  << "  " << pProgPath << " --load=,,_END_" << endl
+  << "      --route=all:0" << endl
+  << "      --create-filter=pinmap:--rts=connect --dtr=connect" << endl
+  << "      --add-filters=0:pinmap" << endl
+  << "      --create-filter=pin2con:--connect=dsr" << endl
+  << "      --add-filters=1,2:pin2con" << endl
+  << "      --octs=off" << endl
+  << "      COM1" << endl
+  << "      \\\\.\\CNCB0" << endl
+  << "      \\\\.\\CNCB1" << endl
+  << "      _END_" << endl
+  << "    - transfer data from CNCB0 and CNCB1 to COM1." << endl
+  << "      If DSR is in raised state on CNCB0 or CNCB1" << endl
+  << "      then RTS and DTR are in raised state on COM1" << endl
+  << "      else RTS and DTR are in cleared state on COM1." << endl
   ;
 }
 ///////////////////////////////////////////////////////////////
@@ -481,7 +509,18 @@ static BOOL CALLBACK OutMethod(
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_CONNECT): {
       if (((Filter *)hFilter)->lmInMask & LM_CONNECT) {
-        WORD lmInVal = ((pOutMsg->u.val ? LM_CONNECT : 0) | (((State *)hFilterInstance)->lmInVal & ~LM_CONNECT));
+        if (pOutMsg->u.val) {
+          ((State *)hFilterInstance)->connectionCounter++;
+
+          _ASSERTE(((State *)hFilterInstance)->connectionCounter > 0);
+
+        } else {
+          _ASSERTE(((State *)hFilterInstance)->connectionCounter > 0);
+
+          ((State *)hFilterInstance)->connectionCounter--;
+        }
+
+        WORD lmInVal = ((((State *)hFilterInstance)->connectionCounter > 0 ? LM_CONNECT : 0) | (((State *)hFilterInstance)->lmInVal & ~LM_CONNECT));
 
         InsertPinState(*(Filter *)hFilter, ((State *)hFilterInstance)->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
 
