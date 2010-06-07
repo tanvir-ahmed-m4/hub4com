@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008-2009 Vyacheslav Frolov
+ * Copyright (c) 2008-2010 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.20  2010/06/07 14:54:48  vfrolov
+ * Added "Connected" and "Disconnected" messages (feature request #3010158)
+ *
  * Revision 1.19  2009/09/14 09:08:48  vfrolov
  * Added discarding owned tick (for optimization)
  *
@@ -627,6 +630,8 @@ void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)
 
 void ComPort::OnDisconnect()
 {
+  cout << name << ": Disconnected" << endl;
+
   Close(name.c_str(), hSock);
   hSock = INVALID_SOCKET;
 
@@ -709,6 +714,8 @@ void ComPort::OnConnect()
   _ASSERTE(isConnected == FALSE);
   _ASSERTE(isDisconnected == FALSE);
   _ASSERTE(hSock != INVALID_SOCKET);
+
+  cout << name << ": Connected" << endl;
 
   isConnected = TRUE;
 
