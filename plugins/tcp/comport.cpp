@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.22  2010/09/14 18:34:30  vfrolov
+ * Fixed rejected connections handling
+ *
  * Revision 1.21  2010/09/14 16:33:34  vfrolov
  * Implemented --write-limit=0 to disable writing to the port
  *
@@ -637,23 +640,23 @@ void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)
 
 void ComPort::OnDisconnect()
 {
-  cout << name << ": Disconnected" << endl;
-
   Close(name.c_str(), hSock);
   hSock = INVALID_SOCKET;
 
+  if (lenWriteBuf) {
+    _ASSERTE(pWriteBuf != NULL);
+
+    writeLost += lenWriteBuf;
+    writeQueued -= lenWriteBuf;
+    lenWriteBuf = 0;
+    pBufFree(pWriteBuf);
+    pWriteBuf = NULL;
+
+    FlowControlUpdate();
+  }
+
   if (isConnected) {
-    if (lenWriteBuf) {
-      _ASSERTE(pWriteBuf != NULL);
-
-      writeLost += lenWriteBuf;
-      writeQueued -= lenWriteBuf;
-      lenWriteBuf = 0;
-      pBufFree(pWriteBuf);
-      pWriteBuf = NULL;
-
-      FlowControlUpdate();
-    }
+    cout << name << ": Disconnected" << endl;
 
     isConnected = FALSE;
 
