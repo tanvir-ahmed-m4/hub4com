@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008-2009 Vyacheslav Frolov
+ * Copyright (c) 2008-2010 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.16  2010/09/14 16:33:34  vfrolov
+ * Implemented --write-limit=0 to disable writing to the port
+ *
  * Revision 1.15  2009/09/14 09:08:48  vfrolov
  * Added discarding owned tick (for optimization)
  *
@@ -126,8 +129,9 @@ static void CALLBACK Help(const char *pProgPath)
   << "                             or n[o]. If sign * is not used then d[efault]" << endl
   << "                             means n[o] else d[efault] means 0." << endl
   << "  --write-limit=<s>        - set write queue limit to <s> (" << ComParams().WriteQueueLimitStr() << " by default)," << endl
-  << "                             where <s> is " << ComParams::WriteQueueLimitLst() << ". The queue will be" << endl
-  << "                             purged with data lost on overruning." << endl
+  << "                             where <s> is " << ComParams::WriteQueueLimitLst() << ". The queue" << endl
+  << "                             will be purged with data lost on overruning." << endl
+  << "                             The value 0 will disable writing to the port." << endl
   << endl
   << "Output data stream description:" << endl
   << "  LINE_DATA(<data>) - send <data> to remote host." << endl

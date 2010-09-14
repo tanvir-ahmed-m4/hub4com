@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008-2009 Vyacheslav Frolov
+ * Copyright (c) 2008-2010 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.6  2010/09/14 16:33:34  vfrolov
+ * Implemented --write-limit=0 to disable writing to the port
+ *
  * Revision 1.5  2009/03/06 07:56:28  vfrolov
  * Fixed assertion with non ascii chars
  *
@@ -69,7 +72,7 @@ BOOL ComParams::SetWriteQueueLimit(const char *pWriteQueueLimit)
 {
   if (isdigit((unsigned char)*pWriteQueueLimit)) {
     writeQueueLimit = atol(pWriteQueueLimit);
-    return writeQueueLimit > 0;
+    return writeQueueLimit >= 0;
   }
 
   return FALSE;
@@ -77,7 +80,7 @@ BOOL ComParams::SetWriteQueueLimit(const char *pWriteQueueLimit)
 
 string ComParams::WriteQueueLimitStr(long writeQueueLimit)
 {
-  if (writeQueueLimit > 0) {
+  if (writeQueueLimit >= 0) {
     stringstream buf;
     buf << writeQueueLimit;
     return buf.str();
@@ -88,7 +91,7 @@ string ComParams::WriteQueueLimitStr(long writeQueueLimit)
 
 const char *ComParams::WriteQueueLimitLst()
 {
-  return "a positive number";
+  return "a positive number or 0";
 }
 ///////////////////////////////////////////////////////////////
 } // end namespace

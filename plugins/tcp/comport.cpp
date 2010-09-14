@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.21  2010/09/14 16:33:34  vfrolov
+ * Implemented --write-limit=0 to disable writing to the port
+ *
  * Revision 1.20  2010/06/07 14:54:48  vfrolov
  * Added "Connected" and "Disconnected" messages (feature request #3010158)
  *
@@ -450,11 +453,15 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
 
   switch (HUB_MSG_T2N(pMsg->type)) {
   case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_DATA): {
-    BYTE *pBuf = pMsg->u.buf.pBuf;
+    if (!writeQueueLimit)
+      return TRUE;
+
     DWORD len = pMsg->u.buf.size;
 
     if (!len)
       return TRUE;
+
+    BYTE *pBuf = pMsg->u.buf.pBuf;
 
     if (!pBuf) {
       writeLost += len;

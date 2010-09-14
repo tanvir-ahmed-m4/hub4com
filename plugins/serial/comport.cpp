@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2008 Vyacheslav Frolov
+ * Copyright (c) 2006-2010 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.25  2010/09/14 16:31:50  vfrolov
+ * Implemented --write-limit=0 to disable writing to the port
+ *
  * Revision 1.24  2008/12/22 09:40:46  vfrolov
  * Optimized message switching
  *
@@ -610,11 +613,15 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
 
   switch (HUB_MSG_T2N(pMsg->type)) {
   case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_DATA): {
-    BYTE *pBuf = pMsg->u.buf.pBuf;
+    if (!writeQueueLimit)
+      return TRUE;
+
     DWORD len = pMsg->u.buf.size;
 
     if (!len)
       return TRUE;
+
+    BYTE *pBuf = pMsg->u.buf.pBuf;
 
     if (!pBuf) {
       writeLost += len;
