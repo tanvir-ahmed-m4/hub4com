@@ -272,5 +272,137 @@ Q. We've been using and experimenting with hub4com and came to the conclusion
    anything from the other loopback ports. Is there some trick to getting a
    physical com port to accept data with hub4com?
 A. By default hub4com use CTS handshaking on output so if CTS state is OFF
-   then no any data can be send to the port. To disable CTS handshaking add
+   then no any data can be sent to the port. To disable CTS handshaking add
    --octs=off option before real com port.
+
+Q. This is my config:
+   A com0com  virtual null modem (COM3<>CNCB0) is used to get input data from
+   the Windows "Generic Text Only" printer (configured on virtual COM4). After
+   this I used hub4com to "split" the ASCII stream in 2 data paths: one stream
+   goes to a dot matrix printer connected via Ethernet (hub4com creates a TCP
+   client that connect to Jetdirect port 9100 of the printer) and the other one
+   is used for a local TCP server on port 5555 (hub4com create a TCP server
+   that will be used by a TCP client on networked PC to collect the same data
+   printed on paper). This is the hub4com command-line:
+
+     hub4com.exe --route=0:1,2 \\.\CNCB0 --use-driver=tcp *5555 *172.16.32.12:9100
+
+   In this way it seems to me that everything works as desired: when the
+   printer closes the TCP connection the hub4com immediately opens a new one.
+
+   How to create a TCP connection when needed instead of using a "permanent"
+   TCP connection w/o a risk to lose some bytes of data when hub4com (re)create
+   the TCP connection to the printer?
+
+   I want to be sure that the TCP client on networked PC continues to get data
+   also in case that the printer is switched off (or disconnected from the
+   network) and, at the same time, I want to be sure that the printer continues
+   to print data also in case that the TCP client is switched off (or disconnected
+   from the network). How to do it?
+
+A. The following config script allows
+
+    - create a TCP connection to the printer when needed instead of using a
+      "permanent" TCP connection.
+    - suspend a printing job till the job will cancelled by user or till
+      connection to the printer or from TCP client on networked PC will
+      established.
+    - repeate each minute tries to create a TCP connection to the printer till
+      there is a printing job.
+
+    Copy and paste the following script to a command file (.bat) or to the console
+
+    ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+    :
+    : Set parameters
+    :
+    SET PRINTER_SERIAL_PORT=COM3
+    SET H4C_SERIAL_PORT=CNCB0
+    SET H4C_TCP_SERVER_PORT=5555
+    SET H4C_TCP_CLIENT_ADDR=172.16.32.12
+    :
+    : Set required flow control on the printer's side
+    :
+    mode com4 octs=on odsr=on dtr=on rts=on
+    :
+    : Set config file path for hub4com to this bat-file or console
+    :
+    SET H4C_CONFIG_FILE="\"%~f0\""
+    GOTO END_SET_H4C_CONFIG_FILE
+    SET H4C_CONFIG_FILE=""
+    :END_SET_H4C_CONFIG_FILE
+    :
+    : Start hub4com
+    :
+    hub4com --load=%H4C_CONFIG_FILE%,_BEGIN_H4C_,_END_H4C_:%H4C_SERIAL_PORT%,%H4C_TCP_SERVER_PORT%,%H4C_TCP_CLIENT_ADDR%
+    :
+    : Skip config for hub4com if something is wrong
+    :
+    GOTO END
+    find "blah blah blah"
+    :
+    : Config for hub4com
+    :
+    _BEGIN_H4C_
+    # Enable route data and signals
+    #  - from SERIAL(0) to TCP(1) and TCP(2)
+    #  - from TCP(1) to SERIAL(0)
+    #  - from TCP(2) to SERIAL(0)
+    # Enable route flow control
+    #  - from TCP(1) and TCP(2) to SERIAL(0)
+    #
+    --bi-route=0:1,2
+    #
+    # The DTR should be in raised state on the SERIAL(0)
+    # if TCP(1) or TCP(2) or both are in connected state
+    # The DTR should be in not raised state on the SERIAL(0)
+    # if TCP(1) and TCP(2) are in not connected state
+    #
+    --create-filter=pinmap:--dtr=connect
+    --add-filters=0:pinmap
+    #
+    # (re)connect TCP(2) only when the DSR on the SERIAL(0)
+    # is in raised state
+    #
+    --create-filter=pin2con:--connect=dsr 
+    --add-filters=0:pin2con
+    #
+    # Disable writing data to the SERIAL(0)
+    #
+    --write-limit=0
+    #
+    # Serial SERIAL(0)
+    #
+    \\.\%%1%%
+    #
+    # Restore write queue limit
+    #
+    --write-limit=256
+    #
+    --use-driver=tcp
+    #
+    # Server TCP(1)
+    #
+    *%%2%%
+    #
+    # Set write queue limit to a big enough value for TCP(2) to
+    # minimize delays while connection procedure is in progress
+    # (it's optional)
+    # --write-limit=2048
+    #
+    # Do reconnect TCP(2) each minute till there is
+    # a job for printing (the DSR on the SERIAL(0)
+    # is in raised state)
+    #
+    --reconnect=60000
+    #
+    # Client TCP(2) to JetDirect server
+    #
+    %%3%%:9100
+    #
+    _END_H4C_
+    find "blah blah blah"
+    :END
+    ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+    ::                          Press CTRL+C                          ::
+    ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
