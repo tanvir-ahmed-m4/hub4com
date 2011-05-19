@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008-2009 Vyacheslav Frolov
+ * Copyright (c) 2008-2011 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.5  2011/05/19 16:31:12  vfrolov
+ * Fixed typo
+ * Added stream description
+ *
  * Revision 1.4  2009/02/02 15:21:42  vfrolov
  * Optimized filter's API
  *
@@ -111,7 +115,7 @@ static PLUGIN_TYPE CALLBACK GetPluginType()
 static const PLUGIN_ABOUT_A about = {
   sizeof(PLUGIN_ABOUT_A),
   "purge",
-  "Copyright (c) 2008 Vyacheslav Frolov",
+  "Copyright (c) 2008-2011 Vyacheslav Frolov",
   "GNU General Public License",
   "Purge mapping filter",
 };
@@ -128,6 +132,13 @@ static void CALLBACK Help(const char *pProgPath)
   << "  " << pProgPath << " ... --create-filter=" << GetPluginAbout()->pName << "[,<FID>][:<options>] ... --add-filters=<ports>:[...,]<FID>[,...] ..." << endl
   << endl
   << "Options:" << endl
+  << endl
+  << "OUT method input data stream description:" << endl
+  << "  PURGE_TX             - it will be discarded from stream." << endl
+  << "  PURGE_TX_IN          - it will force to add PURGE_TX to the stream." << endl
+  << endl
+  << "OUT method output data stream description:" << endl
+  << "  PURGE_TX             - will be added on detecting PURGE_TX_IN." << endl
   << endl
   << "Examples:" << endl
   ;
@@ -185,12 +196,12 @@ static void CALLBACK DeleteInstance(
 static BOOL CALLBACK OutMethod(
     HFILTER hFilter,
     HFILTERINSTANCE hFilterInstance,
-    HMASTERPORT hToPort,
+    HMASTERPORT hFromPort,
     HUB_MSG *pOutMsg)
 {
   _ASSERTE(hFilter != NULL);
   _ASSERTE(hFilterInstance != NULL);
-  _ASSERTE(hToPort != NULL);
+  _ASSERTE(hFromPort != NULL);
   _ASSERTE(pOutMsg != NULL);
 
   switch (HUB_MSG_T2N(pOutMsg->type)) {
@@ -218,7 +229,7 @@ static BOOL CALLBACK OutMethod(
       if (fail_options) {
         cerr << (const char *)hFilterInstance
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
-             << " for port " << pPortName(hToPort)
+             << " for port " << pPortName(hFromPort)
              << " option(s) GO1_0x" << hex << fail_options << dec
              << " not accepted" << endl;
       }
