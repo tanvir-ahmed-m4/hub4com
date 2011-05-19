@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008-2009 Vyacheslav Frolov
+ * Copyright (c) 2008-2011 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.13  2011/05/19 16:34:47  vfrolov
+ * Fixed typo
+ *
  * Revision 1.12  2009/03/06 07:56:28  vfrolov
  * Fixed assertion with non ascii chars
  *
@@ -181,7 +184,7 @@ static PLUGIN_TYPE CALLBACK GetPluginType()
 static const PLUGIN_ABOUT_A about = {
   sizeof(PLUGIN_ABOUT_A),
   "linectl",
-  "Copyright (c) 2008 Vyacheslav Frolov",
+  "Copyright (c) 2008-2011 Vyacheslav Frolov",
   "GNU General Public License",
   "Baudrate and line control mapping filter",
 };
@@ -269,12 +272,12 @@ static void CALLBACK DeleteInstance(
 static BOOL CALLBACK OutMethod(
     HFILTER hFilter,
     HFILTERINSTANCE hFilterInstance,
-    HMASTERPORT hToPort,
+    HMASTERPORT hFromPort,
     HUB_MSG *pOutMsg)
 {
   _ASSERTE(hFilter != NULL);
   _ASSERTE(hFilterInstance != NULL);
-  _ASSERTE(hToPort != NULL);
+  _ASSERTE(hFromPort != NULL);
   _ASSERTE(pOutMsg != NULL);
 
   switch (HUB_MSG_T2N(pOutMsg->type)) {
@@ -306,7 +309,7 @@ static BOOL CALLBACK OutMethod(
       if (fail_options) {
         cerr << (const char *)hFilterInstance
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
-             << " for port " << pPortName(hToPort)
+             << " for port " << pPortName(hFromPort)
              << " option(s) GO" << iGo << "_0x" << hex << fail_options << dec
              << " not accepted" << endl;
       }
