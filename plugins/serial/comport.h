@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2008 Vyacheslav Frolov
+ * Copyright (c) 2006-2011 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.18  2011/05/19 16:47:00  vfrolov
+ * Fixed unexpected assertion
+ * Added human readable printing output options set
+ *
  * Revision 1.17  2008/12/18 16:50:52  vfrolov
  * Extended the number of possible IN options
  *
@@ -145,6 +149,9 @@ class ComPort
     DWORD intercepted_options[2];
     DWORD inOptions[2];
     DWORD outOptions;
+#ifdef _DEBUG
+    DWORD outOptionsRequested;
+#endif
 
     DWORD writeQueueLimit;
     DWORD writeQueueLimitSendXoff;

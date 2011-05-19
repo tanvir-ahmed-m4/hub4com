@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2010 Vyacheslav Frolov
+ * Copyright (c) 2006-2011 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.26  2011/05/19 16:46:59  vfrolov
+ * Fixed unexpected assertion
+ * Added human readable printing output options set
+ *
  * Revision 1.25  2010/09/14 16:31:50  vfrolov
  * Implemented --write-limit=0 to disable writing to the port
  *
@@ -218,6 +222,25 @@ static const FIELD2NAME fieldNameTableGo1Options[] = {
   {0, 0, NULL}
 };
 ///////////////////////////////////////////////////////////////
+static const FIELD2NAME fieldNameTableSetPinState[] = {
+  TOFIELD2NAME2(PIN_STATE_, RTS),
+  TOFIELD2NAME2(PIN_STATE_, DTR),
+  TOFIELD2NAME2(PIN_STATE_, OUT1),
+  TOFIELD2NAME2(PIN_STATE_, OUT2),
+  TOFIELD2NAME2(PIN_STATE_, CTS),
+  TOFIELD2NAME2(PIN_STATE_, DSR),
+  TOFIELD2NAME2(PIN_STATE_, RI),
+  TOFIELD2NAME2(PIN_STATE_, DCD),
+  TOFIELD2NAME2(PIN_STATE_, BREAK),
+  {0, 0, NULL}
+};
+///////////////////////////////////////////////////////////////
+static const FIELD2NAME fieldNameTableSoOptions[] = {
+  TOFIELD2NAME2(SO_, SET_BR),
+  TOFIELD2NAME2(SO_, SET_LC),
+  {0, 0, NULL}
+};
+///////////////////////////////////////////////////////////////
 static const FIELD2NAME fieldNameTableComEvents[] = {
   TOFIELD2NAME2(EV_, CTS),
   TOFIELD2NAME2(EV_, DSR),
@@ -289,6 +312,9 @@ ComPort::ComPort(
     countWaitCommEventOverlapped(0),
     countXoff(0),
     outOptions(0),
+#ifdef _DEBUG
+    outOptionsRequested(0),
+#endif
     writeQueueLimit(comParams.WriteQueueLimit()),
     writeQueued(0),
     writeSuspended(FALSE),
@@ -438,9 +464,9 @@ BOOL ComPort::Start()
       return FALSE;
     }
 
-    cout << name << " Event(s) 0x" << hex << events << dec << " [";
+    cout << name << " Event(s) [";
     PrintFields(cout, fieldNameTableComEvents, events);
-    cout << "] will be monitired" << endl;
+    cout << "] will be monitored" << endl;
   }
 
   if (!StartRead()) {
@@ -688,18 +714,21 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     break;
   }
   case HUB_MSG_T2N(HUB_MSG_TYPE_SET_PIN_STATE):
-    _ASSERTE((~SO_O2V_PIN_STATE(outOptions) & MASK2VAL(pMsg->u.val)) == 0);
+    _ASSERTE((~SO_O2V_PIN_STATE(outOptionsRequested) & MASK2VAL(pMsg->u.val)) == 0);
 
     if (!pComIo)
       return FALSE;
 
-    pComIo->SetPinState((WORD)pMsg->u.val, MASK2VAL(pMsg->u.val));
+    pComIo->SetPinState((WORD)pMsg->u.val, SO_O2V_PIN_STATE(outOptions) & MASK2VAL(pMsg->u.val));
     break;
   case HUB_MSG_T2N(HUB_MSG_TYPE_SET_BR): {
-    _ASSERTE(outOptions & SO_SET_BR);
+    _ASSERTE(outOptionsRequested & SO_SET_BR);
 
     if (!pComIo)
       return FALSE;
+
+    if ((outOptions & SO_SET_BR) == 0)
+      break;
 
     DWORD oldVal = pComIo->BaudRate();
     DWORD curVal = pComIo->SetBaudRate(pMsg->u.val);
@@ -732,10 +761,13 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     break;
   }
   case HUB_MSG_T2N(HUB_MSG_TYPE_SET_LC): {
-    _ASSERTE(outOptions & SO_SET_LC);
+    _ASSERTE(outOptionsRequested & SO_SET_LC);
 
     if (!pComIo)
       return FALSE;
+
+    if ((outOptions & SO_SET_LC) == 0)
+      break;
 
     DWORD oldVal = pComIo->LineControl();
     DWORD curVal = pComIo->SetLineControl(pMsg->u.val);
@@ -792,10 +824,13 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     break;
   }
   case HUB_MSG_T2N(HUB_MSG_TYPE_PURGE_TX):
-    _ASSERTE(outOptions & SO_PURGE_TX);
+    _ASSERTE(outOptionsRequested & SO_PURGE_TX);
 
     if (!pComIo)
       return FALSE;
+
+    if ((outOptions & SO_PURGE_TX) == 0)
+      break;
 
     PurgeWrite(FALSE);
     FlowControlUpdate();
@@ -803,6 +838,10 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
   case HUB_MSG_T2N(HUB_MSG_TYPE_SET_OUT_OPTS): {
     if (!pComIo)
       return FALSE;
+
+#ifdef _DEBUG
+    outOptionsRequested |= pMsg->u.val;
+#endif
 
     pMsg->u.val &= ~outOptions;
 
@@ -842,9 +881,11 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
     pMsg->u.val &= ~outOptions;
 
     if (pMsg->u.val) {
-      cerr << name << " WARNING: Requested output option(s) [0x"
-           << hex << pMsg->u.val << dec
-           << "] will be ignored by driver" << endl;
+      cerr << name << " WARNING: Requested output option(s) [";
+      BOOL delimitNext = FALSE;
+      delimitNext = PrintFields(cerr, fieldNameTableSetPinState, SO_O2V_PIN_STATE(pMsg->u.val), delimitNext, "SET_");
+      PrintFields(cerr, fieldNameTableSoOptions, pMsg->u.val & ~SO_V2O_PIN_STATE(-1), delimitNext);
+      cerr << "] will be ignored by driver" << endl;
     }
     break;
   }
@@ -940,9 +981,7 @@ void ComPort::OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done)
 
 void ComPort::OnCommEvent(WaitCommEventOverlapped *pOverlapped, DWORD eMask)
 {
-  //cout << name << " OnCommEvent " << ::GetCurrentThreadId() << endl;
-
-  //cout << name << " Event(s): 0x" << hex << eMask << dec << " [";
+  //cout << name << " OnCommEvent " << ::GetCurrentThreadId() << " [";
   //PrintFields(cout, fieldNameTableComEvents, eMask);
   //cout << "]" << endl;
 
