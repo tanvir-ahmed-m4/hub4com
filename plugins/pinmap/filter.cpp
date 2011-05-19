@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008-2010 Vyacheslav Frolov
+ * Copyright (c) 2008-2011 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,10 @@
  *
  *
  * $Log$
+ * Revision 1.18  2011/05/19 16:33:34  vfrolov
+ * Fixed typo
+ * Added 'on' input state
+ *
  * Revision 1.17  2010/05/18 15:00:36  vfrolov
  * Added connection counter
  *
@@ -121,6 +125,7 @@ static struct {
 ///////////////////////////////////////////////////////////////
 #define LM_BREAK     ((WORD)1 << 8)
 #define LM_CONNECT   ((WORD)1 << 9)
+#define LM_ON        ((WORD)1 << 10)
 #define MST2LM(m)    ((WORD)((BYTE)(m)))
 #define LM2MST(lm)   ((BYTE)(lm))
 #define LM_2_GO1(lm) (GO1_V2O_MODEM_STATUS(LM2MST(lm)) | ((lm & LM_BREAK) ? GO1_BREAK_STATUS : 0))
@@ -135,13 +140,14 @@ static struct {
   {"ring",    MST2LM(MODEM_STATUS_RI)},
   {"break",   LM_BREAK},
   {"connect", LM_CONNECT},
+  {"on",      LM_ON},
 };
 ///////////////////////////////////////////////////////////////
 class State {
   public:
     State(HMASTERPORT hMasterPort)
       : pName(pPortName(hMasterPort))
-      , lmInVal(0)
+      , lmInVal(LM_ON)
       , connectionCounter(0)
     {}
 
@@ -266,7 +272,7 @@ static PLUGIN_TYPE CALLBACK GetPluginType()
 static const PLUGIN_ABOUT_A about = {
   sizeof(PLUGIN_ABOUT_A),
   "pinmap",
-  "Copyright (c) 2008-2010 Vyacheslav Frolov",
+  "Copyright (c) 2008-2011 Vyacheslav Frolov",
   "GNU General Public License",
   "Pinouts mapping filter",
 };
@@ -293,7 +299,7 @@ static void CALLBACK Help(const char *pProgPath)
   << "  --dcd=[!]<s>          - wire input state of <s> to output pin DCD." << endl
   << "  --break=[!]<s>        - wire input state of <s> to output state of BREAK." << endl
   << endl
-  << "  The possible values of <s> above can be cts, dsr, dcd, ring, break or" << endl
+  << "  The possible values of <s> above can be on, cts, dsr, dcd, ring, break or" << endl
   << "  connect. The exclamation sign (!) can be used to invert the value. If no any" << endl
   << "  wire option specified, then the options --rts=cts --dtr=dsr are used by" << endl
   << "  default." << endl
@@ -322,13 +328,14 @@ static void CALLBACK Help(const char *pProgPath)
   << "      _END_" << endl
   << "    - transfer data and signals between COM1 and COM2." << endl
   << "  " << pProgPath << " --load=,,_END_" << endl
-  << "      --create-filter=pinmap:--rts=cts" << endl
+  << "      --create-filter=pinmap:--rts=cts --dtr=on" << endl
   << "      --add-filters=0,1:pinmap" << endl
   << "      --octs=off" << endl
   << "      COM1" << endl
   << "      COM2" << endl
   << "      _END_" << endl
-  << "    - allow end-to-end RTS/CTS handshaking between COM1 and COM2." << endl
+  << "    - allow end-to-end RTS/CTS handshaking between COM1 and COM2" << endl
+  << "      and raise DTR on both ports." << endl
   << "  " << pProgPath << " --load=,,_END_" << endl
   << "      --create-filter=pinmap" << endl
   << "      --add-filters=0:pinmap" << endl
@@ -441,12 +448,12 @@ static void InsertPinState(
 static BOOL CALLBACK OutMethod(
     HFILTER hFilter,
     HFILTERINSTANCE hFilterInstance,
-    HMASTERPORT hToPort,
+    HMASTERPORT hFromPort,
     HUB_MSG *pOutMsg)
 {
   _ASSERTE(hFilter != NULL);
   _ASSERTE(hFilterInstance != NULL);
-  _ASSERTE(hToPort != NULL);
+  _ASSERTE(hFromPort != NULL);
   _ASSERTE(pOutMsg != NULL);
 
   switch (HUB_MSG_T2N(pOutMsg->type)) {
@@ -478,7 +485,7 @@ static BOOL CALLBACK OutMethod(
       if (fail_options) {
         cerr << ((State *)hFilterInstance)->pName
              << " WARNING: Requested by filter " << ((Filter *)hFilter)->FilterName()
-             << " for port " << pPortName(hToPort)
+             << " for port " << pPortName(hFromPort)
              << " option(s) GO1_0x" << hex << fail_options << dec
              << " not accepted" << endl;
       }
