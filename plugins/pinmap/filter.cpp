@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.19  2011/05/23 09:53:58  vfrolov
+ * Added --data option
+ *
  * Revision 1.18  2011/05/19 16:33:34  vfrolov
  * Fixed typo
  * Added 'on' input state
@@ -85,6 +88,7 @@
 namespace FilterPinMap {
 ///////////////////////////////////////////////////////////////
 static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal;
+static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone;
 static ROUTINE_PORT_NAME_A *pPortName;
 static ROUTINE_FILTER_NAME_A *pFilterName;
 static ROUTINE_FILTERPORT *pFilterPort;
@@ -108,19 +112,24 @@ class Valid {
     BOOL isValid;
 };
 ///////////////////////////////////////////////////////////////
+#define PST2OM(m)    ((DWORD)((WORD)(m)))
+#define OM2PST(m)    ((WORD)(m))
+#define OM_DATA      ((DWORD)1 << 16)
+
 static struct {
   const char *pName;
-  WORD val;
+  DWORD val;
 } pinOut_names[] = {
-  {"rts=",    PIN_STATE_RTS},
-  {"dtr=",    PIN_STATE_DTR},
-  {"out1=",   PIN_STATE_OUT1},
-  {"out2=",   PIN_STATE_OUT2},
-  {"cts=",    PIN_STATE_CTS},
-  {"dsr=",    PIN_STATE_DSR},
-  {"ring=",   PIN_STATE_RI},
-  {"dcd=",    PIN_STATE_DCD},
-  {"break=",  PIN_STATE_BREAK},
+  {"rts=",    PST2OM(PIN_STATE_RTS)},
+  {"dtr=",    PST2OM(PIN_STATE_DTR)},
+  {"out1=",   PST2OM(PIN_STATE_OUT1)},
+  {"out2=",   PST2OM(PIN_STATE_OUT2)},
+  {"cts=",    PST2OM(PIN_STATE_CTS)},
+  {"dsr=",    PST2OM(PIN_STATE_DSR)},
+  {"ring=",   PST2OM(PIN_STATE_RI)},
+  {"dcd=",    PST2OM(PIN_STATE_DCD)},
+  {"break=",  PST2OM(PIN_STATE_BREAK)},
+  {"data=",   OM_DATA},
 };
 ///////////////////////////////////////////////////////////////
 #define LM_BREAK     ((WORD)1 << 8)
@@ -147,11 +156,13 @@ class State {
   public:
     State(HMASTERPORT hMasterPort)
       : pName(pPortName(hMasterPort))
+      , outVal(0)
       , lmInVal(LM_ON)
       , connectionCounter(0)
     {}
 
     const char *const pName;
+    DWORD outVal;
     WORD lmInVal;
     int connectionCounter;
 };
@@ -165,12 +176,12 @@ class Filter : public Valid {
     struct PinOuts {
       PinOuts() : mask(0), val(0) {}
 
-      WORD mask;
-      WORD val;
+      DWORD mask;
+      DWORD val;
     };
 
     PinOuts pinMap[sizeof(pinIn_names)/sizeof(pinIn_names[0])];
-    WORD outMask;
+    DWORD outMask;
     WORD lmInMask;
 
   private:
@@ -298,6 +309,7 @@ static void CALLBACK Help(const char *pProgPath)
   << "  --ring=[!]<s>         - wire input state of <s> to output pin RI." << endl
   << "  --dcd=[!]<s>          - wire input state of <s> to output pin DCD." << endl
   << "  --break=[!]<s>        - wire input state of <s> to output state of BREAK." << endl
+  << "  --data=[!]<s>         - wire input state of <s> to state of DATA." << endl
   << endl
   << "  The possible values of <s> above can be on, cts, dsr, dcd, ring, break or" << endl
   << "  connect. The exclamation sign (!) can be used to invert the value. If no any" << endl
@@ -315,6 +327,8 @@ static void CALLBACK Help(const char *pProgPath)
   << "                          of connect" << endl
   << "  BREAK_STATUS(<val>)   - current state of break." << endl
   << "  MODEM_STATUS(<val>)   - current state of modem." << endl
+  << "  LINE_DATA(<data>)     - will be discarded from stream if the state of DATA is" << endl
+  << "                          OFF." << endl
   << endl
   << "OUT method output data stream description:" << endl
   << "  SET_PIN_STATE(<set>)  - will be added on appropriate state changing." << endl
@@ -343,6 +357,14 @@ static void CALLBACK Help(const char *pProgPath)
   << "      COM2" << endl
   << "      _END_" << endl
   << "    - receive data and signals from COM2 and send it back to COM2." << endl
+  << "  " << pProgPath << " --load=,,_END_" << endl
+  << "      --create-filter=pinmap:--data=!cts" << endl
+  << "      --add-filters=0:pinmap" << endl
+  << "      --echo-route=0" << endl
+  << "      --octs=off" << endl
+  << "      COM2" << endl
+  << "      _END_" << endl
+  << "    - receive data from COM2 and if cts is OFF then send data back to COM2." << endl
   << "  " << pProgPath << " --load=,,_END_" << endl
   << "      --route=all:0" << endl
   << "      --create-filter=pinmap:--rts=connect --dtr=connect" << endl
@@ -413,9 +435,10 @@ static void CALLBACK DeleteInstance(
 }
 ///////////////////////////////////////////////////////////////
 static void InsertPinState(
-    Filter &filter,
+    const Filter &filter,
     WORD lmInMask,
     WORD lmInVal,
+    State &state,
     HUB_MSG **ppOutMsg)
 {
   if (!lmInMask)
@@ -423,23 +446,25 @@ static void InsertPinState(
 
   //cout << "InsertPinState lmInMask=0x" << hex << lmInMask << " lmInVal=0x" << lmInVal << dec << endl;
 
-  WORD mask = 0;
-  WORD val = 0;
+  DWORD outMask = 0;
+  DWORD outVal = 0;
 
   for (int iIn = 0 ; iIn < sizeof(pinIn_names)/sizeof(pinIn_names[0]) ; iIn++) {
     if ((lmInMask & pinIn_names[iIn].lmVal) == 0)
       continue;
 
-    mask |= filter.pinMap[iIn].mask;
+    outMask |= filter.pinMap[iIn].mask;
 
     if ((lmInVal & pinIn_names[iIn].lmVal) != 0)
-      val |= (filter.pinMap[iIn].val & filter.pinMap[iIn].mask);
+      outVal |= (filter.pinMap[iIn].val & filter.pinMap[iIn].mask);
     else
-      val |= (~filter.pinMap[iIn].val & filter.pinMap[iIn].mask);
+      outVal |= (~filter.pinMap[iIn].val & filter.pinMap[iIn].mask);
   }
 
-  if (mask) {
-    DWORD dVal = (VAL2MASK(mask) | val);
+  state.outVal = (outVal & outMask) | (state.outVal & ~outMask);
+
+  if (OM2PST(outMask)) {
+    DWORD dVal = (VAL2MASK(OM2PST(outMask)) | OM2PST(outVal));
     //cout << "SET_PIN_STATE 0x" << hex << dVal << dec << endl;
     *ppOutMsg = pMsgInsertVal(*ppOutMsg, HUB_MSG_TYPE_SET_PIN_STATE, dVal);
   }
@@ -459,10 +484,10 @@ static BOOL CALLBACK OutMethod(
   switch (HUB_MSG_T2N(pOutMsg->type)) {
     case HUB_MSG_T2N(HUB_MSG_TYPE_SET_OUT_OPTS): {
       // or'e with the required mask to set pin state
-      pOutMsg->u.val |= SO_V2O_PIN_STATE(((Filter *)hFilter)->outMask);
+      pOutMsg->u.val |= SO_V2O_PIN_STATE(OM2PST(((Filter *)hFilter)->outMask));
 
       // init pin state
-      InsertPinState(*(Filter *)hFilter, ((Filter *)hFilter)->lmInMask, ((State *)hFilterInstance)->lmInVal, &pOutMsg);
+      InsertPinState(*(Filter *)hFilter, ((Filter *)hFilter)->lmInMask, ((State *)hFilterInstance)->lmInVal, *(State *)hFilterInstance, &pOutMsg);
 
       break;
     }
@@ -493,13 +518,13 @@ static BOOL CALLBACK OutMethod(
     }
     case HUB_MSG_T2N(HUB_MSG_TYPE_SET_PIN_STATE):
       // discard any pin settings controlled by this filter
-      pOutMsg->u.val &= ~(VAL2MASK(((Filter *)hFilter)->outMask));
+      pOutMsg->u.val &= ~(VAL2MASK(OM2PST(((Filter *)hFilter)->outMask)));
       break;
     case HUB_MSG_T2N(HUB_MSG_TYPE_MODEM_STATUS): {
       WORD lmInMask = MST2LM(MASK2VAL(pOutMsg->u.val)) & ((Filter *)hFilter)->lmInMask;
       WORD lmInVal = ((MST2LM(pOutMsg->u.val) & lmInMask) | (((State *)hFilterInstance)->lmInVal & ~lmInMask));
 
-      InsertPinState(*(Filter *)hFilter, ((State *)hFilterInstance)->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
+      InsertPinState(*(Filter *)hFilter, ((State *)hFilterInstance)->lmInVal ^ lmInVal, lmInVal, *(State *)hFilterInstance, &pOutMsg);
 
       ((State *)hFilterInstance)->lmInVal = lmInVal;
       break;
@@ -508,7 +533,7 @@ static BOOL CALLBACK OutMethod(
       if (((Filter *)hFilter)->lmInMask & LM_BREAK) {
         WORD lmInVal = ((pOutMsg->u.val ? LM_BREAK : 0) | (((State *)hFilterInstance)->lmInVal & ~LM_BREAK));
 
-        InsertPinState(*(Filter *)hFilter, ((State *)hFilterInstance)->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
+        InsertPinState(*(Filter *)hFilter, ((State *)hFilterInstance)->lmInVal ^ lmInVal, lmInVal, *(State *)hFilterInstance, &pOutMsg);
 
         ((State *)hFilterInstance)->lmInVal = lmInVal;
       }
@@ -529,10 +554,18 @@ static BOOL CALLBACK OutMethod(
 
         WORD lmInVal = ((((State *)hFilterInstance)->connectionCounter > 0 ? LM_CONNECT : 0) | (((State *)hFilterInstance)->lmInVal & ~LM_CONNECT));
 
-        InsertPinState(*(Filter *)hFilter, ((State *)hFilterInstance)->lmInVal ^ lmInVal, lmInVal, &pOutMsg);
+        InsertPinState(*(Filter *)hFilter, ((State *)hFilterInstance)->lmInVal ^ lmInVal, lmInVal, *(State *)hFilterInstance, &pOutMsg);
 
         ((State *)hFilterInstance)->lmInVal = lmInVal;
       }
+      break;
+    }
+    case HUB_MSG_T2N(HUB_MSG_TYPE_LINE_DATA): {
+      if ((((Filter *)hFilter)->outMask & OM_DATA) != 0 && (((State *)hFilterInstance)->outVal & OM_DATA) == 0) {
+        if (!pMsgReplaceNone(pOutMsg, HUB_MSG_TYPE_EMPTY))
+          return FALSE;
+      }
+
       break;
     }
   }
@@ -566,6 +599,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
     const HUB_ROUTINES_A * pHubRoutines)
 {
   if (!ROUTINE_IS_VALID(pHubRoutines, pMsgInsertVal) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pMsgReplaceNone) ||
       !ROUTINE_IS_VALID(pHubRoutines, pPortName) ||
       !ROUTINE_IS_VALID(pHubRoutines, pFilterName) ||
       !ROUTINE_IS_VALID(pHubRoutines, pFilterPort))
@@ -574,6 +608,7 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   }
 
   pMsgInsertVal = pHubRoutines->pMsgInsertVal;
+  pMsgReplaceNone = pHubRoutines->pMsgReplaceNone;
   pPortName = pHubRoutines->pPortName;
   pFilterName = pHubRoutines->pFilterName;
   pFilterPort = pHubRoutines->pFilterPort;
