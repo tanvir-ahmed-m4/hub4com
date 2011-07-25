@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.17  2011/07/25 06:43:00  vfrolov
+ * Removed set-ID field assertion (set-ID field reserved for future)
+ *
  * Revision 1.16  2011/07/21 10:13:22  vfrolov
  * Added warning for not supported output options
  *
@@ -159,11 +162,9 @@ BOOL ComHub::StartAll() const
     } while (repeats--);
 
     for (int iGo = 0 ; iGo < sizeof(fail_options)/sizeof(fail_options[0]) ; iGo++) {
-      _ASSERTE((fail_options[iGo] & GO_I2O(-1)) == 0);
-
       if (fail_options[iGo]) {
         cerr << (*i)->Name() << " WARNING: Requested input option(s) GO" << iGo << "_0x"
-             << hex << fail_options[iGo] << dec << " not supported" << endl;
+             << hex << (fail_options[iGo] & ~GO_I2O(-1)) << dec << " not supported" << endl;
       }
 
       HubMsg msg;
