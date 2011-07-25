@@ -1,7 +1,7 @@
 /*
  * plugins_api.h
  *
- * Copyright (c) 2008-2009 Vyacheslav Frolov
+ * Copyright (c) 2008-2011 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,6 +60,7 @@ extern "C" {
 #define HUB_MSG_TYPE_EMPTY         (0   | HUB_MSG_UNION_TYPE_NONE)
 #define HUB_MSG_TYPE_LINE_DATA     (1   | HUB_MSG_UNION_TYPE_BUF)
 #define HUB_MSG_TYPE_CONNECT       (2   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_BOOL)
+/*************/
 #define HUB_MSG_TYPE_MODEM_STATUS  (3   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_MASK_VAL)
 #define   MODEM_STATUS_DCTS        0x01
 #define   MODEM_STATUS_DDSR        0x02
@@ -69,6 +70,7 @@ extern "C" {
 #define   MODEM_STATUS_DSR         0x20
 #define   MODEM_STATUS_RI          0x40
 #define   MODEM_STATUS_DCD         0x80
+/*************/
 #define HUB_MSG_TYPE_LINE_STATUS   (4   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_MASK_VAL)
 #define   LINE_STATUS_DR           0x01
 #define   LINE_STATUS_OE           0x02
@@ -78,6 +80,7 @@ extern "C" {
 #define   LINE_STATUS_THRE         0x20
 #define   LINE_STATUS_TEMT         0x40
 #define   LINE_STATUS_FIFOERR      0x80
+/*************/
 #define HUB_MSG_TYPE_SET_PIN_STATE (5   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_MASK_VAL)
 #define   SPS_P2V_MCR(p)           ((BYTE)(p))
 #define   SPS_V2P_MCR(v)           ((WORD)(BYTE)(v))
@@ -92,9 +95,17 @@ extern "C" {
 #define   PIN_STATE_RI             SPS_V2P_MST(MODEM_STATUS_RI)
 #define   PIN_STATE_DCD            SPS_V2P_MST(MODEM_STATUS_DCD)
 #define   PIN_STATE_BREAK          0x0100
+/*************/
 #define HUB_MSG_TYPE_GET_IN_OPTS   (6   | HUB_MSG_UNION_TYPE_PVAL)
-#define   GO_O2I(o)                ((DWORD)(o) >> 30)
-#define   GO_I2O(i)                ((DWORD)i << 30)
+/*
+ *      Input
+ *        HUB_MSG.u.pv.val   - the set and set-ID of input-options that can be requested
+ *      Output
+ *       *HUB_MSG.u.pv.pVal  - the cumulative set of requested input-options
+ *                             (suppose set-ID is from Input, set-ID field reserved for future)
+ */
+#define   GO_O2I(o)                ((DWORD)(o) >> 30)      /* unpack set-ID      */
+#define   GO_I2O(i)                ((DWORD)i << 30)        /* pack set-ID        */
 #define   GO0_ESCAPE_MODE          ((DWORD)1 << 0)
 #define   GO0_LBR_STATUS           ((DWORD)1 << 1)
 #define   GO0_LLC_STATUS           ((DWORD)1 << 2)
@@ -106,8 +117,18 @@ extern "C" {
 #define   GO1_RLC_STATUS           ((DWORD)1 << 17)
 #define   GO1_BREAK_STATUS         ((DWORD)1 << 18)
 #define   GO1_PURGE_TX_IN          ((DWORD)1 << 19)
+/*************/
 #define HUB_MSG_TYPE_FAIL_IN_OPTS  (7   | HUB_MSG_UNION_TYPE_VAL)
+/*
+ *      Input
+ *        HUB_MSG.u.val      - the set and set-ID of rejected input-options
+ */
+/*************/
 #define HUB_MSG_TYPE_SET_OUT_OPTS  (8   | HUB_MSG_UNION_TYPE_VAL)
+/*
+ *      Input
+ *        HUB_MSG.u.val      - the cumulative set of requested output-options
+ */
 #define   SO_O2V_PIN_STATE(o)      ((WORD)(o))
 #define   SO_V2O_PIN_STATE(v)      ((DWORD)(WORD)(v))
 #define   SO_O2V_LINE_STATUS(o)    ((BYTE)((o) >> 16))
@@ -115,15 +136,39 @@ extern "C" {
 #define   SO_SET_BR                ((DWORD)1 << 24)
 #define   SO_SET_LC                ((DWORD)1 << 25)
 #define   SO_PURGE_TX              ((DWORD)1 << 26)
+/*************/
 #define HUB_MSG_TYPE_RBR_STATUS    (9   | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_UINT)
 #define HUB_MSG_TYPE_RLC_STATUS    (10  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_LC)
+/*************/
 #define HUB_MSG_TYPE_COUNT_REPEATS (11  | HUB_MSG_UNION_TYPE_PVAL | HUB_MSG_VAL_TYPE_MSG_TYPE)
+/*
+ *      Input
+ *        HUB_MSG.u.pv.val   - the message-type that can be repeated multiple times
+ *      Output
+ *       *HUB_MSG.u.pv.pVal  - the cumulative number of requested repeats
+ */
+/*************/
 #define HUB_MSG_TYPE_GET_ESC_OPTS  (12  | HUB_MSG_UNION_TYPE_PVAL)
+/*
+ *      Input
+ *        HUB_MSG.u.pv.val   - the set of escape-mode-input-options that can be requested
+ *      Output
+ *       *HUB_MSG.u.pv.pVal  - the cumulative set of requested escape-mode-input-options
+ */
 #define   ESC_OPTS_MAP_EO_2_GO1(e) ((DWORD)(e) & 0x00FFFFFF)
 #define   ESC_OPTS_MAP_GO1_2_EO(g) ((DWORD)(g) & 0x00FFFFFF)
 #define   ESC_OPTS_O2V_ESCCHAR(o)  ((BYTE)(o >> 24))
 #define   ESC_OPTS_V2O_ESCCHAR(v)  ((DWORD)(BYTE)(v) << 24)
+/*************/
 #define HUB_MSG_TYPE_FAIL_ESC_OPTS (13  | HUB_MSG_UNION_TYPE_PVAL)
+/*
+ *      Input
+ *        HUB_MSG.u.val      - the set of rejected escape-mode-input-options
+ *      Output
+ *       *HUB_MSG.u.pv.pVal  - the cumulative set of requested input-options
+ *                             (suppose set-ID is 1, set-ID field reserved for future)
+ */
+/*************/
 #define HUB_MSG_TYPE_BREAK_STATUS  (14  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_BOOL)
 #define HUB_MSG_TYPE_SET_BR        (15  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_UINT)
 #define HUB_MSG_TYPE_SET_LC        (16  | HUB_MSG_UNION_TYPE_VAL | HUB_MSG_VAL_TYPE_LC)
