@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008-2010 Vyacheslav Frolov
+ * Copyright (c) 2008-2011 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.12  2011/07/26 11:59:14  vfrolov
+ * Replaced strerror() by FormatMessage()
+ *
  * Revision 1.11  2010/09/14 18:34:30  vfrolov
  * Fixed rejected connections handling
  *
@@ -70,7 +73,25 @@ static void TraceError(DWORD err, const char *pFmt, ...)
   vfprintf(stderr, pFmt, va);
   va_end(va);
 
-  fprintf(stderr, " ERROR %s (%lu)\n", strerror(err), (unsigned long)err);
+  LPVOID pMsgBuf;
+
+  FormatMessage(
+      FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+      NULL,
+      err,
+      MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+      (LPTSTR) &pMsgBuf,
+      0,
+      NULL);
+
+  if ((err & 0xFFFF0000) == 0)
+    fprintf(stderr, " ERROR %lu - %s\n", (unsigned long)err, pMsgBuf);
+  else
+    fprintf(stderr, " ERROR 0x%08lX - %s\n", (unsigned long)err, pMsgBuf);
+
+  fflush(stderr);
+
+  LocalFree(pMsgBuf);
 }
 ///////////////////////////////////////////////////////////////
 BOOL SetAddr(struct sockaddr_in &sn, const char *pAddr, const char *pPort)
@@ -448,7 +469,7 @@ void WaitEventOverlapped::Delete()
       if (err != ERROR_IO_PENDING) {
         TraceError(
             err,
-            "WaitEventOverlapped::~WaitEventOverlapped(): UnregisterWait() %s",
+            "WaitEventOverlapped::Delete(): UnregisterWait() %s",
             port.Name().c_str());
       }
     }
@@ -458,7 +479,7 @@ void WaitEventOverlapped::Delete()
     if (!::WSACloseEvent(hEvent)) {
       TraceError(
           GetLastError(),
-          "WaitEventOverlapped::~WaitEventOverlapped(): CloseHandle(hEvent) %s",
+          "WaitEventOverlapped::Delete(): CloseHandle(hEvent) %s",
           port.Name().c_str());
     }
   }

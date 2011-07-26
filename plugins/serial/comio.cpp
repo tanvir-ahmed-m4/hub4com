@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2009 Vyacheslav Frolov
+ * Copyright (c) 2006-2011 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.17  2011/07/26 11:57:53  vfrolov
+ * Replaced strerror() by FormatMessage()
+ *
  * Revision 1.16  2009/09/14 08:52:27  vfrolov
  * Suppressed "IOCTL_SERIAL_GET_MODEM_CONTROL ERROR Unknown error (87)"
  *
@@ -119,7 +122,25 @@ static void TraceError(DWORD err, const char *pFmt, ...)
   vfprintf(stderr, pFmt, va);
   va_end(va);
 
-  fprintf(stderr, " ERROR %s (%lu)\n", strerror(err), (unsigned long)err);
+  LPVOID pMsgBuf;
+
+  FormatMessage(
+      FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+      NULL,
+      err,
+      MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+      (LPTSTR) &pMsgBuf,
+      0,
+      NULL);
+
+  if ((err & 0xFFFF0000) == 0)
+    fprintf(stderr, " ERROR %lu - %s\n", (unsigned long)err, pMsgBuf);
+  else
+    fprintf(stderr, " ERROR 0x%08lX - %s\n", (unsigned long)err, pMsgBuf);
+
+  fflush(stderr);
+
+  LocalFree(pMsgBuf);
 }
 ///////////////////////////////////////////////////////////////
 static BOOL myGetCommState(HANDLE handle, DCB *pDcb)
