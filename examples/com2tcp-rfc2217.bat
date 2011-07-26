@@ -28,6 +28,12 @@ SETLOCAL
       GOTO BEGIN_PARSE_OPTIONS
     :END_OPTION_INTERFACE
 
+    IF /I "%OPTION%" NEQ "--reconnect" GOTO END_OPTION_RECONNECT
+      SET OPTIONS=%OPTIONS% --reconnect=%~1
+      SHIFT /1
+      GOTO BEGIN_PARSE_OPTIONS
+    :END_OPTION_RECONNECT
+
     IF /I "%OPTION%" NEQ "--rfc2217-mode" GOTO END_OPTION_RFC2217_MODE
       SET ARG=%~1
       SHIFT /1
@@ -158,6 +164,11 @@ ECHO     --help                - show this help.
 ECHO.
 ECHO TCP client mode options:
 ECHO     --interface ^<if^>      - use interface ^<if^> for connecting.
+ECHO     --reconnect ^<t^>       - enable^/disable forcing connection to remote host
+ECHO                             on disconnecting and set reconnect time. Where ^<t^>
+ECHO                             is a positive number of milliseconds or d^[efault^]
+ECHO                             or n^[o^]. If connection is not permanent then
+ECHO                             d^[efault^] means n^[o^] else d^[efault^] means 0.
 ECHO.
 ECHO TCP server mode options:
 ECHO     --interface ^<if^>      - use interface ^<if^> for listening.
