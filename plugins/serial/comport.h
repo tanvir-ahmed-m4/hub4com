@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.19  2011/07/27 17:08:33  vfrolov
+ * Implemented serial port share mode
+ *
  * Revision 1.18  2011/05/19 16:47:00  vfrolov
  * Fixed unexpected assertion
  * Added human readable printing output options set
@@ -124,9 +127,12 @@ class ComPort
     BOOL Start();
     BOOL FakeReadFilter(HUB_MSG *pInMsg);
     BOOL Write(HUB_MSG *pMsg);
+
     void OnWrite(WriteOverlapped *pOverlapped, DWORD len, DWORD done);
     void OnRead(ReadOverlapped *pOverlapped, BYTE *pBuf, DWORD done);
     void OnCommEvent(WaitCommEventOverlapped *pOverlapped, DWORD eMask);
+    void OnPortFree() { Update(); }
+
     void LostReport();
 
     const string &Name() const { return name; }
@@ -135,6 +141,11 @@ class ComPort
   private:
     void FlowControlUpdate();
     void PurgeWrite(BOOL withLost);
+    void FilterX(BYTE *pBuf, DWORD &len);
+    void UpdateOutOptions(DWORD options);
+    void StartDisconnect();
+    void Update();
+    BOOL Start(BOOL first);
     BOOL StartRead();
     BOOL StartWaitCommEvent();
     void CheckComEvents(DWORD eMask);
@@ -142,16 +153,22 @@ class ComPort
     ComIo *pComIo;
     string name;
     HMASTERPORT hMasterPort;
+
     int countReadOverlapped;
     int countWaitCommEventOverlapped;
     int countXoff;
 
     DWORD intercepted_options[2];
     DWORD inOptions[2];
+    DWORD escapeOptions;
     DWORD outOptions;
 #ifdef _DEBUG
     DWORD outOptionsRequested;
 #endif
+
+    int connectionCounter;
+    BOOL connectSent;
+    BOOL permanent;
 
     DWORD writeQueueLimit;
     DWORD writeQueueLimitSendXoff;
@@ -165,6 +182,13 @@ class ComPort
     queue<WriteOverlapped *> writeOverlappedBuf;
     BYTE *pWriteBuf;
     DWORD lenWriteBuf;
+
+#ifdef _DEBUG
+  private:
+    ComPort(const ComPort &) {}
+    ~ComPort() {}
+    void operator=(const ComPort &) {}
+#endif  /* _DEBUG */
 };
 ///////////////////////////////////////////////////////////////
 

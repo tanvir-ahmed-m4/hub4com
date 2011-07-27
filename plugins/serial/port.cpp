@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008-2010 Vyacheslav Frolov
+ * Copyright (c) 2008-2011 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.16  2011/07/27 17:08:33  vfrolov
+ * Implemented serial port share mode
+ *
  * Revision 1.15  2010/09/14 16:31:50  vfrolov
  * Implemented --write-limit=0 to disable writing to the port
  *
@@ -124,7 +127,7 @@ static PLUGIN_TYPE CALLBACK GetPluginType()
 static const PLUGIN_ABOUT_A about = {
   sizeof(PLUGIN_ABOUT_A),
   "serial",
-  "Copyright (c) 2008 Vyacheslav Frolov",
+  "Copyright (c) 2008-2011 Vyacheslav Frolov",
   "GNU General Public License",
   "Serial port driver",
 };
@@ -174,6 +177,8 @@ static void CALLBACK Help(const char *pProgPath)
   << "                             where <s> is " << ComParams::WriteQueueLimitLst() << ". The queue" << endl
   << "                             will be purged with data lost on overruning." << endl
   << "                             The value 0 will disable writing to the port." << endl
+  << "  --share-mode=<c>         - set share mode to <c> (" << ComParams().ShareModeStr() << " by default), where <c>" << endl
+  << "                             is " << ComParams::ShareModeLst() << "." << endl
   << endl
   << "  The value c[urrent] above means to use current COM port settings." << endl
   << endl
@@ -181,23 +186,20 @@ static void CALLBACK Help(const char *pProgPath)
   << "  SET_OUT_OPTS(<opts>)     - or'e <opts> with the output data stream options." << endl
   << "  LINE_DATA(<data>)        - write <data> to serial port." << endl
   << "  SET_PIN_STATE(<state>)   - set serial port pins to required state." << endl
+  << "  CONNECT(TRUE)            - increment connection counter." << endl
+  << "  CONNECT(FALSE)           - decrement connection counter." << endl
   << endl
   << "Input data stream description:" << endl
   << "  LINE_DATA(<data>)        - readed <data> from serial port." << endl
-  << "  CONNECT(TRUE)            - serial port started." << endl
+  << "  CONNECT(TRUE)            - serial port was started." << endl
+  << "  CONNECT(FALSE)           - serial port is stopping." << endl
   << "  LINE_STATUS(<val>)       - current state of line." << endl
   << "  MODEM_STATUS(<val>)      - current state of modem." << endl
   << endl
-  << "Fake read filter input data stream description:" << endl
-  << "  GET_IN_OPTS(<pOpts>,<mask>)" << endl
-  << "                           - the port removes bits from <mask> in this message" << endl
-  << "                             for locally supported input data stream options." << endl
-  << endl
-  << "Fake read filter output data stream description:" << endl
-  << "  GET_IN_OPTS(<pOpts>,<mask>)" << endl
-  << "                           - the port adds this message at detecting the" << endl
-  << "                             GET_IN_OPTS message in the stream to get the" << endl
-  << "                             required input data stream options." << endl
+  << "In share mode the incrementing of the connection counter will force serial port" << endl
+  << "starting and the decrementing of the connection counter to 0 will force serial" << endl
+  << "port stopping. The stopped serial port is closed so it allowed to be used by" << endl
+  << "other applications." << endl
   << endl
   << "Examples:" << endl
   << "  " << pProgPath << " COM1 \\\\.\\CNCB1 \\\\.\\CNCB2" << endl
@@ -294,6 +296,12 @@ static BOOL CALLBACK Config(
   if ((pParam = GetParam(pArg, "--write-limit=")) != NULL) {
     if (!comParams.SetWriteQueueLimit(pParam)) {
       Diag("Invalid write limit value in ", pArg);
+      exit(1);
+    }
+  } else
+  if ((pParam = GetParam(pArg, "--share-mode=")) != NULL) {
+    if (!comParams.SetShareMode(pParam)) {
+      Diag("Invalid share mode value in ", pArg);
       exit(1);
     }
   } else {

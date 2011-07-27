@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2006-2008 Vyacheslav Frolov
+ * Copyright (c) 2006-2011 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.12  2011/07/27 17:08:33  vfrolov
+ * Implemented serial port share mode
+ *
  * Revision 1.11  2008/12/17 11:52:35  vfrolov
  * Replaced ComIo::dcb by serialBaudRate, serialLineControl,
  * serialHandFlow and serialChars
@@ -171,10 +174,21 @@ struct SERIAL_CHARS {
 class ComIo
 {
   public:
-    ComIo(ComPort &_port) : port(_port), handle(INVALID_HANDLE_VALUE) {}
-    ~ComIo() { Close(); }
+    ComIo(ComPort &_port, const char *pPath)
+      : port(_port)
+      , countStartedOverlaps(0)
+      , path(pPath)
+      , handle(INVALID_HANDLE_VALUE)
+      , handleClosing(INVALID_HANDLE_VALUE)
+      , notifyOnFree(FALSE)
+      , hasExtendedModemControl(FALSE)
+      , pinStateValue(0)
+      , pinStateMask(0)
+    {
+    }
 
-    BOOL Open(const char *pPath, const ComParams &comParams);
+    BOOL Open(const ComParams &comParams);
+    BOOL Open();
     void Close();
 
     WORD PinStateControlMask() const {
@@ -201,6 +215,7 @@ class ComIo
     void PurgeWrite() { ::PurgeComm(handle, PURGE_TXABORT|PURGE_TXCLEAR); }
 
     HANDLE Handle() const { return handle; }
+    const string &Path() const { return path; }
     DWORD BaudRate() const { return serialBaudRate.BaudRate; }
     DWORD LineControl() const {
       return (VAL2LC_BYTESIZE(serialLineControl.WordLength)
@@ -213,14 +228,35 @@ class ComIo
 
   public:
     ComPort &port;
+    int countStartedOverlaps;
 
   private:
+    BOOL OpenPath();
+    void PrintParams(const char *pPrefix, const char *pSuffix);
+
+    string path;
+
     HANDLE handle;
+    HANDLE handleClosing;
+    BOOL notifyOnFree;
+
     BOOL hasExtendedModemControl;
+
+    WORD pinStateValue;
+    WORD pinStateMask;
+
     SERIAL_BAUD_RATE serialBaudRate;
     SERIAL_LINE_CONTROL serialLineControl;
     SERIAL_HANDFLOW serialHandFlow;
     SERIAL_CHARS serialChars;
+    COMMTIMEOUTS timeouts;
+
+#ifdef _DEBUG
+  private:
+    ComIo(const ComIo &comIo) : port(comIo.port) {}
+    ~ComIo() {}
+    void operator=(const ComIo &) {}
+#endif  /* _DEBUG */
 };
 ///////////////////////////////////////////////////////////////
 class ReadOverlapped : private OVERLAPPED
@@ -243,14 +279,18 @@ class ReadOverlapped : private OVERLAPPED
 class WriteOverlapped : private OVERLAPPED
 {
   public:
+    WriteOverlapped(ComIo &_comIo) : comIo(_comIo) {
 #ifdef _DEBUG
-    WriteOverlapped() : pBuf(NULL) {}
+      pBuf = NULL;
+#endif
+    }
+#ifdef _DEBUG
     ~WriteOverlapped() {
       _ASSERTE(pBuf == NULL);
     }
 #endif
 
-    BOOL StartWrite(ComIo *_pComIo, BYTE *_pBuf, DWORD _len);
+    BOOL StartWrite(BYTE *_pBuf, DWORD _len);
 
   private:
     static VOID CALLBACK OnWrite(
@@ -259,16 +299,53 @@ class WriteOverlapped : private OVERLAPPED
       LPOVERLAPPED pOverlapped);
     void BufFree();
 
-    ComIo *pComIo;
+    ComIo &comIo;
     BYTE *pBuf;
     DWORD len;
 };
 ///////////////////////////////////////////////////////////////
-class WaitCommEventOverlapped : private OVERLAPPED
+class SafeDelete
+{
+  protected:
+    SafeDelete() : deleted(FALSE), locked(0) {}
+
+    virtual ~SafeDelete() {}
+
+    void Delete() {
+      _ASSERTE(locked >= 0);
+
+      if (locked <= 0)
+        delete this;
+      else
+        deleted = TRUE;
+    }
+
+    void LockDelete() { locked++; }
+    BOOL UnockDelete() {
+      locked--;
+
+      _ASSERTE(locked >= 0);
+
+      if (deleted) {
+        if (locked <= 0)
+          delete this;
+
+        return FALSE;
+      }
+
+      return TRUE;
+    }
+
+  private:
+    BOOL deleted;
+    int locked;
+};
+///////////////////////////////////////////////////////////////
+class WaitCommEventOverlapped : private OVERLAPPED, public SafeDelete
 {
   public:
     WaitCommEventOverlapped(ComIo &_comIo);
-    ~WaitCommEventOverlapped();
+    void Delete();
     BOOL StartWaitCommEvent();
 
   private:
@@ -280,6 +357,11 @@ class WaitCommEventOverlapped : private OVERLAPPED
     ComIo &comIo;
     HANDLE hWait;
     DWORD eMask;
+
+#ifdef _DEBUG
+  private:
+    ~WaitCommEventOverlapped() {}
+#endif  /* _DEBUG */
 };
 ///////////////////////////////////////////////////////////////
 
