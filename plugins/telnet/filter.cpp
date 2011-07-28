@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.22  2011/07/28 13:42:20  vfrolov
+ * Implemented --ascii-cr-padding option
+ *
  * Revision 1.21  2011/07/25 07:03:55  vfrolov
  * Fixed set-ID field assertion
  *
@@ -225,6 +228,7 @@ class Filter : public Valid {
     const char *const pName;
     string terminalType;
     BOOL suppressEcho;
+    BYTE_string ascii_cr_padding;
 
     enum {
       comport_no,
@@ -294,6 +298,39 @@ Filter::Filter(const char *_pName, int argc, const char *const argv[])
         Invalidate();
       }
     }
+    else
+    if ((pParam = GetParam(pArg, "ascii-cr-padding=")) != NULL) {
+      for (;;) {
+        unsigned char ch1 = *pParam++;
+
+        if (!ch1)
+          break;
+
+        unsigned char ch2 = *pParam++;
+
+        if (!ch2 || !isxdigit(ch1) || !isxdigit(ch2)) {
+          Diag("Invalid value in ", *pArgs);
+          Invalidate();
+          break;
+        }
+
+        BYTE padding;
+
+        if (isdigit(ch1))
+          padding = ch1 - '0';
+        else
+          padding = (BYTE)toupper(ch1) - 'A';
+
+        padding <<= 4;
+
+        if (isdigit(ch2))
+          padding += ch2 - '0';
+        else
+          padding += (BYTE)toupper(ch2) - 'A';
+
+        ascii_cr_padding += padding;
+      }
+    }
     else {
       Diag("Unknown option ", *pArgs);
       Invalidate();
@@ -332,6 +369,8 @@ TelnetProtocol *State::CreateProtocol(const Filter &filter)
 
   if (!pTelnetProtocol)
     return NULL;
+
+  pTelnetProtocol->SetAsciiCrPadding(filter.ascii_cr_padding);
 
   TelnetOption *pTo;
 
@@ -397,7 +436,7 @@ static PLUGIN_TYPE CALLBACK GetPluginType()
 static const PLUGIN_ABOUT_A about = {
   sizeof(PLUGIN_ABOUT_A),
   "telnet",
-  "Copyright (c) 2008 Vyacheslav Frolov",
+  "Copyright (c) 2008-2011 Vyacheslav Frolov",
   "GNU General Public License",
   "Telnet protocol filter",
 };
@@ -423,6 +462,10 @@ static void CALLBACK Help(const char *pProgPath)
   << "                             default)." << endl
   << "  --keep-active=<s>        - send NOP command every <s> seconds to keep the" << endl
   << "                             connection active if data is not transferred." << endl
+  << "  --ascii-cr-padding=<p>   - in the default ASCII mode insert padding <p>" << endl
+  << "                             following CR while encoding raw data to telnet" << endl
+  << "                             protocol data. Where <p> is a sequence of pairs" << endl
+  << "                             of hexadecimal digits" << endl
   << endl
   << "IN method input data stream description:" << endl
   << "  LINE_DATA - telnet protocol data (will be discarded if engine not started)." << endl
