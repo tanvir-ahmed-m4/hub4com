@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008-2009 Vyacheslav Frolov
+ * Copyright (c) 2008-2011 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.17  2011/11/07 14:24:16  vfrolov
+ * Added --delay-disconnect option
+ *
  * Revision 1.16  2009/02/02 15:21:42  vfrolov
  * Optimized filter's API
  *
@@ -95,6 +98,9 @@ static ROUTINE_MSG_INSERT_VAL *pMsgInsertVal;
 static ROUTINE_MSG_REPLACE_NONE *pMsgReplaceNone;
 static ROUTINE_PORT_NAME_A *pPortName;
 static ROUTINE_FILTER_NAME_A *pFilterName;
+static ROUTINE_TIMER_CREATE *pTimerCreate;
+static ROUTINE_TIMER_SET *pTimerSet;
+static ROUTINE_TIMER_DELETE *pTimerDelete;
 static ROUTINE_FILTERPORT *pFilterPort;
 ///////////////////////////////////////////////////////////////
 const char *GetParam(const char *pArg, const char *pPattern)
@@ -118,10 +124,28 @@ class Valid {
 ///////////////////////////////////////////////////////////////
 class State {
   public:
-    State(HMASTERPORT hMasterPort) : pName(pPortName(hMasterPort)), connect(FALSE) {}
+    State(HMASTERPORT _hMasterPort)
+      : hMasterPort(_hMasterPort)
+      , pName(pPortName(_hMasterPort))
+      , connect(FALSE)
+      , last_connect(FALSE)
+      , hDelayDisconnectTimer(NULL)
+    {
+    }
 
+    ~State()
+    {
+      if (hDelayDisconnectTimer)
+        pTimerDelete(hDelayDisconnectTimer);
+    }
+
+    const HMASTERPORT hMasterPort;
     const char *const pName;
+
     BOOL connect;
+    BOOL last_connect;
+
+    HMASTERTIMER hDelayDisconnectTimer;
 };
 ///////////////////////////////////////////////////////////////
 class Filter : public Valid {
@@ -132,6 +156,7 @@ class Filter : public Valid {
 
     DWORD pin;
     BOOL negative;
+    DWORD delayDisconnect;
 
   private:
     const char *pName;
@@ -149,9 +174,10 @@ static struct {
 };
 
 Filter::Filter(const char *_pName, int argc, const char *const argv[])
-  : pName(_pName),
-    pin(GO1_V2O_MODEM_STATUS(MODEM_STATUS_DSR)),
-    negative(FALSE)
+  : pName(_pName)
+  , pin(GO1_V2O_MODEM_STATUS(MODEM_STATUS_DSR))
+  , negative(FALSE)
+  , delayDisconnect(0)
 {
   for (const char *const *pArgs = &argv[1] ; argc > 1 ; pArgs++, argc--) {
     const char *pArg = GetParam(*pArgs, "--");
@@ -183,7 +209,18 @@ Filter::Filter(const char *_pName, int argc, const char *const argv[])
         cerr << "Unknown pin " << pParam << " in " << *pArgs << endl;
         Invalidate();
       }
-    } else {
+    }
+    else
+    if ((pParam = GetParam(pArg, "delay-disconnect=")) != NULL) {
+      if (isdigit((unsigned char)*pParam)) {
+        delayDisconnect = atol(pParam);
+      }
+      else {
+        cerr << "Invalid value in " << pArg << endl;
+        exit(1);
+      }
+    }
+    else {
       cerr << "Unknown option " << *pArgs << endl;
       Invalidate();
     }
@@ -198,7 +235,7 @@ static PLUGIN_TYPE CALLBACK GetPluginType()
 static const PLUGIN_ABOUT_A about = {
   sizeof(PLUGIN_ABOUT_A),
   "pin2con",
-  "Copyright (c) 2008 Vyacheslav Frolov",
+  "Copyright (c) 2008-2011 Vyacheslav Frolov",
   "GNU General Public License",
   "Connect or disconnect on changing of line or modem state filter",
 };
@@ -218,6 +255,10 @@ static void CALLBACK Help(const char *pProgPath)
   << "  --connect=[!]<state>  - <state> is cts, dsr, dcd, ring or break (dsr by" << endl
   << "                          default). The exclamation sign (!) can be used to" << endl
   << "                          invert the value." << endl
+  << "  --delay-disconnect=<t>" << endl
+  << "                        - delay the disconnect at least for <t> milliseconds." << endl
+  << "                          Ignore the disconnect if the connect will raised" << endl
+  << "                          again while this delay." << endl
   << endl
   << "IN method input data stream description:" << endl
   << "  CONNECT(TRUE/FALSE)   - will be discarded from stream." << endl
@@ -295,13 +336,61 @@ static HUB_MSG *InsertConnectState(
     Filter &filter,
     State &state,
     HUB_MSG *pInMsg,
-    BOOL pinState)
+    BOOL pinState,
+    BOOL timeout = FALSE)
 {
-  if (filter.negative)
-    pinState = !pinState;
+  _ASSERTE(filter.delayDisconnect || (!timeout && !state.hDelayDisconnectTimer));
 
-  if (state.connect != pinState)
-    pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_CONNECT, state.connect = pinState);
+  if (!timeout)
+    state.last_connect = filter.negative ? !pinState : pinState;
+
+  //cout << "beg timeout=" << timeout << " connect=" << state.connect << " last_connect=" << state.last_connect << endl;
+
+  if (state.connect != state.last_connect) {
+    if (!state.last_connect && filter.delayDisconnect) {
+      if (!timeout) {
+        if (!state.hDelayDisconnectTimer) {
+          state.hDelayDisconnectTimer = pTimerCreate((HTIMEROWNER)&state);
+
+          if (state.hDelayDisconnectTimer) {
+            LARGE_INTEGER firstReportTime;
+
+            firstReportTime.QuadPart = -10000LL * filter.delayDisconnect;
+
+            pTimerSet(
+                state.hDelayDisconnectTimer,
+                state.hMasterPort,
+                &firstReportTime, 0,
+                (HTIMERPARAM)state.hDelayDisconnectTimer);
+
+            //cout << "pTimerSet" << endl;
+          }
+        }
+      } else {
+        pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_CONNECT, state.connect = state.last_connect);
+
+        //cout << "HUB_MSG_TYPE_CONNECT connect=" << state.connect << endl;
+
+        if (state.hDelayDisconnectTimer) {
+          pTimerDelete(state.hDelayDisconnectTimer);
+          state.hDelayDisconnectTimer = NULL;
+
+          //cout << "pTimerDelete" << endl;
+        }
+      }
+    } else {
+      pInMsg = pMsgInsertVal(pInMsg, HUB_MSG_TYPE_CONNECT, state.connect = state.last_connect);
+
+      //cout << "HUB_MSG_TYPE_CONNECT connect=" << state.connect << endl;
+    }
+  } else {
+    if (state.hDelayDisconnectTimer) {
+      pTimerDelete(state.hDelayDisconnectTimer);
+      state.hDelayDisconnectTimer = NULL;
+
+      cout << "pTimerDelete" << endl;
+    }
+  }
 
   return pInMsg;
 }
@@ -347,6 +436,21 @@ static BOOL CALLBACK InMethod(
     if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
       return FALSE;
     break;
+  case HUB_MSG_T2N(HUB_MSG_TYPE_TICK): {
+    if (pInMsg->u.hv2.hVal0 != hFilterInstance)
+      break;
+
+    HUB_MSG inMsg = *pInMsg;
+
+    // discard owned tick
+    if (!pMsgReplaceNone(pInMsg, HUB_MSG_TYPE_EMPTY))
+      return FALSE;
+
+    if (inMsg.u.hv2.hVal1 == ((State *)hFilterInstance)->hDelayDisconnectTimer)
+      pInMsg = InsertConnectState(*((Filter *)hFilter), *(State *)hFilterInstance, pInMsg, 0, TRUE);
+
+    break;
+  }
   case HUB_MSG_T2N(HUB_MSG_TYPE_MODEM_STATUS): {
     WORD pin;
 
@@ -397,6 +501,9 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
       !ROUTINE_IS_VALID(pHubRoutines, pMsgReplaceNone) ||
       !ROUTINE_IS_VALID(pHubRoutines, pPortName) ||
       !ROUTINE_IS_VALID(pHubRoutines, pFilterName) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pTimerCreate) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pTimerSet) ||
+      !ROUTINE_IS_VALID(pHubRoutines, pTimerDelete) ||
       !ROUTINE_IS_VALID(pHubRoutines, pFilterPort))
   {
     return NULL;
@@ -406,6 +513,9 @@ const PLUGIN_ROUTINES_A *const * CALLBACK InitA(
   pMsgReplaceNone = pHubRoutines->pMsgReplaceNone;
   pPortName = pHubRoutines->pPortName;
   pFilterName = pHubRoutines->pFilterName;
+  pTimerCreate = pHubRoutines->pTimerCreate;
+  pTimerSet = pHubRoutines->pTimerSet;
+  pTimerDelete = pHubRoutines->pTimerDelete;
   pFilterPort = pHubRoutines->pFilterPort;
 
   return plugins;

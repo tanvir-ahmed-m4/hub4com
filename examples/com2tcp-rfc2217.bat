@@ -50,11 +50,18 @@ SETLOCAL
     :END_OPTION_RFC2217_MODE
 
     IF /I "%OPTION%" NEQ "--connect" GOTO END_OPTION_CONNECT
-      SET COM_PIN2CON=--create-filter=pin2con,com,connect:%~1
+      SET COM_PIN2CON=--create-filter=pin2con,com,connect
+      SET COM_PIN2CON_OPTIONS=%COM_PIN2CON_OPTIONS% --connect=%~1
       SET PERMANENT=
       SHIFT /1
       GOTO BEGIN_PARSE_OPTIONS
     :END_OPTION_CONNECT
+
+    IF /I "%OPTION%" NEQ "--delay-disconnect" GOTO END_OPTION_DELAY_DISCONNECT
+      SET COM_PIN2CON_OPTIONS=%COM_PIN2CON_OPTIONS% --delay-disconnect=%~1
+      SHIFT /1
+      GOTO BEGIN_PARSE_OPTIONS
+    :END_OPTION_DELAY_DISCONNECT
 
     IF /I "%OPTION%" NEQ "--keep-active" GOTO END_OPTION_KEEP_ACTIVE
       SET TCP_TELNET_OPTIONS=%TCP_TELNET_OPTIONS% --keep-active=%~1
@@ -113,6 +120,10 @@ SETLOCAL
     SET TCP_TELNET_OPTIONS=:"%TCP_TELNET_OPTIONS%"
   :END_QUOTE_TCP_TELNET_OPTIONS
 
+  IF "%COM_PIN2CON%" == "" GOTO END_COM_PIN2CON
+    SET COM_PIN2CON=%COM_PIN2CON%:"%COM_PIN2CON_OPTIONS%"
+  :END_COM_PIN2CON
+
   %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,com,COM
   SET OPTIONS=%OPTIONS% --create-filter=escparse,com,parse
   %TC% SET OPTIONS=%OPTIONS% --create-filter=trace,com,ExM
@@ -157,6 +168,10 @@ ECHO                             ^<state^> is cts, dsr, dcd, ring or break. The
 ECHO                             exclamation sign ^(^!^) can be used to invert the
 ECHO                             action. By default the connection will be permanent
 ECHO                             as it's possible.
+ECHO     --delay-disconnect ^<t^>
+ECHO                           - delay the disconnect at least for ^<t^> milliseconds.
+ECHO                             Ignore the disconnect if the connect will raised
+ECHO                             again while this delay.
 ECHO     --keep-active ^<s^>     - send NOP command every ^<s^> seconds to keep the
 ECHO                             connection active if data is not transferred.
 ECHO     --trace               - enable trace output.
