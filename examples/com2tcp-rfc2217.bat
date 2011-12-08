@@ -22,6 +22,11 @@ SETLOCAL
       GOTO BEGIN_PARSE_OPTIONS
     :END_OPTION_TRACE
 
+    IF /I "%OPTION%" NEQ "--share-com-port" GOTO END_OPTION_SHARE_COM_PORT
+      SET OPTIONS=%OPTIONS% --share-mode=on
+      GOTO BEGIN_PARSE_OPTIONS
+    :END_OPTION_SHARE_COM_PORT
+
     IF /I "%OPTION%" NEQ "--interface" GOTO END_OPTION_INTERFACE
       SET OPTIONS=%OPTIONS% --interface=%~1
       SHIFT /1
@@ -174,6 +179,9 @@ ECHO                             Ignore the disconnect if the connect will raise
 ECHO                             again while this delay.
 ECHO     --keep-active ^<s^>     - send NOP command every ^<s^> seconds to keep the
 ECHO                             connection active if data is not transferred.
+ECHO     --share-com-port      - open the com port on connecting and close it on
+ECHO                             disconnecting. By default the com port is open
+ECHO                             permanently.
 ECHO     --trace               - enable trace output.
 ECHO     --help                - show this help.
 ECHO.
