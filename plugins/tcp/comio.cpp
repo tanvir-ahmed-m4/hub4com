@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.13  2011/12/08 09:38:23  vfrolov
+ * Fixed compile warning
+ *
  * Revision 1.12  2011/07/26 11:59:14  vfrolov
  * Replaced strerror() by FormatMessage()
  *
@@ -216,9 +219,7 @@ static int CALLBACK ConditionProc(
     OUT GROUP FAR * /*g*/,
     IN DWORD_PTR dwCallbackData)
 {
-  ConditionProcData *pCpd = (ConditionProcData *)dwCallbackData;
-
-  _ASSERTE(pCpd != NULL);
+  _ASSERTE((ConditionProcData *)dwCallbackData != NULL);
 
   if (lpCallerId)
     ((ConditionProcData *)dwCallbackData)->SetSN(lpCallerId->buf, lpCallerId->len);
