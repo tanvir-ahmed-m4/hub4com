@@ -159,7 +159,7 @@ with address your.computer.addr.
 
   1. Start the hub4com.exe on the computer with address your.computer.addr:
 
-       hub4com.exe --use-driver=tcp 2401 com0com.cvs.sourceforge.net:2401
+       hub4com.exe --use-driver=tcp /2401 com0com.cvs.sourceforge.net:2401
 
   2. On computer that has not access to the internet check out the hub4com
      souce code from the CVS repository:
@@ -179,7 +179,7 @@ this problem (for <your-progect>, <developername> and <modulename>):
 
   1. Start the hub4com.exe:
 
-       hub4com.exe --use-driver=tcp <your-progect>.cvs.sourceforge.net:443 --interface=localhost 22
+       hub4com.exe --use-driver=tcp <your-progect>.cvs.sourceforge.net:443 --interface=localhost /22
 
   2. Check out the souce code from the CVS repository:
 
