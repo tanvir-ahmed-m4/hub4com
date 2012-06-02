@@ -150,8 +150,8 @@ to 5 users to chat by using ordinary telnet application.
        telnet your.computer.addr 5555
 
 
-CVS proxy
----------
+CVS pserver proxy
+-----------------
 
 You have a computer that has not access to the internet and you'd like to
 allow it to access to hub4com's CVS repository by using proxy computer
@@ -165,7 +165,25 @@ with address your.computer.addr.
      souce code from the CVS repository:
 
        cvs -d:pserver:anonymous@your.computer.addr:/cvsroot/com0com login
-       cvs -z3 -d:pserver:anonymous@172.16.36.111:/cvsroot/com0com co -P hub4com
+       cvs -z3 -d:pserver:anonymous@your.computer.addr:/cvsroot/com0com co -P hub4com
+
+
+CVS ssh to https proxy
+----------------------
+
+You have a computer that is behind firewall which block traffic on the SSH
+ports used to access SourceForge CVS servers for developers. SourceForge
+provides SSH access to CVS servers using port 443, to eliminate this problem
+but CVSNT does not allow specifying the port for using the SSH. To eliminate
+this problem (for <your-progect>, <developername> and <modulename>):
+
+  1. Start the hub4com.exe:
+
+       hub4com.exe --use-driver=tcp <your-progect>.cvs.sourceforge.net:443 --interface=localhost 22
+
+  2. Check out the souce code from the CVS repository:
+
+       cvs -z3 -d:ssh:<developername>@localhost:/cvsroot/<your-progect> co -P <modulename>
 
 
 Multiplexing
@@ -364,7 +382,7 @@ A. The following config script allows
     # (re)connect TCP(2) only when the DSR on the SERIAL(0)
     # is in raised state
     #
-    --create-filter=pin2con:--connect=dsr 
+    --create-filter=pin2con:--connect=dsr
     --add-filters=0:pin2con
     #
     # Disable writing data to the SERIAL(0)
