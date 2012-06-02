@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008-2010 Vyacheslav Frolov
+ * Copyright (c) 2008-2012 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.17  2012/06/02 19:37:20  vfrolov
+ * Added ability to divide incoming TCP sessions
+ *
  * Revision 1.16  2010/09/14 16:33:34  vfrolov
  * Implemented --write-limit=0 to disable writing to the port
  *
@@ -112,11 +115,13 @@ static void CALLBACK Help(const char *pProgPath)
   << "Usage  (client mode):" << endl
   << "  " << pProgPath << " ... [--use-driver=" << GetPluginAbout()->pName << "] [*]<host addr>:<host port> ..." << endl
   << "Usage  (server mode):" << endl
-  << "  " << pProgPath << " ... [--use-driver=" << GetPluginAbout()->pName << "] [*][!]<listen port>[/<priority>] ..." << endl
+  << "  " << pProgPath << " ... [--use-driver=" << GetPluginAbout()->pName << "] [*][!][/]<listen port>[/<priority>] ..." << endl
   << endl
   << "  The sign * above means that connection should be permanent as it's possible." << endl
   << "  In client mode it will force connection to remote host on start." << endl
   << "  The sign ! above means that connection to <listen port> should be rejected if" << endl
+  << "  the connection counter is 0." << endl
+  << "  The sign / above means that after disconnecting the port will be busy until" << endl
   << "  the connection counter is 0." << endl
   << "  The <priority> above is an integer (default is 0). The port will be used only" << endl
   << "  if all ports with the same <listen port> and higher <priority> are busy." << endl

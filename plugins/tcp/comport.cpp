@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * Copyright (c) 2008-2010 Vyacheslav Frolov
+ * Copyright (c) 2008-2012 Vyacheslav Frolov
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
  *
  *
  * $Log$
+ * Revision 1.23  2012/06/02 19:37:20  vfrolov
+ * Added ability to divide incoming TCP sessions
+ *
  * Revision 1.22  2010/09/14 18:34:30  vfrolov
  * Fixed rejected connections handling
  *
@@ -188,11 +191,13 @@ ComPort::ComPort(
     const char *pPath)
   : pListener(NULL),
     rejectZeroConnectionCounter(FALSE),
+    busyTillZeroConnectionCounter(FALSE),
     priority(0),
     hSock(INVALID_SOCKET),
     isValid(TRUE),
     isConnected(FALSE),
     isDisconnected(FALSE),
+    pendingListenerOnDisconnect(FALSE),
     connectionCounter(0),
     permanent(FALSE),
     reconnectTime(-1),
@@ -221,6 +226,9 @@ ComPort::ComPort(
         continue;
       case '!':
         rejectZeroConnectionCounter = TRUE;
+        continue;
+      case '/':
+        busyTillZeroConnectionCounter = TRUE;
         continue;
     }
     break;
@@ -534,8 +542,15 @@ BOOL ComPort::Write(HUB_MSG *pMsg)
 
       connectionCounter--;
 
-      if (hSock != INVALID_SOCKET && !permanent && connectionCounter <= 0)
-        PortTcp::Disconnect(name.c_str(), hSock);
+      if (connectionCounter <= 0) {
+        if (hSock != INVALID_SOCKET && !permanent)
+          PortTcp::Disconnect(name.c_str(), hSock);
+
+        if (pendingListenerOnDisconnect && pListener) {
+          pendingListenerOnDisconnect = FALSE;
+          pListener->OnDisconnect(this);
+        }
+      }
     }
     break;
   }
@@ -669,7 +684,10 @@ void ComPort::OnDisconnect()
   }
 
   if (pListener) {
-    pListener->OnDisconnect(this);
+    if (!busyTillZeroConnectionCounter || connectionCounter <= 0)
+      pListener->OnDisconnect(this);
+    else
+      pendingListenerOnDisconnect = TRUE;
   }
   else
   if (CanConnect()) {
