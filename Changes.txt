@@ -1,0 +1,44 @@
+
+
+* The pinmap filter: added ability to set pins to ON/OFF.
+* The pinmap filter: added --data option to control data stream by pin state.
+* Added --reconnect option to com2tcp-rfc2217.bat.
+* Implemented serial port share mode to allow use COM port by other
+  applications when port is not used by hub4com.
+* Added --share-com-port option to com2tcp-rfc2217.bat.
+* The telnet filter: added --ascii-cr-padding option to insert padding
+  following CR in the default ASCII mode.
+* The pin2con filter: added --delay-disconnect option to ignore the disconnect
+  if the connect will raised shortly.
+* Added --delay-disconnect option to com2tcp-rfc2217.bat.
+* Implemented tag-sync filter to allow resynchronization data tagged by tag
+  filter after data lost.
+* Added ability to divide incoming TCP sessions (prevent accepting new TCP
+  connection until the connection counter is 0).
+* Fixed some bugs and made some improvements.
+
+v2.0.1.0 (2011-05-10)
+
+* Implemented priority and reject modifiers for TCP/IP listener.
+* Added ability disable writing to the TCP/IP or serial ports.
+* Fixed some TCP/IP bugs.
+* Added connection counter logic to pinmap filter.
+* Made some optimizations and improvements.
+
+v2.0.0.0 (2009-03-12)
+
+* Added TCP/IP ports support.
+* Implemented all com2tcp functionality.
+* Implemented RFC 2217 "Telnet Com Port Control Option" protocol.
+* New features can be added by implementing plugins.
+* Many other features added.
+
+v1.1.0.0 (2008-03-17)
+
+* Added read interval timeout option.
+* Added ability to send data received from port to the same port.
+* Fixed some bugs.
+
+2007-02-26 - hub4com v1.0.0.0 released.
+2007-01-23 - hub4com project moved to http://com0com.sourceforge.net/.
+2006       - hub4com project started.
